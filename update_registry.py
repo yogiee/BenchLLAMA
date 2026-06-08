@@ -90,7 +90,7 @@ if __name__ == "__main__":
             else:
                 unchanged.append(name)
         else:
-            entry = {"name": name, "disk_gb": info["disk_gb"], "role": None}
+            entry = {"name": name, "disk_gb": info["disk_gb"], "role": "worker"}
             added.append(name)
         proposed.append(entry)
 
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     # ── Print summary ─────────────────────────────────────────────────────────
 
     if added:
-        print("New models added (role=null — set before running):")
+        print("New models added (role=worker — promoted to router automatically if gate passes):")
         for name in added:
             info = completion[name]
             caps = ", ".join(sorted(info["capabilities"]))
@@ -133,5 +133,5 @@ if __name__ == "__main__":
         REGISTRY.write_text(json.dumps(proposed, indent=2) + "\n")
         print(f"models.json written  ({len(proposed)} models)")
         if added:
-            print(f"\n  {len(added)} new model(s) have role=null.")
-            print("  Edit models.json and set each to 'worker' or 'router' before running.")
+            print(f"\n  {len(added)} new model(s) added as role=worker.")
+            print("  Run the standard suite — router promotion happens automatically if the gate passes.")

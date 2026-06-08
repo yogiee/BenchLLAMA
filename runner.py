@@ -495,6 +495,43 @@ def write_summary(results, out_md: Path, fast_mode: bool = False):
     print(f"MD → {out_md}", flush=True)
 
 
+# ── Role gate ─────────────────────────────────────────────────────────────────
+
+ROUTER_TPS_FLOOR = 80  # tok/s
+
+def _role_gate(result):
+    """Apply the role assignment gate. Returns 'router' or 'worker'.
+
+    Router criteria (all must pass):
+      - avg_tps >= 80
+      - calculate tool called with correct args
+      - at least 1/4 reasoning tests correct
+    """
+    tps_ok   = (result.get("avg_tps") or 0) >= ROUTER_TPS_FLOOR
+    tool_ok  = result["tests"].get("calculate", {}).get("correct", False)
+    reason   = sum(
+        1 for tid in ("bat_ball", "two_cities", "cylinder", "farm_heads")
+        if result["tests"].get(tid, {}).get("correct")
+    )
+    return "router" if (tps_ok and tool_ok and reason >= 1) else "worker"
+
+
+def _maybe_promote(model_name, gate_role, registry_path):
+    """If gate says router but registry says worker, promote in models.json."""
+    if gate_role != "router":
+        return
+    try:
+        registry = json.load(registry_path.open())
+        for entry in registry:
+            if entry["name"] == model_name and entry.get("role") == "worker":
+                entry["role"] = "router"
+                registry_path.write_text(json.dumps(registry, indent=2) + "\n")
+                print(f"\n  ★ Role gate passed — {model_name} promoted to router in models.json", flush=True)
+                return
+    except Exception:
+        pass
+
+
 # ── Status writer ─────────────────────────────────────────────────────────────
 
 def _ws(model, phase):
@@ -538,6 +575,8 @@ if __name__ == "__main__":
             cooldown(cd, label=f"after {MODELS[i-1][0]}")
         _ws(model_name, "running")
         r = run_model(model_name, disk_gb, role)
+        if not model_args:
+            _maybe_promote(model_name, _role_gate(r), registry_path)
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
 
