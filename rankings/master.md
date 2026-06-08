@@ -18,32 +18,49 @@ Tool Use (1)           calculate                                              ob
 
 ---
 
+## Drop Criteria
+
+A model is flagged **⚠ drop** when it meets any of:
+
+| Trigger | Threshold | Rationale |
+|---------|-----------|-----------|
+| **Speed floor — router** | tok/s < 60 | Routing adds latency to every request; below 60 it becomes the bottleneck |
+| **Speed floor — worker** | tok/s < 20 | Below 20 tok/s interactive use degrades noticeably |
+| **Reliability failure** | Reproducible generation degeneration (word lists, loops, no answer) | Unreliable output is worse than wrong output |
+| **Dominated** | A lighter model in the registry achieves equal-or-better quality tier AND runs ≥ 30% faster | No reason to keep the heavier variant |
+| **Quality floor** | Reason + Instr + Tool combined < 2 out of 9 objective tests | Fails too many facts-based checks to trust in production |
+
+Dominated is the most common drop cause. Check it after every new model addition: if the new model obsoletes an existing one, flag the old one.
+
+---
+
 ## Rankings
 
 Quality is the gate; speed is the tiebreaker within a tier.
 
 **Persona** avg /5 (4 tests) | **Reason** pass /4 | **JPEG** /7 (pass ≥4) | **RAG** /5 | **Instr** /2 | **Tool** ✓/✗
 **Apt** — Battery grade for assigned role (A=router, B/C/D=worker)
+**Drop?** — `keep` / `⚠ drop` / `—` (pending v2 data)
 
 > When updating: each ranked model has a `↳` notes row immediately below it.
 > Update the data row and rewrite the notes row with the latest run's key findings.
 
-| # | Model (params, disk) | RAM | Load | tok/s | Persona | Reason | JPEG | RAG | Instr | Tool | Apt | Role → Verdict |
-|---|----------------------|-----|------|-------|:-------:|:------:|:----:|:---:|:-----:|:----:|-----|----------------|
-| — | `qwen3.5:2b-mlx` (2B, 3.1 GB) | — | — | — | — | — | — | — | — | — | — | router |
-| ↳ | *v1 context: 96.1 tok/s, 2.5 GB RAM, Reason 1/3, JPEG 4/7, Tool ✓. Purpose-built for routing. No v2 run yet.* | | | | | | | | | | | |
-| — | `qwen3.5:4b-mlx` (4B, 4.0 GB) | — | — | — | — | — | — | — | — | — | — | worker |
-| ↳ | *v1 context: 64.0 tok/s, 3.5 GB RAM, Persona 4/5, Reason 2/3, JPEG 5/7, Tool ✓. Battery B winner (personality ceiling). No v2 run yet.* | | | | | | | | | | | |
-| — | `qwen3.5:9b` (9B GGUF, 6.6 GB) | — | — | — | — | — | — | — | — | — | — | worker |
-| ↳ | *v1 context: ⚠ demoted — degeneration on long output without think, JPEG 3/7 without think. No v2 run yet.* | | | | | | | | | | | |
-| — | `gemma4:e2b-mlx` (e2b ~2B eff., 7.1 GB) | — | — | — | — | — | — | — | — | — | — | worker |
-| ↳ | *v1 context: 67.6 tok/s, 6.3 GB RAM, Persona 4/5, Reason 2/3, JPEG 1/7, Tool ✓. Socratic behavior on open research. No v2 run yet.* | | | | | | | | | | | |
-| — | `qwen3.5:9b-mlx` (9B, 8.9 GB) | — | — | — | — | — | — | — | — | — | — | worker |
-| ↳ | *v1 context: 43 tok/s†, 8.1 GB RAM, Persona 4/5, Reason 2/3, JPEG 6/7, Tool ✓. Best research depth in v1. No v2 run yet.* | | | | | | | | | | | |
-| — | `gemma4:latest` (e4b ~4B eff., 9.6 GB) | — | — | — | — | — | — | — | — | — | — | worker |
-| ↳ | *v1 context: 37.5 tok/s, 9.6 GB RAM, Persona 5/5 (prompt-following), Reason 2/3, JPEG 3/7, Tool ✓. Tool/coding worker; not personality worker. No v2 run yet.* | | | | | | | | | | | |
-| — | `gemma4:e2b-mlx-bf16` (e2b ~2B eff., 10.0 GB) | — | — | — | — | — | — | — | — | — | — | worker |
-| ↳ | *v1 context: 42.9 tok/s, 9.3 GB RAM, Persona 4/5, Reason 2/3, JPEG 4/7, Tool ✓. Quality reference for e2b tier. No v2 run yet.* | | | | | | | | | | | |
+| # | Model (params, disk) | RAM | tok/s | Persona | Reason | JPEG | RAG | Instr | Tool | Apt | Role | Drop? |
+|---|----------------------|-----|-------|:-------:|:------:|:----:|:---:|:-----:|:----:|-----|------|:-----:|
+| — | `qwen3.5:2b-mlx` (2B, 3.1 GB) | — | — | — | — | — | — | — | — | — | router | — |
+| ↳ | *v1: 96.1 tok/s, 2.5 GB RAM, Reason 1/3, JPEG 4/7, Tool ✓. Purpose-built for routing. No v2 run yet.* | | | | | | | | | | | |
+| — | `qwen3.5:4b-mlx` (4B, 4.0 GB) | — | — | — | — | — | — | — | — | — | worker | — |
+| ↳ | *v1: 64.0 tok/s, 3.5 GB RAM, Persona 4/5, Reason 2/3, JPEG 5/7, Tool ✓. Battery B winner (personality ceiling). No v2 run yet.* | | | | | | | | | | | |
+| — | `qwen3.5:9b` (9B GGUF, 6.6 GB) | — | — | — | — | — | — | — | — | — | worker | ⚠ drop |
+| ↳ | *v1: reproducible degeneration on long output (think=False) — devolves to word lists, no final answer. Strictly dominated by `qwen3.5:9b-mlx` (same quality, better reliability, comparable speed). Keep on disk as calibration reference only.* | | | | | | | | | | | |
+| — | `gemma4:e2b-mlx` (e2b ~2B eff., 7.1 GB) | — | — | — | — | — | — | — | — | — | worker | — |
+| ↳ | *v1: 67.6 tok/s, 6.3 GB RAM, Persona 4/5, Reason 2/3, JPEG 1/7, Tool ✓. Socratic behavior on open research — scores understate real capability. No v2 run yet.* | | | | | | | | | | | |
+| — | `qwen3.5:9b-mlx` (9B, 8.9 GB) | — | — | — | — | — | — | — | — | — | worker | — |
+| ↳ | *v1: 43 tok/s†, 8.1 GB RAM, Persona 4/5, Reason 2/3, JPEG 6/7, Tool ✓. Best research depth in v1. No v2 run yet.* | | | | | | | | | | | |
+| — | `gemma4:latest` (e4b ~4B eff., 9.6 GB) | — | — | — | — | — | — | — | — | — | worker | — |
+| ↳ | *v1: 37.5 tok/s, 9.6 GB RAM, Persona 5/5 (prompt-following), Reason 2/3, JPEG 3/7, Tool ✓. Borders worker speed floor — watch tok/s on v2. Tool/coding worker; not personality worker. No v2 run yet.* | | | | | | | | | | | |
+| — | `gemma4:e2b-mlx-bf16` (e2b ~2B eff., 10.0 GB) | — | — | — | — | — | — | — | — | — | worker | ⚠ drop |
+| ↳ | *v1: 42.9 tok/s, 9.3 GB RAM — strictly dominated by `gemma4:e2b-mlx` (67.6 tok/s, 7.1 GB disk, 6.3 GB RAM; +57% speed, −37% disk). No quality advantage observed. Drop unless v2 shows unexpected quality gap.* | | | | | | | | | | | |
 
 † thermal throttle artifact — real speed ≈ 38–44 tok/s
 
