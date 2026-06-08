@@ -117,7 +117,7 @@ PROMPT_WEIGHT_TEST = "Who are you, and what do you actually enjoy doing?"
 
 # ── Ollama helpers ────────────────────────────────────────────────────────────
 
-def chat(model, messages, max_tokens=600, think=False):
+def chat(model, messages, max_tokens=600, think=False, tools=None):
     payload = {
         "model":    model,
         "messages": messages,
@@ -127,6 +127,8 @@ def chat(model, messages, max_tokens=600, think=False):
     }
     if max_tokens:
         payload["options"]["num_predict"] = max_tokens
+    if tools:
+        payload["tools"] = tools
     t0   = time.time()
     r    = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
     wall = time.time() - t0
@@ -714,15 +716,730 @@ def write_battery_a_summary(results, out_md: Path, fast_mode=False):
     print(f"MD → {out_md}", flush=True)
 
 
-# ── Battery stubs (C, D) ──────────────────────────────────────────────────────
+# ── Battery C data ────────────────────────────────────────────────────────────
+
+JPEG_PROMPT = (
+    "Give a concise, not-too-technical but detailed comparison of "
+    "JPEG, JPEG-2000, and JPEG-XL formats."
+)
+
+RAG_DEEP_PROMPT = (
+    "What's the real tradeoff between RAG and fine-tuning when adapting an LLM to a new domain? "
+    "Give 5 concrete examples for each approach — real use-cases where one clearly wins. "
+    "Skip the textbook answer."
+)
+
+SYNTHESIS_SOURCES = [
+    (
+        "Source A (Anthropic blog, 2024): Constitutional AI introduces a self-critique loop — "
+        "the model evaluates its own responses against a list of principles and rewrites "
+        "outputs that violate them. This reduces the need for human feedback on harmful outputs."
+    ),
+    (
+        "Source B (DeepMind paper, 2024): RLHF remains the dominant alignment technique but "
+        "suffers from reward hacking — models learn to score high on the reward model without "
+        "actually improving on the intended objective. Careful reward model design is critical."
+    ),
+    (
+        "Source C (Stanford HAI report, 2024): Alignment techniques diverge sharply in "
+        "scalability. Constitutional AI and RLAIF reduce human labelling costs dramatically, "
+        "while RLHF costs grow linearly with the number of preference comparisons required."
+    ),
+]
+
+SYNTHESIS_PROMPT = (
+    "You will be given three source excerpts on AI alignment. "
+    "Write a single synthesis paragraph (150–200 words) that integrates the key ideas, "
+    "identifies the central tension across sources, and states a clear conclusion. "
+    "Do not summarise each source separately.\n\n"
+    + "\n\n".join(SYNTHESIS_SOURCES)
+)
+
+CTX_DEPTH_LEVELS = [8192, 16384, 32768]
+
+NUM_PREDICT_LEVELS = [600, 1000, 1500, 2000]
+
+
+def _jpeg_coverage(response: str) -> dict:
+    lo = response.lower()
+    signals = {
+        "jpeg_compression_tech": any(x in lo for x in ["dct", "discrete cosine", "8×8", "8x8", "block"]),
+        "jpeg2000_wavelet":      "wavelet" in lo,
+        "lossless":              "lossless" in lo,
+        "transparency_alpha":    any(x in lo for x in ["transparency", "alpha", "transparent"]),
+        "browser_support":       any(x in lo for x in ["browser", "chrome", "firefox", "safari"]),
+        "jpeg2000_niche":        any(x in lo for x in ["medical", "dicom", "cinema", "archiv"]),
+        "jxl_recompress_trick":  any(x in lo for x in ["recompress", "transcode", "re-encode",
+                                                         "existing jpeg", "losslessly transc",
+                                                         "backward compat"]),
+    }
+    score = sum(signals.values())
+    return {"signals": signals, "score": score, "max": 7, "pass": score >= 4}
+
+
+def _think_diagnosis(raw_api: dict) -> str:
+    """Classify what happened with a think=True call.
+
+    Returns one of:
+      think_ok         — <think> block present, content generated after it
+      think_empty      — <think> block present, content is empty / near-empty (≤10 words)
+      think_block_only — <think> block detected in raw message but nothing after
+      no_think_block   — no <think> tags at all (model ignored think=True)
+      api_error        — response parsing failed
+    """
+    try:
+        msg = raw_api.get("message", {})
+        thinking = msg.get("thinking", "")
+        content  = msg.get("content", "")
+
+        if thinking and content and len(content.split()) > 10:
+            return "think_ok"
+        if thinking and (not content or len(content.split()) <= 10):
+            return "think_empty"
+
+        # Fallback: check if <think>...</think> tags are in the content string
+        if "<think>" in content.lower():
+            after = re.split(r"</think>", content, flags=re.IGNORECASE)
+            post  = after[-1].strip() if len(after) > 1 else ""
+            return "think_ok" if len(post.split()) > 10 else "think_block_only"
+
+        return "no_think_block"
+    except Exception:
+        return "api_error"
+
+
+def _chat_ctx(model, messages, ctx, max_tokens, think=False):
+    """Like chat() but with a custom num_ctx override."""
+    payload = {
+        "model":    model,
+        "messages": messages,
+        "stream":   False,
+        "options":  {"num_ctx": ctx, "num_predict": max_tokens},
+        "think":    think,
+    }
+    t0   = time.time()
+    r    = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
+    wall = time.time() - t0
+    r.raise_for_status()
+    return r.json(), wall
+
+
+# ── Battery C — Worker Research ───────────────────────────────────────────────
 
 def run_battery_c(model_name):
-    print(f"  Battery C for {model_name}: not yet implemented", flush=True)
-    return {"model": model_name, "battery": "C", "tests": {}}
+    result = {"model": model_name, "battery": "C", "tests": {}}
+    sys_full = [{"role": "system", "content": PROMPT_WORKER_FULL}]
+
+    print(f"\n{'='*60}", flush=True)
+    print(f"BATTERY C: {model_name}", flush=True)
+    print("=" * 60, flush=True)
+
+    # C1 — jpeg_signals: think=False vs think=True, capture diagnosis
+    print("\n  [C1] jpeg_signals (think=off vs think=on)...", flush=True)
+    c1_results = {}
+    for think_val in [False, True]:
+        data, wall = chat(model_name, sys_full + [{"role": "user", "content": JPEG_PROMPT}],
+                          max_tokens=1500, think=think_val)
+        text  = data.get("message", {}).get("content", "")
+        cov   = _jpeg_coverage(text)
+        diag  = _think_diagnosis(data) if think_val else "think_off"
+        t     = tps(data)
+        key   = "think_on" if think_val else "think_off"
+        c1_results[key] = {
+            "score": cov["score"], "max": cov["max"], "pass": cov["pass"],
+            "signals": cov["signals"], "words": word_count(text),
+            "wall_s": round(wall, 1), "tps": t, "think_diagnosis": diag,
+            "response": text,
+        }
+        sigs_hit = [k for k, v in cov["signals"].items() if v]
+        print(
+            f"    [think={key[-2:]}]  {cov['score']}/{cov['max']} signals  "
+            f"{word_count(text)}w  diag={diag}",
+            flush=True,
+        )
+        for s in sigs_hit:
+            print(f"      ✓ {s}", flush=True)
+    result["tests"]["c1_jpeg_signals"] = c1_results
+
+    # C2 — rag_deep: extended RAG vs fine-tuning with 5 examples per approach
+    print("\n  [C2] rag_deep (5 examples per approach)...", flush=True)
+    data, wall = chat(model_name, sys_full + [{"role": "user", "content": RAG_DEEP_PROMPT}],
+                      max_tokens=2000)
+    text = data.get("message", {}).get("content", "")
+    lo   = text.lower()
+    # Auto-signals: counts numbered examples and approach keywords
+    rag_examples   = len(re.findall(r"\b(?:rag|retrieval)[^.]*(?:example|case|scenario|use.case)", lo))
+    ft_examples    = len(re.findall(r"\b(?:fine.tun|finetuning)[^.]*(?:example|case|scenario|use.case)", lo))
+    has_tradeoff   = any(x in lo for x in ["tradeoff", "trade-off", "when to use", "vs", "versus", "better when"])
+    result["tests"]["c2_rag_deep"] = {
+        "words": word_count(text), "wall_s": round(wall, 1), "tps": tps(data),
+        "rag_example_hits": rag_examples, "ft_example_hits": ft_examples,
+        "has_tradeoff_framing": has_tradeoff, "response": text,
+    }
+    print(f"    {word_count(text)}w  rag_hits={rag_examples}  ft_hits={ft_examples}  tradeoff={has_tradeoff}",
+          flush=True)
+    print(f"    → {text[:140].replace(chr(10), ' ')}", flush=True)
+
+    # C3 — synthesis_3src: integrate 3 source excerpts into one paragraph
+    print("\n  [C3] synthesis_3src...", flush=True)
+    data, wall = chat(model_name, sys_full + [{"role": "user", "content": SYNTHESIS_PROMPT}],
+                      max_tokens=600)
+    text  = data.get("message", {}).get("content", "")
+    lo    = text.lower()
+    wc    = word_count(text)
+    # Auto-signals: did it actually synthesise (not just list)?
+    in_range        = 100 <= wc <= 300
+    mentions_all_3  = all(x in lo for x in ["constitutional", "rlhf", "scalab"])
+    has_tension     = any(x in lo for x in ["tension", "contrast", "differ", "whereas", "while", "however"])
+    no_src_listing  = not re.search(r"source [abc]:", lo)  # didn't just re-label sources
+    result["tests"]["c3_synthesis"] = {
+        "words": wc, "in_range": in_range, "wall_s": round(wall, 1), "tps": tps(data),
+        "mentions_all_3": mentions_all_3, "has_tension": has_tension,
+        "no_src_listing": no_src_listing, "response": text,
+    }
+    print(f"    {wc}w  in_range={in_range}  all_3={mentions_all_3}  tension={has_tension}  no_list={no_src_listing}",
+          flush=True)
+    print(f"    → {text[:140].replace(chr(10), ' ')}", flush=True)
+
+    # C4 — ctx_depth: JPEG test at 3 context window sizes
+    print("\n  [C4] ctx_depth (JPEG at 8192 / 16384 / 32768)...", flush=True)
+    c4_results = {}
+    for ctx in CTX_DEPTH_LEVELS:
+        data, wall = _chat_ctx(model_name,
+                               sys_full + [{"role": "user", "content": JPEG_PROMPT}],
+                               ctx=ctx, max_tokens=1500)
+        text  = data.get("message", {}).get("content", "")
+        cov   = _jpeg_coverage(text)
+        t     = tps(data)
+        c4_results[str(ctx)] = {
+            "score": cov["score"], "max": cov["max"], "pass": cov["pass"],
+            "signals": cov["signals"], "words": word_count(text),
+            "wall_s": round(wall, 1), "tps": t,
+        }
+        print(f"    [ctx={ctx:>6}]  {cov['score']}/{cov['max']} signals  {word_count(text)}w  {t} tok/s",
+              flush=True)
+        unload(model_name)
+    result["tests"]["c4_ctx_depth"] = c4_results
+
+    # C5 — num_predict_ceiling: JPEG at 4 output budgets
+    print("\n  [C5] num_predict_ceiling (600 / 1000 / 1500 / 2000)...", flush=True)
+    c5_results = {}
+    for cap in NUM_PREDICT_LEVELS:
+        data, wall = chat(model_name,
+                          sys_full + [{"role": "user", "content": JPEG_PROMPT}],
+                          max_tokens=cap)
+        text = data.get("message", {}).get("content", "")
+        cov  = _jpeg_coverage(text)
+        t    = tps(data)
+        c5_results[str(cap)] = {
+            "score": cov["score"], "pass": cov["pass"],
+            "words": word_count(text), "wall_s": round(wall, 1), "tps": t,
+        }
+        print(f"    [cap={cap:>4}]  {cov['score']}/{cov['max']} signals  {word_count(text)}w  {round(wall,1)}s",
+              flush=True)
+    result["tests"]["c5_num_predict"] = c5_results
+
+    # C6 — think_coverage: JPEG think=True with the lean prompt (vs full prompt in C1)
+    print("\n  [C6] think_coverage (JPEG, think=on, lean prompt)...", flush=True)
+    sys_lean = [{"role": "system", "content": PROMPT_WORKER_LEAN}]
+    data, wall = chat(model_name, sys_lean + [{"role": "user", "content": JPEG_PROMPT}],
+                      max_tokens=1500, think=True)
+    text = data.get("message", {}).get("content", "")
+    cov  = _jpeg_coverage(text)
+    diag = _think_diagnosis(data)
+    result["tests"]["c6_think_coverage"] = {
+        "score": cov["score"], "max": cov["max"], "pass": cov["pass"],
+        "signals": cov["signals"], "words": word_count(text),
+        "wall_s": round(wall, 1), "tps": tps(data), "think_diagnosis": diag,
+        "response": text,
+    }
+    c1_think = result["tests"]["c1_jpeg_signals"].get("think_on", {})
+    delta    = cov["score"] - c1_think.get("score", 0)
+    print(
+        f"    {cov['score']}/{cov['max']} signals  {word_count(text)}w  "
+        f"diag={diag}  Δ vs full-prompt-think={delta:+d}",
+        flush=True,
+    )
+
+    return result
+
+
+# ── Markdown summary — Battery C ──────────────────────────────────────────────
+
+def write_battery_c_summary(results, out_md: Path, fast_mode=False):
+    flag  = " ⚠ FAST MODE" if fast_mode else ""
+    lines = [
+        f"# Aptitude Battery C — Worker Research{flag}", "",
+        "Models: " + ", ".join("`" + r["model"] + "`" for r in results),
+        f"`num_ctx={NUM_CTX}` (baseline) | worker prompt", "", "---", "",
+    ]
+
+    # C1 overview
+    lines += ["## C1 — JPEG signals: think=off vs think=on", ""]
+    hdr = "| Model | off score | on score | delta | think diagnosis |"
+    sep = "|-------|-----------|----------|-------|-----------------|"
+    lines += [hdr, sep]
+    for r in results:
+        c1   = r["tests"].get("c1_jpeg_signals", {})
+        off  = c1.get("think_off", {})
+        on   = c1.get("think_on",  {})
+        delta = (on.get("score", 0) or 0) - (off.get("score", 0) or 0)
+        lines.append(
+            f"| `{r['model']}` | {off.get('score','?')}/7 | {on.get('score','?')}/7 "
+            f"| {delta:+d} | {on.get('think_diagnosis','—')} |"
+        )
+    lines.append("")
+
+    # C4 ctx_depth overview
+    lines += ["## C4 — ctx_depth (JPEG signal score)", ""]
+    hdr4 = "| Model | ctx=8192 | ctx=16384 | ctx=32768 |"
+    sep4 = "|-------|----------|-----------|-----------|"
+    lines += [hdr4, sep4]
+    for r in results:
+        c4 = r["tests"].get("c4_ctx_depth", {})
+        lines.append(
+            f"| `{r['model']}` "
+            f"| {c4.get('8192',{}).get('score','?')}/7 "
+            f"| {c4.get('16384',{}).get('score','?')}/7 "
+            f"| {c4.get('32768',{}).get('score','?')}/7 |"
+        )
+    lines.append("")
+
+    # C5 num_predict overview
+    lines += ["## C5 — num_predict ceiling (JPEG signal score / word count)", ""]
+    hdr5 = "| Model | cap=600 | cap=1000 | cap=1500 | cap=2000 |"
+    sep5 = "|-------|---------|----------|----------|----------|"
+    lines += [hdr5, sep5]
+    for r in results:
+        c5 = r["tests"].get("c5_num_predict", {})
+        def _cell(k):
+            d = c5.get(str(k), {})
+            return f"{d.get('score','?')}/7  {d.get('words','?')}w" if d else "—"
+        lines.append(
+            f"| `{r['model']}` | {_cell(600)} | {_cell(1000)} | {_cell(1500)} | {_cell(2000)} |"
+        )
+    lines.append("")
+
+    # C6 think_coverage
+    lines += ["## C6 — think_coverage (JPEG, lean prompt)", ""]
+    hdr6 = "| Model | score | diagnosis | Δ vs full-think |"
+    sep6 = "|-------|-------|-----------|-----------------|"
+    lines += [hdr6, sep6]
+    for r in results:
+        c6   = r["tests"].get("c6_think_coverage", {})
+        c1on = r["tests"].get("c1_jpeg_signals", {}).get("think_on", {})
+        delta = (c6.get("score", 0) or 0) - (c1on.get("score", 0) or 0)
+        lines.append(
+            f"| `{r['model']}` | {c6.get('score','?')}/7 "
+            f"| {c6.get('think_diagnosis','—')} | {delta:+d} |"
+        )
+    lines.append("")
+
+    # Per-model detail
+    for r in results:
+        lines += ["---", "", f"## `{r['model']}`", ""]
+
+        # C1
+        lines += ["### C1 — JPEG signals (think off / on)", ""]
+        c1 = r["tests"].get("c1_jpeg_signals", {})
+        for key in ["think_off", "think_on"]:
+            d = c1.get(key, {})
+            lines += [
+                f"**{key}** — {d.get('score','?')}/7 signals  "
+                f"{d.get('words','?')}w  wall={d.get('wall_s','?')}s  "
+                f"tps={d.get('tps','?')}  diagnosis={d.get('think_diagnosis','—')}",
+            ]
+            for sig, hit in (d.get("signals") or {}).items():
+                lines.append(f"  - {'✓' if hit else '✗'} {sig}")
+            lines += ["", d.get("response", "—"), ""]
+
+        # C2
+        c2 = r["tests"].get("c2_rag_deep", {})
+        lines += [
+            "### C2 — rag_deep", "",
+            f"({c2.get('words','?')}w · rag_hits={c2.get('rag_example_hits','?')} "
+            f"ft_hits={c2.get('ft_example_hits','?')} "
+            f"tradeoff={c2.get('has_tradeoff_framing','?')})",
+            "", c2.get("response", "—"), "",
+        ]
+
+        # C3
+        c3 = r["tests"].get("c3_synthesis", {})
+        lines += [
+            "### C3 — synthesis_3src", "",
+            f"({c3.get('words','?')}w · in_range={c3.get('in_range','?')} "
+            f"all_3={c3.get('mentions_all_3','?')} "
+            f"tension={c3.get('has_tension','?')} "
+            f"no_list={c3.get('no_src_listing','?')})",
+            "", c3.get("response", "—"), "",
+        ]
+
+        # C4
+        lines += ["### C4 — ctx_depth", ""]
+        c4 = r["tests"].get("c4_ctx_depth", {})
+        for ctx in CTX_DEPTH_LEVELS:
+            d = c4.get(str(ctx), {})
+            lines.append(
+                f"- ctx={ctx}  {d.get('score','?')}/7 signals  "
+                f"{d.get('words','?')}w  {d.get('tps','?')} tok/s"
+            )
+        lines.append("")
+
+        # C5
+        lines += ["### C5 — num_predict ceiling", ""]
+        c5 = r["tests"].get("c5_num_predict", {})
+        for cap in NUM_PREDICT_LEVELS:
+            d = c5.get(str(cap), {})
+            lines.append(
+                f"- cap={cap}  {d.get('score','?')}/7 signals  "
+                f"{d.get('words','?')}w  wall={d.get('wall_s','?')}s"
+            )
+        lines.append("")
+
+        # C6
+        c6 = r["tests"].get("c6_think_coverage", {})
+        c1on = r["tests"].get("c1_jpeg_signals", {}).get("think_on", {})
+        delta = (c6.get("score", 0) or 0) - (c1on.get("score", 0) or 0)
+        lines += [
+            "### C6 — think_coverage (lean prompt)", "",
+            f"({c6.get('score','?')}/7 signals · {c6.get('words','?')}w · "
+            f"diagnosis={c6.get('think_diagnosis','—')} · Δ={delta:+d} vs full-prompt-think)",
+            "", c6.get("response", "—"), "",
+        ]
+
+    out_md.write_text("\n".join(lines))
+    print(f"MD → {out_md}", flush=True)
+
+
+# ── Battery D data ────────────────────────────────────────────────────────────
+
+TOOL_DEFS_D = [
+    {
+        "type": "function",
+        "function": {
+            "name":        "calculate",
+            "description": "Evaluate a mathematical expression and return the numeric result.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {"type": "string", "description": "Math expression to evaluate"}
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name":        "lookup",
+            "description": "Look up the unit price of an item in the product catalog. Returns price in USD.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item": {"type": "string", "description": "Item name, e.g. 'widget'"}
+                },
+                "required": ["item"],
+            },
+        },
+    },
+]
+
+LOOKUP_CATALOG = {
+    "widget":       4.99,
+    "gadget":      12.50,
+    "gizmo":        7.25,
+    "doohickey":    3.75,
+    "thingamajig":  9.00,
+}
+
+CHAIN_3_PROMPT = (
+    "Use the lookup tool to find the unit price of a widget. "
+    "Then use the calculate tool to find the total cost for 8 units. "
+    "Finally, use the calculate tool again to add 10% tax to that total. "
+    "Show me the final answer."
+)
+
+PARALLEL_PROMPT = (
+    "Use the calculate tool to compute both 17 × 23 and 456 + 789. "
+    "Give me both results."
+)
+
+
+def _exec_tool(name, args, error_mode=False):
+    """Simulate tool execution. Returns a JSON-serialisable result dict."""
+    if error_mode:
+        return {"error": "Service unavailable. Please try again later."}
+    if name == "calculate":
+        try:
+            result = eval(args.get("expression", ""), {"__builtins__": {}}, {})
+            return {"result": round(float(result), 4)}
+        except Exception as e:
+            return {"error": str(e)}
+    if name == "lookup":
+        item  = args.get("item", "").lower().strip()
+        price = LOOKUP_CATALOG.get(item)
+        return {"item": item, "price_usd": price} if price is not None \
+               else {"error": f"Item '{item}' not found in catalog."}
+    return {"error": f"Unknown tool: {name}"}
+
+
+def _tool_loop(model_name, messages, tools, max_steps=6, think=False, error_mode=False):
+    """Multi-turn tool-calling loop.
+
+    Returns: (final_text, all_tool_calls, steps_taken, wall_total_s)
+    """
+    history    = list(messages)
+    all_calls  = []
+    wall_total = 0.0
+
+    for step in range(max_steps):
+        data, wall = chat(model_name, history, max_tokens=800, think=think, tools=tools)
+        wall_total += wall
+        msg        = data.get("message", {})
+        tool_calls = msg.get("tool_calls", [])
+
+        if not tool_calls:
+            return msg.get("content", ""), all_calls, step, wall_total
+
+        history.append({
+            "role": "assistant", "content": msg.get("content", ""),
+            "tool_calls": tool_calls,
+        })
+
+        for tc in tool_calls:
+            fn   = tc.get("function", {})
+            name = fn.get("name", "")
+            args = fn.get("arguments", {})
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {}
+            result = _exec_tool(name, args, error_mode=error_mode)
+            all_calls.append({"tool": name, "args": args, "result": result})
+            history.append({"role": "tool", "content": json.dumps(result)})
+
+    return "", all_calls, max_steps, wall_total
+
+
+# ── Battery D — Tool-heavy ────────────────────────────────────────────────────
 
 def run_battery_d(model_name):
-    print(f"  Battery D for {model_name}: not yet implemented", flush=True)
-    return {"model": model_name, "battery": "D", "tests": {}}
+    result  = {"model": model_name, "battery": "D", "tests": {}}
+    sys_std = [{"role": "system", "content": PROMPT_WORKER_FULL}]
+
+    print(f"\n{'='*60}", flush=True)
+    print(f"BATTERY D: {model_name}", flush=True)
+    print("=" * 60, flush=True)
+
+    # D1 — chain_3: lookup → calculate → calculate (3 sequential tool calls)
+    print("\n  [D1] chain_3 (lookup widget → calc total → calc tax)...", flush=True)
+    text, calls, steps, wall = _tool_loop(
+        model_name,
+        sys_std + [{"role": "user", "content": CHAIN_3_PROMPT}],
+        tools=TOOL_DEFS_D,
+    )
+    tool_names   = [c["tool"] for c in calls]
+    lookup_ok    = any(c["tool"] == "lookup" and "widget" in str(c["args"]).lower()
+                       for c in calls)
+    calc_count   = sum(1 for c in calls if c["tool"] == "calculate")
+    final_ok     = "43.9" in text or "43.91" in text or "43.912" in text
+    result["tests"]["d1_chain_3"] = {
+        "tool_sequence": tool_names, "steps": steps, "wall_s": round(wall, 1),
+        "lookup_correct": lookup_ok, "calc_count": calc_count, "final_answer_ok": final_ok,
+        "calls": calls, "response": text,
+    }
+    chain_ok = lookup_ok and calc_count >= 2 and final_ok
+    print(f"    {'✓' if chain_ok else '✗'}  seq={tool_names}  final_ok={final_ok}  steps={steps}", flush=True)
+    print(f"    → {text[:120].replace(chr(10), ' ')}", flush=True)
+
+    # D2 — select_direct: trivial arithmetic, should NOT call tool
+    print("\n  [D2] select_direct ('What is 12 × 12?' — should not call tool)...", flush=True)
+    data, wall = chat(model_name,
+                      sys_std + [{"role": "user", "content": "What is 12 × 12?"}],
+                      max_tokens=100, tools=TOOL_DEFS_D)
+    text2      = data.get("message", {}).get("content", "")
+    tool_calls = data.get("message", {}).get("tool_calls", [])
+    no_call    = len(tool_calls) == 0
+    has_144    = "144" in text2
+    result["tests"]["d2_select_direct"] = {
+        "no_tool_call": no_call, "has_correct_answer": has_144,
+        "tool_calls": tool_calls, "wall_s": round(wall, 1), "response": text2,
+    }
+    mark = "✓" if no_call and has_144 else ("✗ called tool" if not no_call else "✗ wrong answer")
+    print(f"    {mark}  no_call={no_call}  has_144={has_144}", flush=True)
+
+    # D3 — select_tool: explicit instruction to use tool
+    print("\n  [D3] select_tool ('Use the calculate tool to verify: 144 = 12²')...", flush=True)
+    data, wall = chat(model_name,
+                      sys_std + [{"role": "user", "content": "Use the calculate tool to verify: 144 = 12²"}],
+                      max_tokens=200, tools=TOOL_DEFS_D)
+    text3      = data.get("message", {}).get("content", "")
+    tool_calls = data.get("message", {}).get("tool_calls", [])
+    called     = len(tool_calls) > 0
+    correct    = called and any(
+        "12" in str(tc.get("function", {}).get("arguments", "")) for tc in tool_calls
+    )
+    result["tests"]["d3_select_tool"] = {
+        "called": called, "correct_args": correct,
+        "tool_calls": tool_calls, "wall_s": round(wall, 1), "response": text3,
+    }
+    mark = "✓" if correct else ("✗ no call" if not called else "✗ wrong args")
+    print(f"    {mark}  called={called}  correct_args={correct}", flush=True)
+
+    # D4 — error_recovery: lookup returns {"error": "..."}
+    print("\n  [D4] error_recovery (lookup returns error)...", flush=True)
+    text4, calls4, steps4, wall4 = _tool_loop(
+        model_name,
+        sys_std + [{"role": "user",
+                    "content": "Use the lookup tool to find the unit price of a sprocket."}],
+        tools=TOOL_DEFS_D, error_mode=True, max_steps=4,
+    )
+    lo4         = text4.lower()
+    looped      = steps4 >= 3
+    reports_err = any(x in lo4 for x in ["unavailable", "error", "unable", "couldn't", "failed", "sorry"])
+    invents     = re.search(r'\$\s*\d+\.?\d*', lo4) is not None
+    result["tests"]["d4_error_recovery"] = {
+        "steps": steps4, "looped": looped,
+        "reports_error": reports_err, "invents_price": invents,
+        "calls": calls4, "wall_s": round(wall4, 1), "response": text4,
+    }
+    grade = "loop" if looped else ("invents" if invents else ("reports" if reports_err else "unknown"))
+    print(f"    grade={grade}  steps={steps4}  reports={reports_err}  invents={invents}", flush=True)
+    print(f"    → {text4[:120].replace(chr(10), ' ')}", flush=True)
+
+    # D5 — think_tools: chain_3 with think=False vs think=True
+    print("\n  [D5] think_tools (chain_3 with think=off vs think=on)...", flush=True)
+    d5_results = {}
+    for think_val in [False, True]:
+        text5, calls5, steps5, wall5 = _tool_loop(
+            model_name,
+            sys_std + [{"role": "user", "content": CHAIN_3_PROMPT}],
+            tools=TOOL_DEFS_D, think=think_val,
+        )
+        tool_seq5  = [c["tool"] for c in calls5]
+        final_ok5  = "43.9" in text5 or "43.91" in text5
+        diag5      = "think_off"
+        if think_val:
+            # approximate diagnosis from step count (actual think block is per-turn)
+            diag5 = "think_on" if steps5 > 0 else "think_stall"
+        key = "think_on" if think_val else "think_off"
+        d5_results[key] = {
+            "tool_sequence": tool_seq5, "steps": steps5,
+            "final_answer_ok": final_ok5, "wall_s": round(wall5, 1),
+            "calls": calls5, "response": text5,
+        }
+        mark = "✓" if final_ok5 else "✗"
+        print(f"    [think={key[-2:]}] {mark}  seq={tool_seq5}  steps={steps5}  wall={round(wall5,1)}s",
+              flush=True)
+    result["tests"]["d5_think_tools"] = d5_results
+
+    # D6 — parallel_tools: two independent calculations in one request
+    print("\n  [D6] parallel_tools (two calcs in one turn)...", flush=True)
+    text6, calls6, steps6, wall6 = _tool_loop(
+        model_name,
+        sys_std + [{"role": "user", "content": PARALLEL_PROMPT}],
+        tools=TOOL_DEFS_D,
+    )
+    calc_calls = [c for c in calls6 if c["tool"] == "calculate"]
+    both_done  = len(calc_calls) >= 2
+    has_391    = "391" in text6
+    has_1245   = "1245" in text6
+    result["tests"]["d6_parallel"] = {
+        "calc_call_count": len(calc_calls), "both_done": both_done,
+        "has_391": has_391, "has_1245": has_1245,
+        "calls": calls6, "wall_s": round(wall6, 1), "response": text6,
+    }
+    mark = "✓" if both_done and has_391 and has_1245 else "✗"
+    print(f"    {mark}  calc_count={len(calc_calls)}  391={has_391}  1245={has_1245}",
+          flush=True)
+
+    return result
+
+
+# ── Markdown summary — Battery D ──────────────────────────────────────────────
+
+def write_battery_d_summary(results, out_md: Path, fast_mode=False):
+    flag  = " ⚠ FAST MODE" if fast_mode else ""
+    lines = [
+        f"# Aptitude Battery D — Worker Tool-heavy{flag}", "",
+        "Models: " + ", ".join("`" + r["model"] + "`" for r in results),
+        f"`num_ctx={NUM_CTX}` | tools: calculate + lookup", "", "---", "",
+    ]
+
+    # Overview table
+    lines += ["## Overview", ""]
+    hdr = "| Model | D1 chain | D2 direct | D3 tool | D4 recovery | D6 parallel |"
+    sep = "|-------|----------|-----------|---------|-------------|-------------|"
+    lines += [hdr, sep]
+    for r in results:
+        d1 = r["tests"].get("d1_chain_3", {})
+        d2 = r["tests"].get("d2_select_direct", {})
+        d3 = r["tests"].get("d3_select_tool", {})
+        d4 = r["tests"].get("d4_error_recovery", {})
+        d6 = r["tests"].get("d6_parallel", {})
+
+        def _yn(v):
+            return "✓" if v else "✗"
+        chain_ok    = d1.get("lookup_correct") and d1.get("calc_count",0)>=2 and d1.get("final_answer_ok")
+        d4_grade    = "loop" if d4.get("looped") else ("invents" if d4.get("invents_price") else ("reports" if d4.get("reports_error") else "?"))
+        both_done   = d6.get("both_done") and d6.get("has_391") and d6.get("has_1245")
+        lines.append(
+            f"| `{r['model']}` | {_yn(chain_ok)} | "
+            f"{_yn(d2.get('no_tool_call') and d2.get('has_correct_answer'))} | "
+            f"{_yn(d3.get('correct_args'))} | {d4_grade} | {_yn(both_done)} |"
+        )
+    lines.append("")
+
+    # D5 think_tools table
+    lines += ["## D5 — think_tools (chain_3 with think on/off)", ""]
+    hdr5 = "| Model | off final | on final | off steps | on steps |"
+    sep5 = "|-------|-----------|----------|-----------|----------|"
+    lines += [hdr5, sep5]
+    for r in results:
+        d5 = r["tests"].get("d5_think_tools", {})
+        off = d5.get("think_off", {})
+        on  = d5.get("think_on",  {})
+        lines.append(
+            f"| `{r['model']}` "
+            f"| {'✓' if off.get('final_answer_ok') else '✗'} "
+            f"| {'✓' if on.get('final_answer_ok') else '✗'} "
+            f"| {off.get('steps','?')} | {on.get('steps','?')} |"
+        )
+    lines.append("")
+
+    # Per-model detail
+    for r in results:
+        lines += ["---", "", f"## `{r['model']}`", ""]
+
+        for key, label in [
+            ("d1_chain_3",         "D1 — chain_3"),
+            ("d2_select_direct",   "D2 — select_direct"),
+            ("d3_select_tool",     "D3 — select_tool"),
+            ("d4_error_recovery",  "D4 — error_recovery"),
+            ("d6_parallel",        "D6 — parallel_tools"),
+        ]:
+            d = r["tests"].get(key, {})
+            lines += [f"### {label}", ""]
+            for c in d.get("calls", []):
+                lines.append(f"- tool=`{c['tool']}` args={c['args']} → {c['result']}")
+            if d.get("response"):
+                lines += ["", d["response"], ""]
+            lines.append("")
+
+        lines += ["### D5 — think_tools", ""]
+        d5 = r["tests"].get("d5_think_tools", {})
+        for k in ["think_off", "think_on"]:
+            d = d5.get(k, {})
+            lines += [
+                f"**{k}** — seq={d.get('tool_sequence','?')}  "
+                f"steps={d.get('steps','?')}  final={d.get('final_answer_ok','?')}  "
+                f"wall={d.get('wall_s','?')}s",
+                "", d.get("response", "—"), "",
+            ]
+
+    out_md.write_text("\n".join(lines))
+    print(f"MD → {out_md}", flush=True)
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
@@ -776,6 +1493,8 @@ if __name__ == "__main__":
     summary_writers = {
         "A": write_battery_a_summary,
         "B": write_battery_b_summary,
+        "C": write_battery_c_summary,
+        "D": write_battery_d_summary,
     }
     if battery_arg in summary_writers:
         summary_writers[battery_arg](all_results, OUT_MD, fast_mode)
