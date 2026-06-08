@@ -51,16 +51,14 @@ Quality is the gate; speed is the tiebreaker within a tier.
 | ↳ | *v1: 96.1 tok/s, 2.5 GB RAM, Reason 1/3, JPEG 4/7, Tool ✓. Purpose-built for routing. No v2 run yet.* | | | | | | | | | | | |
 | — | `qwen3.5:4b-mlx` (4B, 4.0 GB) | — | — | — | — | — | — | — | — | — | worker | — |
 | ↳ | *v1: 64.0 tok/s, 3.5 GB RAM, Persona 4/5, Reason 2/3, JPEG 5/7, Tool ✓. Battery B winner (personality ceiling). No v2 run yet.* | | | | | | | | | | | |
-| — | `qwen3.5:9b` (9B GGUF, 6.6 GB) | — | — | — | — | — | — | — | — | — | worker | ⚠ drop |
-| ↳ | *v1: reproducible degeneration on long output (think=False) — devolves to word lists, no final answer. Strictly dominated by `qwen3.5:9b-mlx` (same quality, better reliability, comparable speed). Keep on disk as calibration reference only.* | | | | | | | | | | | |
+| — | `qwen3.5:9b` (9B GGUF, 6.6 GB) | — | — | — | — | — | — | — | — | — | worker | — |
+| ↳ | *v1: degeneration on long output without think. Re-testing under v2 parameters before verdict.* | | | | | | | | | | | |
 | — | `gemma4:e2b-mlx` (e2b ~2B eff., 7.1 GB) | — | — | — | — | — | — | — | — | — | worker | — |
 | ↳ | *v1: 67.6 tok/s, 6.3 GB RAM, Persona 4/5, Reason 2/3, JPEG 1/7, Tool ✓. Socratic behavior on open research — scores understate real capability. No v2 run yet.* | | | | | | | | | | | |
 | — | `qwen3.5:9b-mlx` (9B, 8.9 GB) | — | — | — | — | — | — | — | — | — | worker | — |
 | ↳ | *v1: 43 tok/s†, 8.1 GB RAM, Persona 4/5, Reason 2/3, JPEG 6/7, Tool ✓. Best research depth in v1. No v2 run yet.* | | | | | | | | | | | |
 | — | `gemma4:latest` (e4b ~4B eff., 9.6 GB) | — | — | — | — | — | — | — | — | — | worker | — |
 | ↳ | *v1: 37.5 tok/s, 9.6 GB RAM, Persona 5/5 (prompt-following), Reason 2/3, JPEG 3/7, Tool ✓. Borders worker speed floor — watch tok/s on v2. Tool/coding worker; not personality worker. No v2 run yet.* | | | | | | | | | | | |
-| — | `gemma4:e2b-mlx-bf16` (e2b ~2B eff., 10.0 GB) | — | — | — | — | — | — | — | — | — | worker | ⚠ drop |
-| ↳ | *v1: 42.9 tok/s, 9.3 GB RAM — strictly dominated by `gemma4:e2b-mlx` (67.6 tok/s, 7.1 GB disk, 6.3 GB RAM; +57% speed, −37% disk). No quality advantage observed. Drop unless v2 shows unexpected quality gap.* | | | | | | | | | | | |
 
 † thermal throttle artifact — real speed ≈ 38–44 tok/s
 
@@ -83,7 +81,6 @@ num_ctx=16384 | timeout=480s | 5-min smart cooldown between models
 | `gemma4:e2b-mlx` | worker | — | — | — | — | — | — | — | — | — | — | — |
 | `qwen3.5:9b-mlx` | worker | — | — | — | — | — | — | — | — | — | — | — |
 | `gemma4:latest` | worker | — | — | — | — | — | — | — | — | — | — | — |
-| `gemma4:e2b-mlx-bf16` | worker | — | — | — | — | — | — | — | — | — | — | — |
 
 ---
 

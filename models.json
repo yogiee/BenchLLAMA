@@ -4,6 +4,5 @@
   {"name": "qwen3.5:9b",           "disk_gb": 6.6,  "role": "worker"},
   {"name": "gemma4:e2b-mlx",       "disk_gb": 7.1,  "role": "worker"},
   {"name": "qwen3.5:9b-mlx",       "disk_gb": 8.9,  "role": "worker"},
-  {"name": "gemma4:latest",        "disk_gb": 9.6,  "role": "worker"},
-  {"name": "gemma4:e2b-mlx-bf16",  "disk_gb": 10.0, "role": "worker"}
+  {"name": "gemma4:latest",        "disk_gb": 9.6,  "role": "worker"}
 ]
