@@ -129,8 +129,13 @@ def chat(model, messages, max_tokens=600, think=False, tools=None):
         payload["options"]["num_predict"] = max_tokens
     if tools:
         payload["tools"] = tools
-    t0   = time.time()
-    r    = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
+    t0 = time.time()
+    r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
+    if r.status_code == 400 and "think" in payload:
+        print(f"\n  ⚠  {model}: think parameter rejected (400) — retrying without it", flush=True)
+        payload.pop("think")
+        t0 = time.time()
+        r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
     wall = time.time() - t0
     r.raise_for_status()
     return r.json(), wall
@@ -1480,7 +1485,11 @@ if __name__ == "__main__":
             _ws(model_name, "cooldown", apt_done, f"Battery {battery_arg}")
             cooldown(COOLDOWN, label=f"after {MODELS[i-1][0]}")
         _ws(model_name, "running", apt_done, f"Battery {battery_arg}")
-        r = runner(model_name)
+        try:
+            r = runner(model_name)
+        except Exception as e:
+            print(f"\n  ✗ {model_name} FAILED: {e} — skipping\n", flush=True)
+            r = {"model": model_name, "disk_gb": disk_gb, "error": str(e), "tests": {}}
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
         print(f"  ✓ {model_name} done — JSON updated", flush=True)

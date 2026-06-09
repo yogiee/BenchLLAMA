@@ -241,8 +241,13 @@ def chat(model, messages, max_tokens=None, tools=None, timeout=TIMEOUT):
         payload["options"]["num_predict"] = max_tokens
     if tools:
         payload["tools"] = tools
-    t0   = time.time()
-    r    = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=timeout)
+    t0 = time.time()
+    r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=timeout)
+    if r.status_code == 400 and "think" in payload:
+        print(f"\n  ⚠  {model}: think parameter rejected (400) — retrying without it", flush=True)
+        payload.pop("think")
+        t0 = time.time()
+        r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=timeout)
     wall = time.time() - t0
     r.raise_for_status()
     return r.json(), wall
