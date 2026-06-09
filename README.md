@@ -66,7 +66,7 @@ Use `--capable-only` with Battery C and D to automatically skip models that fail
 - [Ollama](https://ollama.com) running at `http://localhost:11434`
 - `pip install requests textual`
 
-### Optional: passwordless powermetrics (smarter cooldown)
+### Optional: passwordless powermetrics (smarter cooldown — macOS only)
 
 ```bash
 echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
