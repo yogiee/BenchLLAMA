@@ -92,4 +92,4 @@ python3 update_registry.py        # query localhost:11434 and update models.json
 python3 update_registry.py --dry-run
 ```
 
-New models land with `role: null` — set each to `"worker"` or `"router"` in `models.json` before running.
+New models are added as `role: "worker"` automatically. After running the standard suite, `runner.py` applies the role gate and promotes qualifying models to `router` — no manual editing required.
