@@ -1477,13 +1477,33 @@ if __name__ == "__main__":
     print(f"Models: {[m[0] for m in MODELS]}", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
+    # ── Resume logic ──────────────────────────────────────────────────────────
+    # If the output file exists and is < 24h old, resume — skip models that
+    # already completed successfully. Older files are ignored (fresh run).
     all_results = []
-    apt_done    = []
+    completed   = set()
+    if OUT_JSON.exists():
+        age_h = (time.time() - OUT_JSON.stat().st_mtime) / 3600
+        if age_h < 24:
+            try:
+                all_results = json.load(OUT_JSON.open())
+                completed   = {r["model"] for r in all_results if "error" not in r}
+                if completed:
+                    print(f"  Resuming — {len(completed)} model(s) already done: {sorted(completed)}", flush=True)
+            except Exception:
+                all_results, completed = [], set()
 
-    for i, (model_name, disk_gb) in enumerate(MODELS):
-        if i > 0:
+    apt_done  = []
+    first_run = True
+
+    for model_name, disk_gb in MODELS:
+        if model_name in completed:
+            print(f"  ↷ {model_name} — already done, skipping", flush=True)
+            continue
+        if not first_run:
             _ws(model_name, "cooldown", apt_done, f"Battery {battery_arg}")
-            cooldown(COOLDOWN, label=f"after {MODELS[i-1][0]}")
+            cooldown(COOLDOWN, label=f"after previous model")
+        first_run = False
         _ws(model_name, "running", apt_done, f"Battery {battery_arg}")
         try:
             r = runner(model_name)
