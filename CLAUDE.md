@@ -53,6 +53,7 @@ pip install requests textual
 ./bench.sh ladder --role router              # ladder, router models only
 ./bench.sh aptitude                          # Aptitude Battery B (default)
 ./bench.sh aptitude --battery B --system-prompt ~/alice.md
+./bench.sh aptitude --battery D --capable-only       # Battery D, tool-capable models only
 
 # Fast mode (skip cool-down, informal results)
 ./bench.sh standard --fast
@@ -84,11 +85,13 @@ Full spec: `suites/suite-design.md`
 | Instruction Follow | format_3, no_eiffel | objective auto-check |
 | Tool Use | calculate | objective auto-check |
 
-**Aptitude Suite — 4 batteries, role-targeted:**
-- **A** — Router (speed + classification accuracy) ← stub
-- **B** — Worker Chat (personality ceiling, consistency, multi-turn depth) ← implemented
-- **C** — Worker Research (think mode, depth vs token budget) ← stub
-- **D** — Worker Tool-heavy (chains, error recovery) ← stub
+**Aptitude Suite — 4 batteries, role-targeted (all fully implemented):**
+- **A** — Router: classify_10 accuracy, brevity floor, prompt-weight sweep, false-escalation rate
+- **B** — Worker Chat: personality ceiling, consistency, multi-turn depth, prompt weight, think toggle
+- **C** — Worker Research: jpeg signals (think on/off + diagnosis), rag_deep, synthesis, ctx_depth ladder, num_predict ceiling, think_coverage
+- **D** — Worker Tool-heavy: chain_3, select_direct/tool, error_recovery, partial_error (D4b), think_tools (fixed diagnosis), personality_tool (D7), deep_cart (D8)
+
+Use `--capable-only` with Batteries C and D to skip models that failed the `calculate` test in the most recent `benchmark_*.json`:
 
 **Role Assignment Gate** (used to select which batteries to run after the standard suite):
 

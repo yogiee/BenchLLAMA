@@ -92,19 +92,19 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Update Registry", _cmd(REPO/"update_registry.py", *x), None)]
     if cmd == "batteries":
         return [
-            ("Battery A", _cmd(apt, "--battery", "A", "--role", "router", *x), "router"),
-            ("Battery B", _cmd(apt, "--battery", "B", "--role", "worker", *x), "worker"),
-            ("Battery C", _cmd(apt, "--battery", "C", "--role", "worker", *x), "worker"),
-            ("Battery D", _cmd(apt, "--battery", "D", "--role", "worker", *x), "worker"),
+            ("Battery A", _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
+            ("Battery B", _cmd(apt, "--battery", "B", "--role", "worker", *x),                    "worker"),
+            ("Battery C", _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x),  "worker"),
+            ("Battery D", _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x),  "worker"),
         ]
     if cmd == "all":
         return [
-            ("Standard Suite", _cmd(REPO/"runner.py", *x),                                   None),
-            ("ctx Ladder",     _cmd(REPO/"ctx_ladder.py", *x),                               None),
-            ("Battery A",      _cmd(apt, "--battery", "A", "--role", "router", *x), "router"),
-            ("Battery B",      _cmd(apt, "--battery", "B", "--role", "worker", *x), "worker"),
-            ("Battery C",      _cmd(apt, "--battery", "C", "--role", "worker", *x), "worker"),
-            ("Battery D",      _cmd(apt, "--battery", "D", "--role", "worker", *x), "worker"),
+            ("Standard Suite", _cmd(REPO/"runner.py", *x),                                                    None),
+            ("ctx Ladder",     _cmd(REPO/"ctx_ladder.py", *x),                                                None),
+            ("Battery A",      _cmd(apt, "--battery", "A", "--role", "router", *x),              "router"),
+            ("Battery B",      _cmd(apt, "--battery", "B", "--role", "worker", *x),              "worker"),
+            ("Battery C",      _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x), "worker"),
+            ("Battery D",      _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x), "worker"),
         ]
     return []
 
@@ -199,6 +199,7 @@ class BenchUI(App):
         self._phases_spec   = phases_spec
         self._state         = BenchState()
         self._current_proc: Optional[asyncio.subprocess.Process] = None
+        self._run_log_fh    = None
         self._state.phases  = [PhaseState(ph[0]) for ph in phases_spec]
 
     def compose(self) -> ComposeResult:
@@ -222,6 +223,11 @@ class BenchUI(App):
     # ── Orchestration ─────────────────────────────────────────────────────────
 
     async def _orchestrate(self) -> None:
+        log_name = f"run_{time.strftime('%Y-%m-%d_%H-%M')}.log"
+        run_log  = REPO / "results" / log_name
+        self._run_log_fh = run_log.open("w")
+        self._log.write(f"Run log → {run_log}")
+
         for i, (label, argv, role_filter) in enumerate(self._phases_spec):
             if i > 0:
                 for remaining in range(PAUSE_SECS, 0, -1):
@@ -237,6 +243,9 @@ class BenchUI(App):
             self._log.write(f"\n{'━' * 58}")
             self._log.write(f"  ▶  {label}")
             self._log.write("━" * 58)
+            if self._run_log_fh:
+                self._run_log_fh.write(f"\n{'━' * 58}\n  ▶  {label}\n{'━' * 58}\n")
+                self._run_log_fh.flush()
 
             ok = await self._run_subprocess(argv)
             self._state.phases[i].status = "done" if ok else "error"
@@ -247,6 +256,9 @@ class BenchUI(App):
                     ms.status = "done" if ok else "error"
 
         self._state.finished = True
+        if self._run_log_fh:
+            self._run_log_fh.close()
+            self._run_log_fh = None
 
     async def _run_subprocess(self, argv: list[str]) -> bool:
         try:
@@ -261,11 +273,18 @@ class BenchUI(App):
                 line = raw.decode(errors="replace").rstrip()
                 self._log.write(line)
                 self._parse_line(line)
+                if self._run_log_fh:
+                    self._run_log_fh.write(line + "\n")
+                    self._run_log_fh.flush()
             await proc.wait()
             self._current_proc = None
             return proc.returncode == 0
         except Exception as exc:
-            self._log.write(f"  [subprocess error] {exc}")
+            msg = f"  [subprocess error] {exc}"
+            self._log.write(msg)
+            if self._run_log_fh:
+                self._run_log_fh.write(msg + "\n")
+                self._run_log_fh.flush()
             self._current_proc = None
             return False
 

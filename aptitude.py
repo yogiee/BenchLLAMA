@@ -6,11 +6,13 @@ Targeted batteries for qualifying models. Run after standard suite.
 Battery A — Router     : classification accuracy, brevity, prompt weight, ctx ladder
 Battery B — Worker Chat: four questions, consistency, multi-turn, prompt weight, think toggle
 Battery C — Research   : jpeg vs think, rag deep, synthesis, ctx depth, num_predict ceiling
-Battery D — Tool-heavy : chain_3, select accuracy, error recovery, think toggle
+Battery D — Tool-heavy : chain_3, select accuracy, error recovery, partial error,
+                         think toggle (fixed diagnosis), personality+tool, deep cart
 
 Usage:
   python3 aptitude.py                                   # Battery B, default models
   python3 aptitude.py --battery B                       # explicit battery
+  python3 aptitude.py --battery D --capable-only        # Battery D, tool-capable models only
   python3 aptitude.py --fast                            # skip cool-down (informal)
   python3 aptitude.py --models qwen3.5:4b-mlx gemma4    # override model list
   python3 aptitude.py --system-prompt ~/alice.md        # custom worker prompt
@@ -48,6 +50,7 @@ def _arg(name, default=None):
     return default
 
 fast_mode          = _flag("--fast")
+capable_only       = _flag("--capable-only")   # Battery C/D: skip models that failed calculate
 battery_arg        = _arg("--battery", "B").upper()
 ollama_host        = _arg("--ollama", "http://localhost:11434")
 worker_prompt_path = _arg("--system-prompt")
@@ -92,6 +95,32 @@ def _load_registry(role):
         for m in json.load(path.open())
         if m["role"] == role
     ]
+
+
+def _filter_tool_capable(models):
+    """Keep only models that passed the calculate test in the most recent benchmark JSON.
+    Used by --capable-only for Battery C and D to skip personality-only workers.
+    Falls back to the full list if no benchmark data is available.
+    """
+    benchmarks = sorted(RESULTS_DIR.glob("benchmark_*.json"), key=lambda p: p.stat().st_mtime)
+    if not benchmarks:
+        print("  --capable-only: no benchmark JSON found — running all models", flush=True)
+        return models
+    try:
+        records = json.load(benchmarks[-1].open())
+        passed  = {r["model"] for r in records
+                   if r.get("tests", {}).get("calculate", {}).get("correct")}
+        filtered = [(m, d) for m, d in models if m in passed]
+        if filtered:
+            skipped = [m for m, _ in models if m not in passed]
+            print(f"  --capable-only: {len(filtered)}/{len(models)} models passed tool gate "
+                  f"(skipped: {skipped})", flush=True)
+            return filtered
+        print("  --capable-only: no matches in benchmark data — running all models", flush=True)
+    except Exception as e:
+        print(f"  --capable-only: parse error ({e}) — running all models", flush=True)
+    return models
+
 
 BATTERY_B_MODELS = _load_registry("worker")
 BATTERY_A_MODELS = _load_registry("router")
@@ -760,9 +789,8 @@ SYNTHESIS_PROMPT = (
     + "\n\n".join(SYNTHESIS_SOURCES)
 )
 
-CTX_DEPTH_LEVELS = [8192, 16384, 32768]
-
-NUM_PREDICT_LEVELS = [600, 1000, 1500, 2000]
+CTX_DEPTH_LEVELS    = [8192, 16384, 32768]
+NUM_PREDICT_LEVELS  = [600, 1000, 1500, 2000]
 
 
 def _jpeg_coverage(response: str) -> dict:
@@ -793,7 +821,7 @@ def _think_diagnosis(raw_api: dict) -> str:
       api_error        — response parsing failed
     """
     try:
-        msg = raw_api.get("message", {})
+        msg      = raw_api.get("message", {})
         thinking = msg.get("thinking", "")
         content  = msg.get("content", "")
 
@@ -802,7 +830,6 @@ def _think_diagnosis(raw_api: dict) -> str:
         if thinking and (not content or len(content.split()) <= 10):
             return "think_empty"
 
-        # Fallback: check if <think>...</think> tags are in the content string
         if "<think>" in content.lower():
             after = re.split(r"</think>", content, flags=re.IGNORECASE)
             post  = after[-1].strip() if len(after) > 1 else ""
@@ -832,7 +859,7 @@ def _chat_ctx(model, messages, ctx, max_tokens, think=False):
 # ── Battery C — Worker Research ───────────────────────────────────────────────
 
 def run_battery_c(model_name):
-    result = {"model": model_name, "battery": "C", "tests": {}}
+    result   = {"model": model_name, "battery": "C", "tests": {}}
     sys_full = [{"role": "system", "content": PROMPT_WORKER_FULL}]
 
     print(f"\n{'='*60}", flush=True)
@@ -872,10 +899,9 @@ def run_battery_c(model_name):
                       max_tokens=2000)
     text = data.get("message", {}).get("content", "")
     lo   = text.lower()
-    # Auto-signals: counts numbered examples and approach keywords
-    rag_examples   = len(re.findall(r"\b(?:rag|retrieval)[^.]*(?:example|case|scenario|use.case)", lo))
-    ft_examples    = len(re.findall(r"\b(?:fine.tun|finetuning)[^.]*(?:example|case|scenario|use.case)", lo))
-    has_tradeoff   = any(x in lo for x in ["tradeoff", "trade-off", "when to use", "vs", "versus", "better when"])
+    rag_examples = len(re.findall(r"\b(?:rag|retrieval)[^.]*(?:example|case|scenario|use.case)", lo))
+    ft_examples  = len(re.findall(r"\b(?:fine.tun|finetuning)[^.]*(?:example|case|scenario|use.case)", lo))
+    has_tradeoff = any(x in lo for x in ["tradeoff", "trade-off", "when to use", "vs", "versus", "better when"])
     result["tests"]["c2_rag_deep"] = {
         "words": word_count(text), "wall_s": round(wall, 1), "tps": tps(data),
         "rag_example_hits": rag_examples, "ft_example_hits": ft_examples,
@@ -892,11 +918,10 @@ def run_battery_c(model_name):
     text  = data.get("message", {}).get("content", "")
     lo    = text.lower()
     wc    = word_count(text)
-    # Auto-signals: did it actually synthesise (not just list)?
-    in_range        = 100 <= wc <= 300
-    mentions_all_3  = all(x in lo for x in ["constitutional", "rlhf", "scalab"])
-    has_tension     = any(x in lo for x in ["tension", "contrast", "differ", "whereas", "while", "however"])
-    no_src_listing  = not re.search(r"source [abc]:", lo)  # didn't just re-label sources
+    in_range       = 100 <= wc <= 300
+    mentions_all_3 = all(x in lo for x in ["constitutional", "rlhf", "scalab"])
+    has_tension    = any(x in lo for x in ["tension", "contrast", "differ", "whereas", "while", "however"])
+    no_src_listing = not re.search(r"source [abc]:", lo)
     result["tests"]["c3_synthesis"] = {
         "words": wc, "in_range": in_range, "wall_s": round(wall, 1), "tps": tps(data),
         "mentions_all_3": mentions_all_3, "has_tension": has_tension,
@@ -979,15 +1004,14 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
         f"`num_ctx={NUM_CTX}` (baseline) | worker prompt", "", "---", "",
     ]
 
-    # C1 overview
     lines += ["## C1 — JPEG signals: think=off vs think=on", ""]
     hdr = "| Model | off score | on score | delta | think diagnosis |"
     sep = "|-------|-----------|----------|-------|-----------------|"
     lines += [hdr, sep]
     for r in results:
-        c1   = r["tests"].get("c1_jpeg_signals", {})
-        off  = c1.get("think_off", {})
-        on   = c1.get("think_on",  {})
+        c1    = r["tests"].get("c1_jpeg_signals", {})
+        off   = c1.get("think_off", {})
+        on    = c1.get("think_on",  {})
         delta = (on.get("score", 0) or 0) - (off.get("score", 0) or 0)
         lines.append(
             f"| `{r['model']}` | {off.get('score','?')}/7 | {on.get('score','?')}/7 "
@@ -995,7 +1019,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
         )
     lines.append("")
 
-    # C4 ctx_depth overview
     lines += ["## C4 — ctx_depth (JPEG signal score)", ""]
     hdr4 = "| Model | ctx=8192 | ctx=16384 | ctx=32768 |"
     sep4 = "|-------|----------|-----------|-----------|"
@@ -1010,7 +1033,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
         )
     lines.append("")
 
-    # C5 num_predict overview
     lines += ["## C5 — num_predict ceiling (JPEG signal score / word count)", ""]
     hdr5 = "| Model | cap=600 | cap=1000 | cap=1500 | cap=2000 |"
     sep5 = "|-------|---------|----------|----------|----------|"
@@ -1025,7 +1047,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
         )
     lines.append("")
 
-    # C6 think_coverage
     lines += ["## C6 — think_coverage (JPEG, lean prompt)", ""]
     hdr6 = "| Model | score | diagnosis | Δ vs full-think |"
     sep6 = "|-------|-------|-----------|-----------------|"
@@ -1040,11 +1061,9 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
         )
     lines.append("")
 
-    # Per-model detail
     for r in results:
         lines += ["---", "", f"## `{r['model']}`", ""]
 
-        # C1
         lines += ["### C1 — JPEG signals (think off / on)", ""]
         c1 = r["tests"].get("c1_jpeg_signals", {})
         for key in ["think_off", "think_on"]:
@@ -1058,7 +1077,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
                 lines.append(f"  - {'✓' if hit else '✗'} {sig}")
             lines += ["", d.get("response", "—"), ""]
 
-        # C2
         c2 = r["tests"].get("c2_rag_deep", {})
         lines += [
             "### C2 — rag_deep", "",
@@ -1068,7 +1086,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
             "", c2.get("response", "—"), "",
         ]
 
-        # C3
         c3 = r["tests"].get("c3_synthesis", {})
         lines += [
             "### C3 — synthesis_3src", "",
@@ -1079,7 +1096,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
             "", c3.get("response", "—"), "",
         ]
 
-        # C4
         lines += ["### C4 — ctx_depth", ""]
         c4 = r["tests"].get("c4_ctx_depth", {})
         for ctx in CTX_DEPTH_LEVELS:
@@ -1090,7 +1106,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
             )
         lines.append("")
 
-        # C5
         lines += ["### C5 — num_predict ceiling", ""]
         c5 = r["tests"].get("c5_num_predict", {})
         for cap in NUM_PREDICT_LEVELS:
@@ -1101,8 +1116,7 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
             )
         lines.append("")
 
-        # C6
-        c6 = r["tests"].get("c6_think_coverage", {})
+        c6   = r["tests"].get("c6_think_coverage", {})
         c1on = r["tests"].get("c1_jpeg_signals", {}).get("think_on", {})
         delta = (c6.get("score", 0) or 0) - (c1on.get("score", 0) or 0)
         lines += [
@@ -1169,10 +1183,41 @@ PARALLEL_PROMPT = (
     "Give me both results."
 )
 
+# D7 — personality + tool integration: measures tool correctness AND persona voice together.
+# This is the practical application test — Alice must use tools while sounding like Alice.
+# Scored 0–4: lookup ✓, calculate ✓, correct answer (~$64.97) ✓, persona voice ✓
+D7_PROMPT = (
+    "I'm thinking of ordering some office supplies. "
+    "Can you look up the price of a widget, figure out what 12 of them would cost "
+    "with 8.5% sales tax, and let me know if that seems like a reasonable spend "
+    "for a small office?"
+)
+D7_EXPECTED = 64.97   # 4.99 × 12 × 1.085
 
-def _exec_tool(name, args, error_mode=False):
-    """Simulate tool execution. Returns a JSON-serialisable result dict."""
-    if error_mode:
+# D8 — deep cart: 5 lookups + multi-step calculation; tests loop depth and persistence.
+# Expected: (4.99×3 + 12.50×2 + 7.25×4 + 3.75×1 + 9.00×2) × 0.9 × 1.08 ≈ $88.18
+D8_PROMPT = (
+    "I need to place a full office supply order. Look up the unit price for each item "
+    "and calculate the total:\n"
+    "  - 3 widgets\n"
+    "  - 2 gadgets\n"
+    "  - 4 gizmos\n"
+    "  - 1 doohickey\n"
+    "  - 2 thingamajigs\n\n"
+    "Apply a 10% discount if the subtotal exceeds $30 (it will). "
+    "Then add 8% sales tax. Show me the final amount."
+)
+D8_ITEMS    = {"widget", "gadget", "gizmo", "doohickey", "thingamajig"}
+D8_EXPECTED = 88.18
+
+
+def _exec_tool(name, args, error_mode=False, error_on=None):
+    """Simulate tool execution. Returns a JSON-serialisable result dict.
+
+    error_mode=True        → all tools fail with a service error.
+    error_on={'calculate'} → only the named tools fail; others succeed normally.
+    """
+    if error_mode or (error_on and name in error_on):
         return {"error": "Service unavailable. Please try again later."}
     if name == "calculate":
         try:
@@ -1188,23 +1233,27 @@ def _exec_tool(name, args, error_mode=False):
     return {"error": f"Unknown tool: {name}"}
 
 
-def _tool_loop(model_name, messages, tools, max_steps=6, think=False, error_mode=False):
+def _tool_loop(model_name, messages, tools, max_steps=6, think=False,
+               error_mode=False, error_on=None):
     """Multi-turn tool-calling loop.
 
-    Returns: (final_text, all_tool_calls, steps_taken, wall_total_s)
+    Returns: (final_text, all_tool_calls, steps_taken, wall_total_s, last_raw_api)
+    last_raw_api is the final Ollama response dict — pass to _think_diagnosis() as needed.
     """
     history    = list(messages)
     all_calls  = []
     wall_total = 0.0
+    last_raw   = {}
 
     for step in range(max_steps):
         data, wall = chat(model_name, history, max_tokens=800, think=think, tools=tools)
         wall_total += wall
-        msg        = data.get("message", {})
-        tool_calls = msg.get("tool_calls", [])
+        last_raw    = data
+        msg         = data.get("message", {})
+        tool_calls  = msg.get("tool_calls", [])
 
         if not tool_calls:
-            return msg.get("content", ""), all_calls, step, wall_total
+            return msg.get("content", ""), all_calls, step, wall_total, data
 
         history.append({
             "role": "assistant", "content": msg.get("content", ""),
@@ -1220,11 +1269,11 @@ def _tool_loop(model_name, messages, tools, max_steps=6, think=False, error_mode
                     args = json.loads(args)
                 except Exception:
                     args = {}
-            result = _exec_tool(name, args, error_mode=error_mode)
+            result = _exec_tool(name, args, error_mode=error_mode, error_on=error_on)
             all_calls.append({"tool": name, "args": args, "result": result})
             history.append({"role": "tool", "content": json.dumps(result)})
 
-    return "", all_calls, max_steps, wall_total
+    return "", all_calls, max_steps, wall_total, last_raw
 
 
 # ── Battery D — Tool-heavy ────────────────────────────────────────────────────
@@ -1239,16 +1288,15 @@ def run_battery_d(model_name):
 
     # D1 — chain_3: lookup → calculate → calculate (3 sequential tool calls)
     print("\n  [D1] chain_3 (lookup widget → calc total → calc tax)...", flush=True)
-    text, calls, steps, wall = _tool_loop(
+    text, calls, steps, wall, _ = _tool_loop(
         model_name,
         sys_std + [{"role": "user", "content": CHAIN_3_PROMPT}],
         tools=TOOL_DEFS_D,
     )
-    tool_names   = [c["tool"] for c in calls]
-    lookup_ok    = any(c["tool"] == "lookup" and "widget" in str(c["args"]).lower()
-                       for c in calls)
-    calc_count   = sum(1 for c in calls if c["tool"] == "calculate")
-    final_ok     = "43.9" in text or "43.91" in text or "43.912" in text
+    tool_names = [c["tool"] for c in calls]
+    lookup_ok  = any(c["tool"] == "lookup" and "widget" in str(c["args"]).lower() for c in calls)
+    calc_count = sum(1 for c in calls if c["tool"] == "calculate")
+    final_ok   = "43.9" in text or "43.91" in text or "43.912" in text
     result["tests"]["d1_chain_3"] = {
         "tool_sequence": tool_names, "steps": steps, "wall_s": round(wall, 1),
         "lookup_correct": lookup_ok, "calc_count": calc_count, "final_answer_ok": final_ok,
@@ -1292,9 +1340,9 @@ def run_battery_d(model_name):
     mark = "✓" if correct else ("✗ no call" if not called else "✗ wrong args")
     print(f"    {mark}  called={called}  correct_args={correct}", flush=True)
 
-    # D4 — error_recovery: lookup returns {"error": "..."}
-    print("\n  [D4] error_recovery (lookup returns error)...", flush=True)
-    text4, calls4, steps4, wall4 = _tool_loop(
+    # D4 — error_recovery: all tools return service error
+    print("\n  [D4] error_recovery (all tools fail)...", flush=True)
+    text4, calls4, steps4, wall4, _ = _tool_loop(
         model_name,
         sys_std + [{"role": "user",
                     "content": "Use the lookup tool to find the unit price of a sprocket."}],
@@ -1313,35 +1361,65 @@ def run_battery_d(model_name):
     print(f"    grade={grade}  steps={steps4}  reports={reports_err}  invents={invents}", flush=True)
     print(f"    → {text4[:120].replace(chr(10), ' ')}", flush=True)
 
-    # D5 — think_tools: chain_3 with think=False vs think=True
+    # D4b — partial_error: lookup succeeds, calculate fails.
+    # Tests graceful degradation — use the partial result you have, report what failed.
+    print("\n  [D4b] partial_error (lookup ok, calculate fails)...", flush=True)
+    text4b, calls4b, steps4b, wall4b, _ = _tool_loop(
+        model_name,
+        sys_std + [{"role": "user",
+                    "content": "Use the lookup tool to find the price of a widget, "
+                               "then use the calculate tool to find the total cost for 12 units."}],
+        tools=TOOL_DEFS_D, error_on={"calculate"}, max_steps=4,
+    )
+    lo4b            = text4b.lower()
+    lookup_got4b    = any(c["tool"] == "lookup" and "price_usd" in str(c.get("result", {}))
+                          for c in calls4b)
+    calc_tried4b    = any(c["tool"] == "calculate" for c in calls4b)
+    # plausible totals ($58–$64) that only appear if the model calculated mentally despite the error
+    invents_total4b = bool(re.search(r'\b5[89]\b|\b6[0-4]\b', text4b))
+    reports_partial = any(x in lo4b for x in ["4.99", "unavailable", "error", "unable", "couldn't"])
+    grade4b = (
+        "graceful" if (lookup_got4b and not invents_total4b and reports_partial) else
+        "invents"  if invents_total4b else
+        "unclear"
+    )
+    result["tests"]["d4b_partial_error"] = {
+        "lookup_succeeded": lookup_got4b, "calc_attempted": calc_tried4b,
+        "invents_total": invents_total4b, "reports_partial": reports_partial,
+        "grade": grade4b, "steps": steps4b,
+        "calls": calls4b, "wall_s": round(wall4b, 1), "response": text4b,
+    }
+    print(f"    grade={grade4b}  lookup_ok={lookup_got4b}  calc_tried={calc_tried4b}  invents={invents_total4b}", flush=True)
+    print(f"    → {text4b[:120].replace(chr(10), ' ')}", flush=True)
+
+    # D5 — think_tools: chain_3 with think=False vs think=True.
+    # Uses _think_diagnosis() on the actual final API response (not a step-count approximation).
     print("\n  [D5] think_tools (chain_3 with think=off vs think=on)...", flush=True)
     d5_results = {}
     for think_val in [False, True]:
-        text5, calls5, steps5, wall5 = _tool_loop(
+        text5, calls5, steps5, wall5, last_raw5 = _tool_loop(
             model_name,
             sys_std + [{"role": "user", "content": CHAIN_3_PROMPT}],
             tools=TOOL_DEFS_D, think=think_val,
         )
-        tool_seq5  = [c["tool"] for c in calls5]
-        final_ok5  = "43.9" in text5 or "43.91" in text5
-        diag5      = "think_off"
-        if think_val:
-            # approximate diagnosis from step count (actual think block is per-turn)
-            diag5 = "think_on" if steps5 > 0 else "think_stall"
+        tool_seq5 = [c["tool"] for c in calls5]
+        final_ok5 = "43.9" in text5 or "43.91" in text5
+        diag5     = _think_diagnosis(last_raw5) if think_val else "think_off"
         key = "think_on" if think_val else "think_off"
         d5_results[key] = {
             "tool_sequence": tool_seq5, "steps": steps5,
             "final_answer_ok": final_ok5, "wall_s": round(wall5, 1),
+            "think_diagnosis": diag5,
             "calls": calls5, "response": text5,
         }
         mark = "✓" if final_ok5 else "✗"
-        print(f"    [think={key[-2:]}] {mark}  seq={tool_seq5}  steps={steps5}  wall={round(wall5,1)}s",
-              flush=True)
+        print(f"    [think={key[-2:]}] {mark}  seq={tool_seq5}  steps={steps5}  "
+              f"wall={round(wall5,1)}s  diag={diag5}", flush=True)
     result["tests"]["d5_think_tools"] = d5_results
 
     # D6 — parallel_tools: two independent calculations in one request
     print("\n  [D6] parallel_tools (two calcs in one turn)...", flush=True)
-    text6, calls6, steps6, wall6 = _tool_loop(
+    text6, calls6, steps6, wall6, _ = _tool_loop(
         model_name,
         sys_std + [{"role": "user", "content": PARALLEL_PROMPT}],
         tools=TOOL_DEFS_D,
@@ -1356,8 +1434,61 @@ def run_battery_d(model_name):
         "calls": calls6, "wall_s": round(wall6, 1), "response": text6,
     }
     mark = "✓" if both_done and has_391 and has_1245 else "✗"
-    print(f"    {mark}  calc_count={len(calc_calls)}  391={has_391}  1245={has_1245}",
-          flush=True)
+    print(f"    {mark}  calc_count={len(calc_calls)}  391={has_391}  1245={has_1245}", flush=True)
+
+    # D7 — personality_tool: tool correctness + persona voice in the same response.
+    # The practical application test: a model must use tools AND maintain character.
+    # Scored 0–4: lookup ✓, calculate ✓, correct final answer ✓, persona voice ✓
+    print("\n  [D7] personality_tool (widget order + persona voice)...", flush=True)
+    text7, calls7, steps7, wall7, _ = _tool_loop(
+        model_name,
+        sys_std + [{"role": "user", "content": D7_PROMPT}],
+        tools=TOOL_DEFS_D,
+    )
+    lookup_ok7  = any(c["tool"] == "lookup" and "widget" in str(c["args"]).lower() for c in calls7)
+    calc_ok7    = any(c["tool"] == "calculate" for c in calls7)
+    final_ok7   = any(x in text7 for x in ["64.9", "64.97", "64.98", "65.0", "65.00"])
+    voice7      = persona_signals(text7)
+    voice_ok7   = voice7["direct_voice"] or voice7["warmth"] or voice7["wit"]
+    d7_score    = sum([lookup_ok7, calc_ok7, final_ok7, voice_ok7])
+    result["tests"]["d7_personality_tool"] = {
+        "lookup_correct": lookup_ok7, "calc_called": calc_ok7,
+        "final_answer_ok": final_ok7, "voice_ok": voice_ok7,
+        "voice_signals": voice7, "score": d7_score, "max": 4,
+        "steps": steps7, "wall_s": round(wall7, 1),
+        "calls": calls7, "response": text7,
+    }
+    sigs7 = [k for k, v in voice7.items() if v]
+    print(f"    {d7_score}/4  lookup={lookup_ok7}  calc={calc_ok7}  answer={final_ok7}  voice={voice_ok7}", flush=True)
+    print(f"    voice: {sigs7 or 'none'}", flush=True)
+    print(f"    → {text7[:120].replace(chr(10), ' ')}", flush=True)
+
+    # D8 — deep_cart: 5-item order requiring 8+ tool calls; tests loop depth and persistence.
+    # Expected final: ~$88.18 (subtotal $90.72 × 0.9 discount × 1.08 tax)
+    # Scored 0–4: all items looked up ✓, ≥3 calculate calls ✓, correct answer ✓, completed ✓
+    print("\n  [D8] deep_cart (5-item order, 8+ tool calls, discount + tax)...", flush=True)
+    text8, calls8, steps8, wall8, _ = _tool_loop(
+        model_name,
+        sys_std + [{"role": "user", "content": D8_PROMPT}],
+        tools=TOOL_DEFS_D, max_steps=15,
+    )
+    items_looked = {c["args"].get("item", "").lower().strip()
+                    for c in calls8 if c["tool"] == "lookup"}
+    all_looked   = D8_ITEMS.issubset(items_looked)
+    calc_count8  = sum(1 for c in calls8 if c["tool"] == "calculate")
+    final_ok8    = any(x in text8 for x in ["88.18", "88.17", "88.2", "88.1"])
+    completed    = steps8 < 15   # didn't exhaust the step budget
+    d8_score     = sum([all_looked, calc_count8 >= 3, final_ok8, completed])
+    result["tests"]["d8_deep_cart"] = {
+        "items_looked_up": sorted(items_looked), "all_items_found": all_looked,
+        "calc_call_count": calc_count8, "final_answer_ok": final_ok8,
+        "completed_in_budget": completed, "score": d8_score, "max": 4,
+        "tool_call_total": len(calls8), "steps": steps8, "wall_s": round(wall8, 1),
+        "calls": calls8, "response": text8,
+    }
+    print(f"    {d8_score}/4  all_items={all_looked}  calcs={calc_count8}  "
+          f"final={final_ok8}  calls={len(calls8)}  steps={steps8}", flush=True)
+    print(f"    → {text8[:120].replace(chr(10), ' ')}", flush=True)
 
     return result
 
@@ -1374,42 +1505,91 @@ def write_battery_d_summary(results, out_md: Path, fast_mode=False):
 
     # Overview table
     lines += ["## Overview", ""]
-    hdr = "| Model | D1 chain | D2 direct | D3 tool | D4 recovery | D6 parallel |"
-    sep = "|-------|----------|-----------|---------|-------------|-------------|"
+    hdr = ("| Model | D1 chain | D2 direct | D3 tool | D4 full | "
+           "D4b partial | D6 parallel | D7 voice | D8 cart |")
+    sep = ("|-------|----------|-----------|---------|---------|"
+           "------------|-------------|----------|---------|")
     lines += [hdr, sep]
     for r in results:
-        d1 = r["tests"].get("d1_chain_3", {})
-        d2 = r["tests"].get("d2_select_direct", {})
-        d3 = r["tests"].get("d3_select_tool", {})
-        d4 = r["tests"].get("d4_error_recovery", {})
-        d6 = r["tests"].get("d6_parallel", {})
+        d1  = r["tests"].get("d1_chain_3",          {})
+        d2  = r["tests"].get("d2_select_direct",    {})
+        d3  = r["tests"].get("d3_select_tool",      {})
+        d4  = r["tests"].get("d4_error_recovery",   {})
+        d4b = r["tests"].get("d4b_partial_error",   {})
+        d6  = r["tests"].get("d6_parallel",         {})
+        d7  = r["tests"].get("d7_personality_tool", {})
+        d8  = r["tests"].get("d8_deep_cart",        {})
 
-        def _yn(v):
-            return "✓" if v else "✗"
-        chain_ok    = d1.get("lookup_correct") and d1.get("calc_count",0)>=2 and d1.get("final_answer_ok")
-        d4_grade    = "loop" if d4.get("looped") else ("invents" if d4.get("invents_price") else ("reports" if d4.get("reports_error") else "?"))
-        both_done   = d6.get("both_done") and d6.get("has_391") and d6.get("has_1245")
+        def _yn(v): return "✓" if v else "✗"
+        chain_ok  = d1.get("lookup_correct") and d1.get("calc_count", 0) >= 2 and d1.get("final_answer_ok")
+        d4_grade  = ("loop"    if d4.get("looped") else
+                     "invents" if d4.get("invents_price") else
+                     "reports" if d4.get("reports_error") else "?")
+        d4b_grade = d4b.get("grade", "—")
+        both_done = d6.get("both_done") and d6.get("has_391") and d6.get("has_1245")
+
         lines.append(
             f"| `{r['model']}` | {_yn(chain_ok)} | "
             f"{_yn(d2.get('no_tool_call') and d2.get('has_correct_answer'))} | "
-            f"{_yn(d3.get('correct_args'))} | {d4_grade} | {_yn(both_done)} |"
+            f"{_yn(d3.get('correct_args'))} | {d4_grade} | "
+            f"{d4b_grade} | {_yn(both_done)} | "
+            f"{d7.get('score','?')}/4 | {d8.get('score','?')}/4 |"
         )
     lines.append("")
 
-    # D5 think_tools table
+    # D5 think_tools table (with think_diagnosis column)
     lines += ["## D5 — think_tools (chain_3 with think on/off)", ""]
-    hdr5 = "| Model | off final | on final | off steps | on steps |"
-    sep5 = "|-------|-----------|----------|-----------|----------|"
+    hdr5 = "| Model | off final | on final | off steps | on steps | think diag (on) |"
+    sep5 = "|-------|-----------|----------|-----------|----------|-----------------|"
     lines += [hdr5, sep5]
     for r in results:
-        d5 = r["tests"].get("d5_think_tools", {})
+        d5  = r["tests"].get("d5_think_tools", {})
         off = d5.get("think_off", {})
         on  = d5.get("think_on",  {})
         lines.append(
             f"| `{r['model']}` "
             f"| {'✓' if off.get('final_answer_ok') else '✗'} "
             f"| {'✓' if on.get('final_answer_ok') else '✗'} "
-            f"| {off.get('steps','?')} | {on.get('steps','?')} |"
+            f"| {off.get('steps','?')} | {on.get('steps','?')} "
+            f"| {on.get('think_diagnosis','—')} |"
+        )
+    lines.append("")
+
+    # D7 voice breakdown
+    lines += ["## D7 — personality_tool (score / voice signals)", ""]
+    hdr7 = "| Model | Score | lookup | calc | answer | voice | voice signals |"
+    sep7 = "|-------|-------|--------|------|--------|-------|---------------|"
+    lines += [hdr7, sep7]
+    for r in results:
+        d7   = r["tests"].get("d7_personality_tool", {})
+        vs   = d7.get("voice_signals", {})
+        sigs = ", ".join(k for k, v in vs.items() if v) or "none"
+        def _yn(v): return "✓" if v else "✗"
+        lines.append(
+            f"| `{r['model']}` | {d7.get('score','?')}/4 "
+            f"| {_yn(d7.get('lookup_correct'))} "
+            f"| {_yn(d7.get('calc_called'))} "
+            f"| {_yn(d7.get('final_answer_ok'))} "
+            f"| {_yn(d7.get('voice_ok'))} "
+            f"| {sigs} |"
+        )
+    lines.append("")
+
+    # D8 deep cart summary
+    lines += ["## D8 — deep_cart (5-item order, discount + tax)", ""]
+    hdr8 = "| Model | Score | all items | calcs | final ok | tool calls | steps |"
+    sep8 = "|-------|-------|-----------|-------|----------|------------|-------|"
+    lines += [hdr8, sep8]
+    for r in results:
+        d8 = r["tests"].get("d8_deep_cart", {})
+        def _yn(v): return "✓" if v else "✗"
+        lines.append(
+            f"| `{r['model']}` | {d8.get('score','?')}/4 "
+            f"| {_yn(d8.get('all_items_found'))} "
+            f"| {d8.get('calc_call_count','?')} "
+            f"| {_yn(d8.get('final_answer_ok'))} "
+            f"| {d8.get('tool_call_total','?')} "
+            f"| {d8.get('steps','?')} |"
         )
     lines.append("")
 
@@ -1418,11 +1598,9 @@ def write_battery_d_summary(results, out_md: Path, fast_mode=False):
         lines += ["---", "", f"## `{r['model']}`", ""]
 
         for key, label in [
-            ("d1_chain_3",         "D1 — chain_3"),
-            ("d2_select_direct",   "D2 — select_direct"),
-            ("d3_select_tool",     "D3 — select_tool"),
-            ("d4_error_recovery",  "D4 — error_recovery"),
-            ("d6_parallel",        "D6 — parallel_tools"),
+            ("d1_chain_3",       "D1 — chain_3"),
+            ("d2_select_direct", "D2 — select_direct"),
+            ("d3_select_tool",   "D3 — select_tool"),
         ]:
             d = r["tests"].get(key, {})
             lines += [f"### {label}", ""]
@@ -1432,6 +1610,25 @@ def write_battery_d_summary(results, out_md: Path, fast_mode=False):
                 lines += ["", d["response"], ""]
             lines.append("")
 
+        d4 = r["tests"].get("d4_error_recovery", {})
+        grade4 = ("loop"    if d4.get("looped") else
+                  "invents" if d4.get("invents_price") else
+                  "reports" if d4.get("reports_error") else "?")
+        lines += [
+            "### D4 — error_recovery (all tools fail)", "",
+            f"grade={grade4}  steps={d4.get('steps','?')}  "
+            f"reports={d4.get('reports_error','?')}  invents={d4.get('invents_price','?')}",
+            "", d4.get("response", "—"), "",
+        ]
+
+        d4b = r["tests"].get("d4b_partial_error", {})
+        lines += [
+            "### D4b — partial_error (lookup ok, calculate fails)", "",
+            f"grade={d4b.get('grade','?')}  lookup_ok={d4b.get('lookup_succeeded','?')}  "
+            f"calc_tried={d4b.get('calc_attempted','?')}  invents={d4b.get('invents_total','?')}",
+            "", d4b.get("response", "—"), "",
+        ]
+
         lines += ["### D5 — think_tools", ""]
         d5 = r["tests"].get("d5_think_tools", {})
         for k in ["think_off", "think_on"]:
@@ -1439,9 +1636,44 @@ def write_battery_d_summary(results, out_md: Path, fast_mode=False):
             lines += [
                 f"**{k}** — seq={d.get('tool_sequence','?')}  "
                 f"steps={d.get('steps','?')}  final={d.get('final_answer_ok','?')}  "
-                f"wall={d.get('wall_s','?')}s",
+                f"wall={d.get('wall_s','?')}s  diag={d.get('think_diagnosis','—')}",
                 "", d.get("response", "—"), "",
             ]
+
+        d6 = r["tests"].get("d6_parallel", {})
+        lines += [
+            "### D6 — parallel_tools", "",
+            f"calc_count={d6.get('calc_call_count','?')}  391={d6.get('has_391','?')}  1245={d6.get('has_1245','?')}",
+            "", d6.get("response", "—"), "",
+        ]
+
+        d7   = r["tests"].get("d7_personality_tool", {})
+        vs7  = d7.get("voice_signals", {})
+        sigs7 = ", ".join(k for k, v in vs7.items() if v) or "none"
+        lines += [
+            "### D7 — personality_tool", "",
+            f"score={d7.get('score','?')}/4  "
+            f"lookup={d7.get('lookup_correct','?')}  "
+            f"calc={d7.get('calc_called','?')}  "
+            f"answer={d7.get('final_answer_ok','?')}  "
+            f"voice={d7.get('voice_ok','?')}  signals: {sigs7}",
+        ]
+        for c in d7.get("calls", []):
+            lines.append(f"- tool=`{c['tool']}` args={c['args']} → {c['result']}")
+        lines += ["", d7.get("response", "—"), ""]
+
+        d8 = r["tests"].get("d8_deep_cart", {})
+        lines += [
+            "### D8 — deep_cart", "",
+            f"score={d8.get('score','?')}/4  "
+            f"items={d8.get('items_looked_up','?')}  "
+            f"calcs={d8.get('calc_call_count','?')}  "
+            f"final={d8.get('final_answer_ok','?')}  "
+            f"calls={d8.get('tool_call_total','?')}  steps={d8.get('steps','?')}",
+        ]
+        for c in d8.get("calls", []):
+            lines.append(f"- tool=`{c['tool']}` args={c['args']} → {c['result']}")
+        lines += ["", d8.get("response", "—"), ""]
 
     out_md.write_text("\n".join(lines))
     print(f"MD → {out_md}", flush=True)
@@ -1453,11 +1685,14 @@ if __name__ == "__main__":
     TODAY  = date.today().isoformat()
     suffix = "_fast" if fast_mode else ""
 
+    # Apply --capable-only filter for tool-relevant batteries (C, D)
+    _cd_models = _filter_tool_capable(BATTERY_B_MODELS) if capable_only else BATTERY_B_MODELS
+
     BATTERY_MAP = {
         "A": (BATTERY_A_MODELS, run_battery_a, "aptitude_a"),
         "B": (BATTERY_B_MODELS, run_battery_b, "aptitude_b"),
-        "C": (BATTERY_B_MODELS, run_battery_c, "aptitude_c"),  # worker models
-        "D": (BATTERY_B_MODELS, run_battery_d, "aptitude_d"),  # worker models
+        "C": (_cd_models,       run_battery_c, "aptitude_c"),
+        "D": (_cd_models,       run_battery_d, "aptitude_d"),
     }
 
     if battery_arg not in BATTERY_MAP:
