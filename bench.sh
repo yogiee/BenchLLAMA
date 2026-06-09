@@ -101,17 +101,17 @@ _pause_short() {
 }
 
 _batteries() {
-    echo "━━━ Battery A ━━━"
-    python3 "$REPO/aptitude.py" --battery A "${PASS[@]}" || return 1
+    echo "━━━ Battery A (routers) ━━━"
+    python3 "$REPO/aptitude.py" --battery A --role router "${PASS[@]}" || return 1
     _pause_short "Battery B"
-    echo "━━━ Battery B ━━━"
-    python3 "$REPO/aptitude.py" --battery B "${PASS[@]}" || return 1
+    echo "━━━ Battery B (workers) ━━━"
+    python3 "$REPO/aptitude.py" --battery B --role worker "${PASS[@]}" || return 1
     _pause_short "Battery C"
-    echo "━━━ Battery C ━━━"
-    python3 "$REPO/aptitude.py" --battery C "${PASS[@]}" || return 1
+    echo "━━━ Battery C (workers) ━━━"
+    python3 "$REPO/aptitude.py" --battery C --role worker "${PASS[@]}" || return 1
     _pause_short "Battery D"
-    echo "━━━ Battery D ━━━"
-    python3 "$REPO/aptitude.py" --battery D "${PASS[@]}" || return 1
+    echo "━━━ Battery D (workers) ━━━"
+    python3 "$REPO/aptitude.py" --battery D --role worker "${PASS[@]}" || return 1
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
