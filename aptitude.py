@@ -50,6 +50,7 @@ def _arg(name, default=None):
     return default
 
 fast_mode          = _flag("--fast")
+force              = _flag("--force")
 capable_only       = _flag("--capable-only")   # Battery C/D: skip models that failed calculate
 battery_arg        = _arg("--battery", "B").upper()
 ollama_host        = _arg("--ollama", "http://localhost:11434")
@@ -1714,10 +1715,10 @@ if __name__ == "__main__":
 
     # ── Resume logic ──────────────────────────────────────────────────────────
     # If the output file exists and is < 24h old, resume — skip models that
-    # already completed successfully. Older files are ignored (fresh run).
+    # already completed successfully. --force disables resume and overwrites.
     all_results = []
     completed   = set()
-    if OUT_JSON.exists():
+    if OUT_JSON.exists() and not force:
         age_h = (time.time() - OUT_JSON.stat().st_mtime) / 3600
         if age_h < 24:
             try:

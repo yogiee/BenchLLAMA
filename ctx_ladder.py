@@ -16,10 +16,11 @@ Ladder ranges per role:
   worker : 4096 / 8192 / 16384 / 32768
 
 Usage:
-  python3 ctx_ladder.py                            # all models from models.json
-  python3 ctx_ladder.py qwen3.5:4b-mlx             # one or more specific models
+  python3 ctx_ladder.py                            # all models (resumes within 72h)
+  python3 ctx_ladder.py qwen3.5:4b-mlx             # specific models (merges into existing JSON)
   python3 ctx_ladder.py --role router              # filter by role
   python3 ctx_ladder.py --fast                     # skip inter-model cool-down
+  python3 ctx_ladder.py --force                    # ignore resume window, overwrite results
   python3 ctx_ladder.py --ollama http://host:11434
 """
 
@@ -51,6 +52,7 @@ def _arg(name, default=None):
     return default
 
 fast_mode   = _flag("--fast")
+force       = _flag("--force")
 ollama_host = _arg("--ollama", "http://localhost:11434")
 role_filter = _arg("--role")
 model_args  = [a for a in sys.argv[1:] if not a.startswith("--")
@@ -382,12 +384,47 @@ if __name__ == "__main__":
     OUT_MD   = RESULTS_DIR / f"ctx_ladder_{TODAY}{suffix}.md"
     print(f"Output: {OUT_JSON}\n", flush=True)
 
+    # ── Resume / merge logic ──────────────────────────────────────────────────
+    # Same semantics as runner.py: 72h resume window, merge on targeted runs,
+    # --force clears the full-run resume guard. See runner.py for full notes.
     all_results = []
+    completed   = set()
 
-    for i, (model_name, disk_gb, role) in enumerate(MODELS):
-        if i > 0:
+    if OUT_JSON.exists() and not (force and not model_args):
+        age_h = (time.time() - OUT_JSON.stat().st_mtime) / 3600
+        if model_args or age_h < 72:
+            try:
+                existing = json.load(OUT_JSON.open())
+                if model_args:
+                    target_names = {m for m, *_ in MODELS}
+                    all_results  = [r for r in existing if r["model"] not in target_names]
+                else:
+                    all_results = existing
+                    completed   = {r["model"] for r in all_results if "error" not in r}
+                    if completed:
+                        print(f"  Resuming — {len(completed)} model(s) already done: {sorted(completed)}", flush=True)
+            except Exception:
+                all_results, completed = [], set()
+
+    # ── Roster change warning (full run only) ─────────────────────────────────
+    if not model_args and not force and completed:
+        eligible_names = {m["name"] for m in registry if m.get("role") in CTX_LADDER}
+        done_names     = {r["model"] for r in all_results}
+        new_models     = eligible_names - done_names
+        if new_models:
+            joined = " ".join(sorted(new_models))
+            print(f"  ⚠ {len(new_models)} new model(s) in models.json not in last run: {sorted(new_models)}", flush=True)
+            print(f"    → './bench.sh ladder {joined}' to add them, or '--force' to rebaseline.", flush=True)
+
+    first_run = True
+    for model_name, disk_gb, role in MODELS:
+        if model_name in completed:
+            print(f"  ↷ {model_name} — already done, skipping", flush=True)
+            continue
+        if not first_run:
             _ws(model_name, "cooldown")
-            cooldown(COOLDOWN, label=f"after {MODELS[i-1][0]}")
+            cooldown(COOLDOWN, label=f"after previous model")
+        first_run = False
         ctx_levels = CTX_LADDER.get(role, CTX_LADDER["worker"])
         r = run_ctx_ladder(model_name, role, disk_gb, ctx_levels)
         all_results.append(r)

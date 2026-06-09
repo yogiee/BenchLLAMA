@@ -17,9 +17,10 @@ Protocol invariants:
   --fast flag skips cool-down (development only; results labeled informal)
 
 Usage:
-  python3 runner.py                              # all default models
-  python3 runner.py qwen3.5:4b-mlx gemma4        # specific models
+  python3 runner.py                              # all default models (resumes within 72h)
+  python3 runner.py qwen3.5:4b-mlx gemma4        # specific models (merges into existing JSON)
   python3 runner.py --fast                       # skip cool-down
+  python3 runner.py --force                      # ignore resume window, overwrite results
   python3 runner.py --system-prompt ~/alice.md   # custom worker prompt
   python3 runner.py --ollama http://host:11434   # remote Ollama
 """
@@ -53,6 +54,7 @@ def _arg(name, default=None):
     return default
 
 fast_mode        = _flag("--fast")
+force            = _flag("--force")
 ollama_host      = _arg("--ollama", "http://localhost:11434")
 worker_prompt_path = _arg("--system-prompt")
 router_prompt_path = _arg("--system-prompt-router")
@@ -559,29 +561,71 @@ if __name__ == "__main__":
     registry_path = REPO / "models.json"
     if not registry_path.exists():
         sys.exit(f"models.json not found at {registry_path} — create it before running (see CLAUDE.md)")
-    DEFAULT_MODELS = [
-        (m["name"], m["disk_gb"], m["role"])
-        for m in json.load(registry_path.open())
-    ]
+    registry = json.load(registry_path.open())
 
-    MODELS = [(m, 0.0, "worker") for m in model_args] if model_args else DEFAULT_MODELS
+    if model_args:
+        reg_map = {m["name"]: m for m in registry}
+        MODELS = [
+            (m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker"))
+            for m in model_args
+        ]
+    else:
+        MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry]
+
     preflight(MODELS, ollama_host)
-    cd     = 0 if fast_mode else COOLDOWN
-    flag   = " [FAST MODE — informal results]" if fast_mode else ""
+    cd   = 0 if fast_mode else COOLDOWN
+    flag = " [FAST MODE — informal results]" if fast_mode else ""
 
     print(f"BenchLLAMA standard suite v2{flag} — {TODAY}", flush=True)
     print(f"ollama={ollama_host} | num_ctx={NUM_CTX} | think=False | {len(MODELS)} models | cooldown={cd}s", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
+    # ── Resume / merge logic ──────────────────────────────────────────────────
+    # Full run, no --force: resume within 72h, skip already-completed models.
+    # Targeted run (model args given): merge into existing JSON regardless of age.
+    # --force, no model args: fresh overwrite, ignore any existing file.
+    # --force with model args: re-run those models, replace their entries in the file.
     all_results = []
-    for i, (model_name, disk_gb, role) in enumerate(MODELS):
-        if i > 0:
+    completed   = set()
+
+    if OUT_JSON.exists() and not (force and not model_args):
+        age_h = (time.time() - OUT_JSON.stat().st_mtime) / 3600
+        if model_args or age_h < 72:
+            try:
+                existing = json.load(OUT_JSON.open())
+                if model_args:
+                    target_names = {m for m, *_ in MODELS}
+                    all_results  = [r for r in existing if r["model"] not in target_names]
+                else:
+                    all_results = existing
+                    completed   = {r["model"] for r in all_results if "error" not in r}
+                    if completed:
+                        print(f"  Resuming — {len(completed)} model(s) already done: {sorted(completed)}", flush=True)
+            except Exception:
+                all_results, completed = [], set()
+
+    # ── Roster change warning (full run only) ─────────────────────────────────
+    if not model_args and not force and completed:
+        registry_names = {m["name"] for m in registry}
+        done_names     = {r["model"] for r in all_results}
+        new_models     = registry_names - done_names
+        if new_models:
+            joined = " ".join(sorted(new_models))
+            print(f"  ⚠ {len(new_models)} new model(s) in models.json not in last run: {sorted(new_models)}", flush=True)
+            print(f"    → './bench.sh standard {joined}' to add them, or '--force' to rebaseline.", flush=True)
+
+    first_run = True
+    for model_name, disk_gb, role in MODELS:
+        if model_name in completed:
+            print(f"  ↷ {model_name} — already done, skipping", flush=True)
+            continue
+        if not first_run:
             _ws(model_name, "cooldown")
-            cooldown(cd, label=f"after {MODELS[i-1][0]}")
+            cooldown(cd, label=f"after previous model")
+        first_run = False
         _ws(model_name, "running")
         r = run_model(model_name, disk_gb, role)
-        if not model_args:
-            _maybe_promote(model_name, _role_gate(r), registry_path)
+        _maybe_promote(model_name, _role_gate(r), registry_path)
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
 
