@@ -20,6 +20,7 @@ BenchLLAMA has since been extracted as a standalone, model-agnostic tool. The pe
 
 | File | What it covers |
 |------|---------------|
+| [cli-reference.md](cli-reference.md) | All subcommands, flags, resume/force behaviour, merge mode, and batteries quick reference |
 | [standard-suite.md](standard-suite.md) | All 13 tests across 5 dimensions — personality, reasoning, research, instruction following, tool use |
 | [ctx-ladder.md](ctx-ladder.md) | Context window characterisation pass — finds optimal `num_ctx` per model |
 | [aptitude-a-router.md](aptitude-a-router.md) | Battery A — 4 tests targeting router-role models |
