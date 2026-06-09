@@ -156,7 +156,7 @@ Signals (each binary):
 
 Pass ≥4. Score = raw signal count (0–7).
 Token cap: 1500
-Baseline: `AiTest/jpeg-format-comparison.md` + `AiTest/jpeg-format-comparison_summary.txt`
+Baseline: `suites/jpeg-format-comparison.md` + `suites/jpeg-format-comparison_summary.txt`
 
 **Test 2 — RAG vs Fine-tuning** (subjective, 1–5)
 ```

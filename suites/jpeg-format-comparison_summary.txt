@@ -1,0 +1,5 @@
+The report covers all three formats across compression quality, artifact types, decode speed, transparency/animation/HDR support, browser compatibility, and practical use cases. Key takeaways:
+
+- JPEG — universal but 30-year-old tech; lossy only, no transparency
+- JPEG-2000 — technically excellent, practically dead for consumers; lives on in medical/cinema pipelines
+- JPEG-XL — the clear winner on every technical metric, plus the unique trick of losslessly recompressing existing JPEGs; waiting on browser/ecosystem adoption to complete
