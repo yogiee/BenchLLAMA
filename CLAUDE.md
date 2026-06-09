@@ -12,14 +12,15 @@ that needs to pick or rank local models.
 
 ## What This Is
 
-Four Python scripts + two shell wrappers + one shared utility:
+Four Python scripts + one TUI launcher + one shared utility:
 
 - **runner.py** — Standard suite (13 tests, 5 dimensions). Always run this first.
 - **ctx_ladder.py** — num_ctx characterisation pass. Run before aptitude to find optimal context window size per model. Results inform per-model ctx values in Battery A, C, D.
 - **aptitude.py** — Role-specific batteries. Run only on models that qualify from the standard suite.
-- **monitor.py** — Live TUI progress display. Launch in a separate Terminal window. Handles all three scripts.
+- **bench_ui.py** — Unified TUI launcher (replaces `bench.sh` orchestration + `monitor.py`). Split-screen: left dashboard (pipeline phases, model status dots, tok/s), right live log. Requires `textual`.
 - **bench_utils.py** — Shared utilities: smart cooldown (temperature-aware) + pre-flight check. Imported by runner.py, ctx_ladder.py, and aptitude.py.
-- **bench.sh** — Primary runner interface. Opens monitor, supports subcommands including `all` (full pipeline).
+- **bench.sh** — Thin wrapper: `exec python3 bench_ui.py "$@"`. All logic lives in bench_ui.py.
+- **monitor.py** — Legacy monitor (separate Terminal window). Superseded by bench_ui.py.
 - **run.sh** — Legacy wrapper, still works for backward compatibility.
 
 Results land in `results/` (gitignored per-run outputs).
@@ -31,10 +32,11 @@ Results land in `results/` (gitignored per-run outputs).
 
 - Python 3.11+
 - `requests` (Ollama HTTP API)
+- `textual` (TUI — bench_ui.py)
 - Ollama running at `http://localhost:11434` (or override via `--ollama`)
 
 ```bash
-pip install requests
+pip install requests textual
 ```
 
 ---
