@@ -5,6 +5,7 @@ results/*.json
 results/*.md
 results/*.log
 results/status.json
+rankings/
 .DS_Store
 .claude/
 CLAUDE.md
