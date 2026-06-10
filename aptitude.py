@@ -1741,6 +1741,7 @@ if __name__ == "__main__":
             cooldown(COOLDOWN, label=f"after previous model")
         first_run = False
         _ws(model_name, "running", apt_done, f"Battery {battery_arg}")
+        print(f"MODEL: {model_name}  ({disk_gb:.1f} GB disk)  battery={battery_arg}", flush=True)
         try:
             r = runner(model_name)
         except Exception as e:

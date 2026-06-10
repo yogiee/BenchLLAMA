@@ -16,7 +16,7 @@ import json
 import re
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -35,32 +35,37 @@ PAUSE_SECS  = 10   # between pipeline phases
 
 @dataclass
 class PhaseState:
-    label: str
-    status: str = "pending"   # pending | running | done | error
+    label:       str
+    role_filter: Optional[str] = None
+    status:      str           = "pending"   # pending | running | done | error
 
 @dataclass
 class ModelState:
-    name: str
-    status: str = "pending"   # pending | running | done | error | skip
+    name:   str
+    role:   Optional[str]   = None
+    tps:    Optional[float] = None
+    status: str             = "pending"   # pending | running | done | error | skip
+    active: bool            = True        # False = greyed out, not part of current phase
 
 class BenchState:
     def __init__(self):
         self.phases:          list[PhaseState]  = []
         self.models:          list[ModelState]  = []
         self.current_phase:   int               = 0
-        self.last_tps:        Optional[float]   = None
+        self.last_tps:        Optional[float]   = None   # live tps while a model is running
         self.start_time:      float             = time.time()
         self.finished:        bool              = False
         self.pause_remaining: int               = 0
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def load_models(role_filter: Optional[str]) -> list[str]:
+def load_all_models() -> list[ModelState]:
+    """Load full model list from registry, preserving any roles already set."""
     try:
-        models = json.loads(MODELS_FILE.read_text())
-        if role_filter:
-            return [m["name"] for m in models if m.get("role") == role_filter]
-        return [m["name"] for m in models if m.get("role")]
+        return [
+            ModelState(name=m["name"], role=m.get("role") or None)
+            for m in json.loads(MODELS_FILE.read_text())
+        ]
     except Exception:
         return []
 
@@ -131,6 +136,9 @@ class Dashboard(Static):
         elapsed = int(time.time() - state.start_time)
         h, m, s = elapsed // 3600, (elapsed % 3600) // 60, elapsed % 60
 
+        total_models  = len(state.models)
+        active_models = sum(1 for ms in state.models if ms.active)
+
         # ── Pipeline phases (only when >1) ────────────────────────────────────
         if len(state.phases) > 1:
             t.append("PIPELINE\n", style="bold")
@@ -142,11 +150,12 @@ class Dashboard(Static):
                 t.append(f"{ph.label}\n")
             t.append("\n")
 
-        # ── Current phase label ───────────────────────────────────────────────
+        # ── Current phase label with model count ──────────────────────────────
         if state.current_phase < len(state.phases):
             ph = state.phases[state.current_phase]
-            label = ph.label if len(state.phases) == 1 else f"▶ {ph.label}"
-            t.append(f"{label}\n", style="bold cyan")
+            prefix = "" if len(state.phases) == 1 else "▶ "
+            count  = f" ({active_models}/{total_models})" if total_models else ""
+            t.append(f"{prefix}{ph.label}{count}\n", style="bold cyan")
 
         # ── Pause countdown ───────────────────────────────────────────────────
         if state.pause_remaining > 0:
@@ -156,12 +165,30 @@ class Dashboard(Static):
         if state.models:
             t.append("\n")
             for ms in state.models:
-                icon, style = ICONS[ms.status]
-                t.append(f"  {icon} ", style=style)
-                t.append(f"{ms.name}")
-                if ms.status == "running" and state.last_tps:
-                    t.append(f"  {state.last_tps:.0f} t/s", style="dim")
-                t.append("\n")
+                icon, icon_style = ICONS[ms.status]
+                is_running = ms.status == "running"
+                arrow = "▶ " if is_running else "  "
+
+                role_str = f" {ms.role.upper()}" if ms.role else ""
+                # Show live tps for running model; settled tps otherwise
+                if is_running and state.last_tps:
+                    tps_str = f" ({state.last_tps:.0f}t/s)"
+                elif ms.tps is not None:
+                    tps_str = f" ({ms.tps:.0f}t/s)"
+                else:
+                    tps_str = ""
+
+                suffix = f" —{role_str}{tps_str}" if (role_str or tps_str) else ""
+
+                if ms.active:
+                    name_style = "bold" if is_running else "default"
+                    t.append(f"  {arrow}")
+                    t.append(f"{icon} ", style=icon_style)
+                    t.append(f"{ms.name}", style=name_style)
+                    t.append(f"{suffix}\n", style="dim")
+                else:
+                    t.append(f"  {icon} ", style="dim")
+                    t.append(f"{ms.name}{suffix}\n", style="dim")
 
             done  = sum(1 for ms in state.models if ms.status in ("done", "skip", "error"))
             total = len(state.models)
@@ -182,7 +209,7 @@ class BenchUI(App):
     CSS = """
     Screen { layout: horizontal; }
     Dashboard {
-        width: 34;
+        width: 50;
         padding: 1 1;
         border-right: solid $panel-lighten-2;
         background: $surface-darken-1;
@@ -200,7 +227,7 @@ class BenchUI(App):
         self._state         = BenchState()
         self._current_proc: Optional[asyncio.subprocess.Process] = None
         self._run_log_fh    = None
-        self._state.phases  = [PhaseState(ph[0]) for ph in phases_spec]
+        self._state.phases  = [PhaseState(ph[0], role_filter=ph[2]) for ph in phases_spec]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -228,6 +255,9 @@ class BenchUI(App):
         self._run_log_fh = run_log.open("w")
         self._log.write(f"Run log → {run_log}")
 
+        # Model list is persistent across all phases
+        self._state.models = load_all_models()
+
         for i, (label, argv, role_filter) in enumerate(self._phases_spec):
             if i > 0:
                 for remaining in range(PAUSE_SECS, 0, -1):
@@ -238,7 +268,9 @@ class BenchUI(App):
             self._state.current_phase = i
             self._state.phases[i].status = "running"
             self._state.last_tps = None
-            self._state.models = [ModelState(n) for n in load_models(role_filter)]
+
+            # Mark which models are active for this phase; reset their status
+            self._set_active_for_phase(role_filter)
 
             self._log.write(f"\n{'━' * 58}")
             self._log.write(f"  ▶  {label}")
@@ -250,15 +282,35 @@ class BenchUI(App):
             ok = await self._run_subprocess(argv)
             self._state.phases[i].status = "done" if ok else "error"
 
-            # Settle any model still marked running
+            # Settle any active model still showing as running
             for ms in self._state.models:
-                if ms.status == "running":
+                if ms.active and ms.status == "running":
                     ms.status = "done" if ok else "error"
+
+            # Re-sync roles — runner.py may have promoted models to router
+            self._sync_roles()
 
         self._state.finished = True
         if self._run_log_fh:
             self._run_log_fh.close()
             self._run_log_fh = None
+
+    def _set_active_for_phase(self, role_filter: Optional[str]) -> None:
+        """Mark models active/inactive for the current phase and reset active models to pending."""
+        for ms in self._state.models:
+            ms.active = (role_filter is None) or (ms.role == role_filter)
+            if ms.active:
+                ms.status = "pending"
+
+    def _sync_roles(self) -> None:
+        """Re-read models.json and update roles on existing ModelState objects in place."""
+        try:
+            role_map = {m["name"]: m.get("role") for m in json.loads(MODELS_FILE.read_text())}
+            for ms in self._state.models:
+                if ms.name in role_map:
+                    ms.role = role_map[ms.name]
+        except Exception:
+            pass
 
     async def _run_subprocess(self, argv: list[str]) -> bool:
         try:
@@ -298,17 +350,21 @@ class BenchUI(App):
             for ms in self._state.models:
                 if ms.status == "running":
                     ms.status = "done"
-                if ms.name == name and ms.status == "pending":
+                if ms.name == name and ms.active and ms.status == "pending":
                     ms.status = "running"
             self._state.last_tps = None
             return
 
-        # Standard suite model done — "  ✓ avg_tps=..."
-        if re.search(r"✓\s+avg_tps=", line):
-            self._mark_running("done")
+        # Standard suite model done — "  ✓ avg_tps=XX.X ..."
+        m = re.search(r"✓\s+avg_tps=([\d.]+)", line)
+        if m:
+            try:
+                self._mark_running("done", tps=float(m.group(1)))
+            except ValueError:
+                self._mark_running("done")
             return
 
-        # Aptitude model done — "✓ name done — JSON updated"
+        # Aptitude model done — "  ✓ name done — JSON updated"
         if "done — JSON updated" in line:
             self._mark_running("done")
             return
@@ -327,7 +383,25 @@ class BenchUI(App):
                     ms.status = "skip"
             return
 
-        # tok/s — "tps=67.0"
+        # Role promotion — "★ Role gate passed — name promoted to router"
+        m = re.search(r"★ Role gate passed — (\S+) promoted to (\w+)", line)
+        if m:
+            name, role = m.group(1), m.group(2)
+            for ms in self._state.models:
+                if ms.name == name:
+                    ms.role = role
+            return
+
+        # capable-only skips — "N tool-capable models(skipped: ['m1', 'm2'])"
+        m = re.search(r"skipped: \[(.+?)\]", line)
+        if m:
+            raw_names = re.findall(r"'([^']+)'", m.group(1))
+            for ms in self._state.models:
+                if ms.name in raw_names:
+                    ms.status = "skip"
+            return
+
+        # Live tok/s — "tps=67.0" (intermediate, shown on currently running model)
         m = re.search(r"\btps=([\d.]+)", line)
         if m:
             try:
@@ -335,10 +409,12 @@ class BenchUI(App):
             except ValueError:
                 pass
 
-    def _mark_running(self, new_status: str) -> None:
+    def _mark_running(self, new_status: str, tps: Optional[float] = None) -> None:
         for ms in self._state.models:
             if ms.status == "running":
                 ms.status = new_status
+                if tps is not None:
+                    ms.tps = tps
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -358,6 +434,7 @@ Commands:
 
 Flags (passed through to the Python scripts):
   --fast                  Skip cool-down (informal results)
+  --force                 Ignore resume window, re-run and overwrite
   --battery A|B|C|D       Aptitude battery (default B)
   --role router|worker    Filter models by role
   --system-prompt <path>  Custom worker system prompt
