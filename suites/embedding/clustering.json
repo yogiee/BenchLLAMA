@@ -1,0 +1,125 @@
+{
+  "source": "seed (curated)",
+  "items": [
+    {
+      "text": "Add an index to speed up the WHERE clause.",
+      "label": "databases"
+    },
+    {
+      "text": "The query planner chose a sequential scan.",
+      "label": "databases"
+    },
+    {
+      "text": "Normalize the schema to avoid duplicate rows.",
+      "label": "databases"
+    },
+    {
+      "text": "A foreign key enforces referential integrity.",
+      "label": "databases"
+    },
+    {
+      "text": "Vacuum reclaims space from dead tuples.",
+      "label": "databases"
+    },
+    {
+      "text": "Joins combine rows from two related tables.",
+      "label": "databases"
+    },
+    {
+      "text": "Whisk the eggs before folding in the flour.",
+      "label": "cooking"
+    },
+    {
+      "text": "Let the dough rest for thirty minutes.",
+      "label": "cooking"
+    },
+    {
+      "text": "Sear the steak on high heat for two minutes.",
+      "label": "cooking"
+    },
+    {
+      "text": "Season the soup with salt and fresh thyme.",
+      "label": "cooking"
+    },
+    {
+      "text": "Preheat the oven to 200 degrees Celsius.",
+      "label": "cooking"
+    },
+    {
+      "text": "Caramelize the onions slowly over low heat.",
+      "label": "cooking"
+    },
+    {
+      "text": "The telescope captured a distant spiral galaxy.",
+      "label": "astronomy"
+    },
+    {
+      "text": "A solar eclipse occurs when the Moon blocks the Sun.",
+      "label": "astronomy"
+    },
+    {
+      "text": "Jupiter is the largest planet in the solar system.",
+      "label": "astronomy"
+    },
+    {
+      "text": "Light from that star took millions of years to arrive.",
+      "label": "astronomy"
+    },
+    {
+      "text": "Black holes warp spacetime around them.",
+      "label": "astronomy"
+    },
+    {
+      "text": "The rover collected samples from the Martian surface.",
+      "label": "astronomy"
+    },
+    {
+      "text": "The central bank raised interest rates again.",
+      "label": "finance"
+    },
+    {
+      "text": "Diversify the portfolio to spread risk.",
+      "label": "finance"
+    },
+    {
+      "text": "Quarterly earnings beat analyst expectations.",
+      "label": "finance"
+    },
+    {
+      "text": "Inflation eroded the currency's purchasing power.",
+      "label": "finance"
+    },
+    {
+      "text": "The bond yield rose after the announcement.",
+      "label": "finance"
+    },
+    {
+      "text": "Investors moved capital into safer assets.",
+      "label": "finance"
+    },
+    {
+      "text": "Do three sets of ten squats with good form.",
+      "label": "fitness"
+    },
+    {
+      "text": "Stretch your hamstrings after a long run.",
+      "label": "fitness"
+    },
+    {
+      "text": "Cardio raises your heart rate for endurance.",
+      "label": "fitness"
+    },
+    {
+      "text": "Rest days let muscles recover and grow.",
+      "label": "fitness"
+    },
+    {
+      "text": "Stay hydrated during a high-intensity workout.",
+      "label": "fitness"
+    },
+    {
+      "text": "Proper posture prevents back injuries when lifting.",
+      "label": "fitness"
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "source": "seed (curated)",
+  "triplets": [
+    {
+      "anchor": "How do I cache API responses?",
+      "positive": "Storing API results avoids repeated network calls.",
+      "negative": "How do I cache flour for baking bread?"
+    },
+    {
+      "anchor": "The deployment failed during the build step.",
+      "positive": "CI broke while compiling the project.",
+      "negative": "The deployment of troops failed during the war."
+    },
+    {
+      "anchor": "Best way to sort a large list in Python",
+      "positive": "Use sorted() or list.sort() for ordering sequences.",
+      "negative": "Best way to sort laundry by colour"
+    },
+    {
+      "anchor": "My laptop battery drains too fast.",
+      "positive": "The notebook's charge runs down quickly.",
+      "negative": "The river drains into the sea too fast."
+    },
+    {
+      "anchor": "Explain how indexing improves database reads.",
+      "positive": "An index lets the engine skip a full table scan.",
+      "negative": "Explain how indexing improves a book's usability."
+    },
+    {
+      "anchor": "How to handle a 429 rate-limit response?",
+      "positive": "Back off and retry when the API throttles you.",
+      "negative": "How to handle a rude customer at the counter?"
+    },
+    {
+      "anchor": "What causes memory leaks in long-running services?",
+      "positive": "Unreleased references keep heap memory from being freed.",
+      "negative": "What causes water leaks in old plumbing?"
+    },
+    {
+      "anchor": "Convert a JSON string to an object.",
+      "positive": "Parse the JSON text into a structured value.",
+      "negative": "Convert dollars to euros for the trip."
+    },
+    {
+      "anchor": "The model overfits on the training set.",
+      "positive": "It memorises training data and generalises poorly.",
+      "negative": "The tailor overfits the suit to the mannequin."
+    },
+    {
+      "anchor": "Schedule a recurring task every night.",
+      "positive": "Run the job automatically on a nightly cron.",
+      "negative": "Schedule a dentist appointment for next night out."
+    },
+    {
+      "anchor": "Compress images without losing quality.",
+      "positive": "Use lossless encoding to shrink files safely.",
+      "negative": "Compress a spring without losing tension."
+    },
+    {
+      "anchor": "Authenticate users with a token.",
+      "positive": "Verify identity using a bearer credential.",
+      "negative": "Authenticate a painting as a genuine original."
+    },
+    {
+      "anchor": "Why is my SQL query so slow?",
+      "positive": "The query lacks an index and scans every row.",
+      "negative": "Why is my morning jog so slow lately?"
+    },
+    {
+      "anchor": "Roll back the migration after an error.",
+      "positive": "Revert the schema change when it fails.",
+      "negative": "Roll back the carpet after the party."
+    },
+    {
+      "anchor": "Stream large files to avoid loading them in memory.",
+      "positive": "Process the file in chunks instead of all at once.",
+      "negative": "Stream the concert live to fans at home."
+    },
+    {
+      "anchor": "Set up retries for flaky network calls.",
+      "positive": "Automatically re-attempt requests that time out.",
+      "negative": "Set up chairs for the flaky wedding guests."
+    }
+  ]
+}

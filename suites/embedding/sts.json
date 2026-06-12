@@ -1,0 +1,1005 @@
+{
+  "source": "STS-B dev (sentence-transformers, n=200)",
+  "pairs": [
+    {
+      "a": "A man with a hard hat is dancing.",
+      "b": "A man wearing a hard hat is dancing.",
+      "score": 1.0
+    },
+    {
+      "a": "A young child is riding a horse.",
+      "b": "A child is riding a horse.",
+      "score": 0.95
+    },
+    {
+      "a": "A man is feeding a mouse to a snake.",
+      "b": "The man is feeding a mouse to the snake.",
+      "score": 1.0
+    },
+    {
+      "a": "A woman is playing the guitar.",
+      "b": "A man is playing guitar.",
+      "score": 0.48
+    },
+    {
+      "a": "A woman is playing the flute.",
+      "b": "A man is playing a flute.",
+      "score": 0.55
+    },
+    {
+      "a": "A woman is cutting an onion.",
+      "b": "A man is cutting onions.",
+      "score": 0.523
+    },
+    {
+      "a": "A man is erasing a chalk board.",
+      "b": "The man is erasing the chalk board.",
+      "score": 1.0
+    },
+    {
+      "a": "A woman is carrying a boy.",
+      "b": "A woman is carrying her baby.",
+      "score": 0.4666
+    },
+    {
+      "a": "Three men are playing guitars.",
+      "b": "Three men are on stage playing guitars.",
+      "score": 0.75
+    },
+    {
+      "a": "A woman peels a potato.",
+      "b": "A woman is peeling a potato.",
+      "score": 1.0
+    },
+    {
+      "a": "People are playing cricket.",
+      "b": "Men are playing cricket.",
+      "score": 0.64
+    },
+    {
+      "a": "A man is playing a guitar.",
+      "b": "A man is playing a flute.",
+      "score": 0.3166
+    },
+    {
+      "a": "The cougar is chasing the bear.",
+      "b": "A cougar is chasing a bear.",
+      "score": 1.0
+    },
+    {
+      "a": "The man cut down a tree with an axe.",
+      "b": "A man chops down a tree with an axe.",
+      "score": 1.0
+    },
+    {
+      "a": "The man is playing the guitar.",
+      "b": "A man is playing a guitar.",
+      "score": 0.9818
+    },
+    {
+      "a": "A man is finding something.",
+      "b": "A woman is slicing something.",
+      "score": 0.16
+    },
+    {
+      "a": "The girl sang into a microphone.",
+      "b": "The lady sang into the microphone.",
+      "score": 0.48
+    },
+    {
+      "a": "A man is climbing a rope.",
+      "b": "A man climbs a rope.",
+      "score": 1.0
+    },
+    {
+      "a": "Kittens are eating food.",
+      "b": "Kittens are eating from dishes.",
+      "score": 0.8
+    },
+    {
+      "a": "A man is speaking.",
+      "b": "A man is spitting.",
+      "score": 0.1272
+    },
+    {
+      "a": "A woman is cooking eggs.",
+      "b": "A woman is cooking something.",
+      "score": 0.6
+    },
+    {
+      "a": "A man is playing a guitar.",
+      "b": "A man is playing a trumpet.",
+      "score": 0.3428
+    },
+    {
+      "a": "An animal is chewing on something.",
+      "b": "An animal is chewing on a key chain.",
+      "score": 0.64
+    },
+    {
+      "a": "A man is playing a flute.",
+      "b": "A man is playing guitar.",
+      "score": 0.4334
+    },
+    {
+      "a": "A man is playing soccer.",
+      "b": "A man is playing flute.",
+      "score": 0.2
+    },
+    {
+      "a": "A girl is riding a horse.",
+      "b": "A girl is riding a bicycle.",
+      "score": 0.3834
+    },
+    {
+      "a": "A man is lifting weights in a garage.",
+      "b": "A man is lifting weights.",
+      "score": 0.85
+    },
+    {
+      "a": "An animal is biting a persons finger.",
+      "b": "A slow loris is biting a persons finger.",
+      "score": 0.6
+    },
+    {
+      "a": "A woman is reading.",
+      "b": "A woman is kneading dough.",
+      "score": 0.2
+    },
+    {
+      "a": "A man is crying.",
+      "b": "A woman is dancing.",
+      "score": 0.12
+    },
+    {
+      "a": "The lady cracked an egg into a bowl.",
+      "b": "The man is cracking eggs into a bowl.",
+      "score": 0.52
+    },
+    {
+      "a": "A band is performing on a stage.",
+      "b": "A band is playing onstage.",
+      "score": 1.0
+    },
+    {
+      "a": "Elephants are walking down a trail.",
+      "b": "A herd of elephants are walking along a trail.",
+      "score": 0.92
+    },
+    {
+      "a": "A man is playing a guitar.",
+      "b": "A man plays the guitar.",
+      "score": 1.0
+    },
+    {
+      "a": "A man sitting on the floor plays a guitar.",
+      "b": "A man sitting on the floor in a room is strumming a guitar.",
+      "score": 0.96
+    },
+    {
+      "a": "A puppy plays with a plastic container.",
+      "b": "The dog is playing with a plastic container.",
+      "score": 0.76
+    },
+    {
+      "a": "A man plays the violin.",
+      "b": "A man is playing violin.",
+      "score": 1.0
+    },
+    {
+      "a": "A man plays the piano.",
+      "b": "A man is playing a piano.",
+      "score": 1.0
+    },
+    {
+      "a": "A man is eating food.",
+      "b": "A man is eating something.",
+      "score": 0.84
+    },
+    {
+      "a": "A man is playing a basketball.",
+      "b": "A man is playing a piano.",
+      "score": 0.28
+    },
+    {
+      "a": "A toddler walks down a hallway.",
+      "b": "A little girl is walking down a hallway.",
+      "score": 0.72
+    },
+    {
+      "a": "A plane is landing.",
+      "b": "A animated airplane is landing.",
+      "score": 0.56
+    },
+    {
+      "a": "A panda is climbing.",
+      "b": "A man is climbing a rope.",
+      "score": 0.32
+    },
+    {
+      "a": "Kids are dancing on stage.",
+      "b": "Some people are dancing on stage.",
+      "score": 0.6
+    },
+    {
+      "a": "A man plays a guitar.",
+      "b": "A man plays the piano.",
+      "score": 0.28
+    },
+    {
+      "a": "A woman is slicing a meat.",
+      "b": "A woman is singing on stage.",
+      "score": 0.05
+    },
+    {
+      "a": "A woman is taking a picture.",
+      "b": "A man is playing a guitar.",
+      "score": 0.05
+    },
+    {
+      "a": "The man is riding a horse.",
+      "b": "A woman is using a hoe.",
+      "score": 0.0
+    },
+    {
+      "a": "A man is drilling a hole in a board.",
+      "b": "Someone is drilling a hole in a piece of wood.",
+      "score": 0.8
+    },
+    {
+      "a": "A man is fitting silencer on a pistol.",
+      "b": "A man is adding a silencer to a gun.",
+      "score": 0.9
+    },
+    {
+      "a": "Two little girls are talking on the phone.",
+      "b": "A little girl is walking down the street.",
+      "score": 0.1
+    },
+    {
+      "a": "Someone is stirring chili in a kettle.",
+      "b": "Someone is stirring a pot of chili with a spoon.",
+      "score": 0.76
+    },
+    {
+      "a": "The woman is cracking eggs into a bowl.",
+      "b": "The lady broke raw eggs into a bowl.",
+      "score": 0.96
+    },
+    {
+      "a": "A woman puts flour on a piece of meat.",
+      "b": "A woman is putting flour onto some meat.",
+      "score": 1.0
+    },
+    {
+      "a": "A man is talking on a phone.",
+      "b": "A man is singing to a woman.",
+      "score": 0.05
+    },
+    {
+      "a": "A man is playing an electronic keyboard.",
+      "b": "A man is playing a flute.",
+      "score": 0.24
+    },
+    {
+      "a": "A man is playing a guitar.",
+      "b": "A man is eating a banana.",
+      "score": 0.12
+    },
+    {
+      "a": "A man is jumping into water.",
+      "b": "A man is cutting paper.",
+      "score": 0.16
+    },
+    {
+      "a": "A man is playing a guitar.",
+      "b": "A guy is playing an instrument.",
+      "score": 0.76
+    },
+    {
+      "a": "A young man is playing the piano.",
+      "b": "A woman is peeling a prawn.",
+      "score": 0.0
+    },
+    {
+      "a": "A woman is mixing ingrediants.",
+      "b": "A woman is mixing food in a bowl.",
+      "score": 0.7
+    },
+    {
+      "a": "Someone is shredding cabbage leaves with a knife.",
+      "b": "Someone is chopping some cabbage leaves.",
+      "score": 0.9
+    },
+    {
+      "a": "A slow lori walks around.",
+      "b": "A animal is walking around.",
+      "score": 0.56
+    },
+    {
+      "a": "A little boy is vacuuming the floor.",
+      "b": "A boy is vacuuming.",
+      "score": 0.76
+    },
+    {
+      "a": "A woman is applying eye liner to her eyelid using an eye pencil.",
+      "b": "A woman is applying cosmetics to her eyelid.",
+      "score": 0.76
+    },
+    {
+      "a": "A man is making a bed.",
+      "b": "A woman is playing a guitar.",
+      "score": 0.0
+    },
+    {
+      "a": "A man plays a keyboard.",
+      "b": "A person is playing the keyboard.",
+      "score": 0.8
+    },
+    {
+      "a": "A rabbit is playing with a toy rabbit.",
+      "b": "A bunny is playing with a stuffed bunny.",
+      "score": 0.85
+    },
+    {
+      "a": "A plane rides on a road.",
+      "b": "An airplane moves along a runway.",
+      "score": 0.5624
+    },
+    {
+      "a": "A man shoots a man.",
+      "b": "A man with a pistol shoots another man.",
+      "score": 0.85
+    },
+    {
+      "a": "A man plays the guitar.",
+      "b": "The man sang and played his guitar.",
+      "score": 0.6
+    },
+    {
+      "a": "A guy is playing hackysack",
+      "b": "A man is playing a key-board.",
+      "score": 0.2
+    },
+    {
+      "a": "One man is breaking cement on another man's chest.",
+      "b": "A man breaks cinder blocks on another man.",
+      "score": 0.75
+    },
+    {
+      "a": "A man is talking with other women on the beach.",
+      "b": "A man is walking down the street.",
+      "score": 0.0
+    },
+    {
+      "a": "The woman is dicing onions.",
+      "b": "A woman is dancing in railway station.",
+      "score": 0.08
+    },
+    {
+      "a": "A chef is preparing some food.",
+      "b": "A chef prepared a meal.",
+      "score": 0.8
+    },
+    {
+      "a": "The man talked to a girl over the internet camera.",
+      "b": "A teenager talks to a girl over a webcam.",
+      "score": 0.56
+    },
+    {
+      "a": "A turtle walks over the ground.",
+      "b": "A large turtle crawls in the grass.",
+      "score": 0.75
+    },
+    {
+      "a": "The lady cracked an egg for the mixer.",
+      "b": "The lady sliced up the meat.",
+      "score": 0.2308
+    },
+    {
+      "a": "Five kittens are eating out of five dishes.",
+      "b": "Kittens are eating food on trays.",
+      "score": 0.55
+    },
+    {
+      "a": "A woman is slicing some tuna.",
+      "b": "A woman is cutting raw fish.",
+      "score": 0.56
+    },
+    {
+      "a": "A man playing the guitar.",
+      "b": "A woman is painting her lips.",
+      "score": 0.0
+    },
+    {
+      "a": "A man is playing a flute.",
+      "b": "A dog is barking at a fly.",
+      "score": 0.0
+    },
+    {
+      "a": "A baby rhino is walking around his pen with his mother.",
+      "b": "A baby rhino is following an adult rhino.",
+      "score": 0.68
+    },
+    {
+      "a": "The man used a sword to slice a plastic bottle.",
+      "b": "A man sliced a plastic bottle with a sword.",
+      "score": 1.0
+    },
+    {
+      "a": "A man is cleaning a fish on a kitchen counter.",
+      "b": "A man is playing a flute.",
+      "score": 0.16
+    },
+    {
+      "a": "A person is chopping coriander leaves.",
+      "b": "A woman is slicing up some green leaves.",
+      "score": 0.45
+    },
+    {
+      "a": "A man is pressing microwave buttons.",
+      "b": "A man turns on the microwave.",
+      "score": 0.55
+    },
+    {
+      "a": "A girl is riding a horse.",
+      "b": "The girl trotted the horse.",
+      "score": 0.9
+    },
+    {
+      "a": "Batman and Robin fly a helicopter over water.",
+      "b": "A helicopter flies over water.",
+      "score": 0.52
+    },
+    {
+      "a": "A woman pours oil into a skillet from a plastic bottle while she is talking.",
+      "b": "An older woman is pouring oil into a skillet on the stove.",
+      "score": 0.76
+    },
+    {
+      "a": "A woman is cutting some herbs.",
+      "b": "A woman is chopping cilantro.",
+      "score": 0.56
+    },
+    {
+      "a": "The lady put the skewered shimp in the hot water.",
+      "b": "The lady fried the breaded meat in hot oil.",
+      "score": 0.32
+    },
+    {
+      "a": "A woman is riding on a horse.",
+      "b": "A man is shooting off guns.",
+      "score": 0.0
+    },
+    {
+      "a": "The boy is playing the piano.",
+      "b": "A band is playing on stage.",
+      "score": 0.2666
+    },
+    {
+      "a": "The cook is kneading the flour.",
+      "b": "A woman is kneading tortilla dough.",
+      "score": 0.52
+    },
+    {
+      "a": "A woman is riding a horse along a perimeter.",
+      "b": "A dog is riding a skateboard.",
+      "score": 0.12
+    },
+    {
+      "a": "A woman is putting her baby in a waste bin.",
+      "b": "The woman is poking holes in the potato.",
+      "score": 0.0
+    },
+    {
+      "a": "A cat is pouncing on a trampoline.",
+      "b": "A man is slicing a tomato.",
+      "score": 0.0
+    },
+    {
+      "a": "A man and woman are eating at a table.",
+      "b": "A couple are eating a meal and talking.",
+      "score": 0.6
+    },
+    {
+      "a": "A woman is riding on a horse.",
+      "b": "A man is turning over tables in anger.",
+      "score": 0.0
+    },
+    {
+      "a": "A man is screwing wood to a wall.",
+      "b": "A man is giving a woman a massage.",
+      "score": 0.04
+    },
+    {
+      "a": "A girl is playing a flute.",
+      "b": "A girl plays a wind instrument.",
+      "score": 0.64
+    },
+    {
+      "a": "A small baby is playing a guitar.",
+      "b": "A boy sits on a bed, sings and plays a guitar.",
+      "score": 0.4
+    },
+    {
+      "a": "A woman is chopping onion.",
+      "b": "A man is doing a card trick.",
+      "score": 0.0
+    },
+    {
+      "a": "A man and a woman walk through the woods.",
+      "b": "The man and woman are walking.",
+      "score": 0.6
+    },
+    {
+      "a": "A child is playing a computer game.",
+      "b": "A boy is playing a game on a laptop.",
+      "score": 0.6182
+    },
+    {
+      "a": "Men are jumping into water from a bridge.",
+      "b": "Men jump in a river.",
+      "score": 0.55
+    },
+    {
+      "a": "A woman is peeling some fish.",
+      "b": "A woman is pouring a yellow mixture on a frying pan.",
+      "score": 0.24
+    },
+    {
+      "a": "People are playing baseball.",
+      "b": "The cricket player hit the ball.",
+      "score": 0.1
+    },
+    {
+      "a": "A person is boiling soup.",
+      "b": "A woman is placing eggs into a pan.",
+      "score": 0.05
+    },
+    {
+      "a": "A woman is dancing.",
+      "b": "A man breaks a stick.",
+      "score": 0.0
+    },
+    {
+      "a": "A ballet dancer is performing on stage.",
+      "b": "The beaver is being petted.",
+      "score": 0.0
+    },
+    {
+      "a": "A man shoots a basket.",
+      "b": "A man is playing a guitar.",
+      "score": 0.1
+    },
+    {
+      "a": "The elephants are bathing.",
+      "b": "Two women are singing.",
+      "score": 0.0
+    },
+    {
+      "a": "The man cut up an onion.",
+      "b": "A man is dancing.",
+      "score": 0.12
+    },
+    {
+      "a": "A woman puts cosmetics on her eyelid.",
+      "b": "The woman is pencilling on eye shadow.",
+      "score": 0.8
+    },
+    {
+      "a": "A woman and man are riding in a car.",
+      "b": "A woman driving a car is talking to the man seated beside her.",
+      "score": 0.68
+    },
+    {
+      "a": "A girl is dancing in a cage.",
+      "b": "A onion is being chopped.",
+      "score": 0.0
+    },
+    {
+      "a": "A cat is on a robot.",
+      "b": "A man is eating bread.",
+      "score": 0.0
+    },
+    {
+      "a": "The lady stirred up raw eggs in the bowl.",
+      "b": "A woman is pouring eyes into a bowl.",
+      "score": 0.2
+    },
+    {
+      "a": "A cow is eating grass.",
+      "b": "A dog is pulling a girl down a hill.",
+      "score": 0.0
+    },
+    {
+      "a": "The man stirred the sauce for the chicken.",
+      "b": "The man is stirring oil.",
+      "score": 0.48
+    },
+    {
+      "a": "A man jumping rope",
+      "b": "A man is talking.",
+      "score": 0.08
+    },
+    {
+      "a": "A woman is peeling an orange.",
+      "b": "A woman cuts off a small piece of lemon rind.",
+      "score": 0.36
+    },
+    {
+      "a": "Someone is beating an egg.",
+      "b": "A woman stirs eggs in a bowl.",
+      "score": 0.5
+    },
+    {
+      "a": "A man is cutting a potato.",
+      "b": "A woman plays an electric guitar.",
+      "score": 0.0166
+    },
+    {
+      "a": "A man is buttering a piece of bread.",
+      "b": "A slow loris hanging on a cord.",
+      "score": 0.0
+    },
+    {
+      "a": "A woman cuts up some vegetables.",
+      "b": "A woman is placing skewered food onto a cooker.",
+      "score": 0.2
+    },
+    {
+      "a": "The lady cut the tail and body of a shrimp.",
+      "b": "A woman is cleaning a shrimp.",
+      "score": 0.9
+    },
+    {
+      "a": "A man plays an acoustic guitar.",
+      "b": "A woman and dog are walking together.",
+      "score": 0.0
+    },
+    {
+      "a": "A person is peeling shrimp.",
+      "b": "A person is preparing shrimp.",
+      "score": 0.72
+    },
+    {
+      "a": "A woman is cutting broccoli.",
+      "b": "A woman is slicing broccoli.",
+      "score": 1.0
+    },
+    {
+      "a": "A small dog laying on the bed.",
+      "b": "A small dog is laying on a bed.",
+      "score": 1.0
+    },
+    {
+      "a": "The man is slicing a potato.",
+      "b": "A man is slicing potato.",
+      "score": 1.0
+    },
+    {
+      "a": "The man is slicing a potato.",
+      "b": "A man is slicing potato.",
+      "score": 1.0
+    },
+    {
+      "a": "A person is peeling shrimp.",
+      "b": "A man is peeling shrimp.",
+      "score": 0.76
+    },
+    {
+      "a": "A woman is putting on sun glasses.",
+      "b": "A woman puts on sunglasses.",
+      "score": 1.0
+    },
+    {
+      "a": "A woman is slicing a potato.",
+      "b": "A woman is slicing carrot.",
+      "score": 0.5
+    },
+    {
+      "a": "Women are running.",
+      "b": "Two women are running.",
+      "score": 0.7648
+    },
+    {
+      "a": "A man is playing a harp.",
+      "b": "A woman is playing a guitar.",
+      "score": 0.32
+    },
+    {
+      "a": "A man dives into a pool.",
+      "b": "A man dives into a swimming pool.",
+      "score": 1.0
+    },
+    {
+      "a": "The man is smashing garlic.",
+      "b": "A man is smashing some garlic.",
+      "score": 1.0
+    },
+    {
+      "a": "A man is cutting up a potato.",
+      "b": "A man is cutting up carrots.",
+      "score": 0.475
+    },
+    {
+      "a": "A man is slicing an onion.",
+      "b": "A man slices an onion.",
+      "score": 1.0
+    },
+    {
+      "a": "A man is dancing.",
+      "b": "A man is singing.",
+      "score": 0.25
+    },
+    {
+      "a": "A man is running.",
+      "b": "A man is singing.",
+      "score": 0.25
+    },
+    {
+      "a": "The man is hiking in the woods.",
+      "b": "A man is tracking in the wood.",
+      "score": 0.6
+    },
+    {
+      "a": "A man is playing a flute.",
+      "b": "A man is playing guitar.",
+      "score": 0.4334
+    },
+    {
+      "a": "A man is riding a bike.",
+      "b": "A woman is riding a horse.",
+      "score": 0.28
+    },
+    {
+      "a": "A woman is playing the guitar.",
+      "b": "A person is playing a guitar.",
+      "score": 0.8
+    },
+    {
+      "a": "A man is eating a pizza.",
+      "b": "A man is eating a food.",
+      "score": 0.72
+    },
+    {
+      "a": "A man is playing guitar.",
+      "b": "A man plays a guitar.",
+      "score": 0.9714
+    },
+    {
+      "a": "The man is buttering the bread.",
+      "b": "The man is stirring the rice.",
+      "score": 0.08
+    },
+    {
+      "a": "A woman is hitting a man.",
+      "b": "A woman is taking a bath.",
+      "score": 0.04
+    },
+    {
+      "a": "Three men are dancing.",
+      "b": "Women are dancing.",
+      "score": 0.26
+    },
+    {
+      "a": "A man is speaking.",
+      "b": "A man is dancing.",
+      "score": 0.24
+    },
+    {
+      "a": "A man is dancing.",
+      "b": "A man is speaking.",
+      "score": 0.24
+    },
+    {
+      "a": "A person is combing a cat hair.",
+      "b": "A person is brushing a cat.",
+      "score": 0.88
+    },
+    {
+      "a": "A man is playing the drums.",
+      "b": "A man is playing guitar.",
+      "score": 0.36
+    },
+    {
+      "a": "A man is peeling a banana.",
+      "b": "A woman is peeling a potato.",
+      "score": 0.28
+    },
+    {
+      "a": "A boy is riding a horse.",
+      "b": "A monkey is riding a bus.",
+      "score": 0.08
+    },
+    {
+      "a": "The puppy tried to get out of the tub.",
+      "b": "A puppy is trying to get out of a bathtub.",
+      "score": 0.88
+    },
+    {
+      "a": "A woman is peeling an onion.",
+      "b": "The woman is slicing green onions.",
+      "score": 0.65
+    },
+    {
+      "a": "A person is mixing a pot of rice.",
+      "b": "A person is peeling a potato.",
+      "score": 0.1556
+    },
+    {
+      "a": "A man is playing a guitar.",
+      "b": "The girl is playing the guitar.",
+      "score": 0.45
+    },
+    {
+      "a": "A lion cub tries to climb a fence.",
+      "b": "A lion tries to climb over a wall.",
+      "score": 0.55
+    },
+    {
+      "a": "A man is talking on a cell phone.",
+      "b": "A guy is talking into a microphone.",
+      "score": 0.4
+    },
+    {
+      "a": "A man is playing a guitar.",
+      "b": "A man is cleaning a cd.",
+      "score": 0.1666
+    },
+    {
+      "a": "Someone is pouring chicken broth into a pot.",
+      "b": "The man is pouring broth into the pot.",
+      "score": 0.75
+    },
+    {
+      "a": "A woman is chopping an onion.",
+      "b": "A woman is chopping garlic with a knife.",
+      "score": 0.36
+    },
+    {
+      "a": "The man is shaking hands with other men.",
+      "b": "A man is shaking another mans hand.",
+      "score": 0.8666
+    },
+    {
+      "a": "A target is being hit with gun fire.",
+      "b": "The target was being shot with bullets.",
+      "score": 0.8428
+    },
+    {
+      "a": "A woman is applying makeup.",
+      "b": "A man is playing a guitar.",
+      "score": 0.0
+    },
+    {
+      "a": "A woman is slicing a big pepper.",
+      "b": "A person is cutting a green pepper.",
+      "score": 0.68
+    },
+    {
+      "a": "A man puts some cheese on a pizza.",
+      "b": "A man is sprinkling shredded cheese on a pizza.",
+      "score": 0.84
+    },
+    {
+      "a": "A man is staring at a leaf.",
+      "b": "A man is slicing a vegetable.",
+      "score": 0.16
+    },
+    {
+      "a": "A person is picking a komodo dragon and putting it in a box.",
+      "b": "A person is placing a baby komodo dragon into a container.",
+      "score": 0.84
+    },
+    {
+      "a": "A person drops a camera down an escelator.",
+      "b": "A man tosses a bag down an escalator.",
+      "score": 0.55
+    },
+    {
+      "a": "The man is playing the keyboards.",
+      "b": "A man is playing guitar.",
+      "score": 0.44
+    },
+    {
+      "a": "A woman is applying eye shadow.",
+      "b": "A woman is washing a bowl.",
+      "score": 0.24
+    },
+    {
+      "a": "A woman is playing the flute.",
+      "b": "A man is playing a keyboard.",
+      "score": 0.2
+    },
+    {
+      "a": "A man is riding on a horse.",
+      "b": "A woman is riding an elephant.",
+      "score": 0.3066
+    },
+    {
+      "a": "A man is playing flute.",
+      "b": "A man is dancing.",
+      "score": 0.04
+    },
+    {
+      "a": "A tiger is walking around his cage.",
+      "b": "A tiger walks around aimlessly.",
+      "score": 0.6
+    },
+    {
+      "a": "A person pours cooking oil into a pot.",
+      "b": "A person is pouring olive oil into a pot on the stove.",
+      "score": 0.76
+    },
+    {
+      "a": "A woman is cutting potato.",
+      "b": "A woman is riding a horse.",
+      "score": 0.15
+    },
+    {
+      "a": "A parrot is talking.",
+      "b": "A parrot is talking into a microphone.",
+      "score": 0.6
+    },
+    {
+      "a": "A man is singing into a microphone.",
+      "b": "A man is dancing in the rain.",
+      "score": 0.08
+    },
+    {
+      "a": "A woman is exercising.",
+      "b": "A woman lifts weights.",
+      "score": 0.68
+    },
+    {
+      "a": "A child runs into and out of the ocean waves.",
+      "b": "A young boy is running toward and from the ocean waves.",
+      "score": 0.76
+    },
+    {
+      "a": "A man is playing the piano.",
+      "b": "A man is playing a wooden flute.",
+      "score": 0.28
+    },
+    {
+      "a": "A guy is riding a horse.",
+      "b": "A man is riding a horse in the desert.",
+      "score": 0.68
+    },
+    {
+      "a": "A dog is stealing food from a refrigerator.",
+      "b": "The dog took something out of the refrigerator.",
+      "score": 0.64
+    },
+    {
+      "a": "A person uses a blowtorch on two cameras.",
+      "b": "A person is burning cameras.",
+      "score": 0.4666
+    },
+    {
+      "a": "A man is putting a knife in a vice.",
+      "b": "A man is getting into a car in a garage.",
+      "score": 0.16
+    },
+    {
+      "a": "A woman is cooking meat.",
+      "b": "A man is speaking.",
+      "score": 0.0
+    },
+    {
+      "a": "A puppy is trying to come out from the sink.",
+      "b": "The puppy tried to get out of the tub.",
+      "score": 0.6
+    },
+    {
+      "a": "A person is folding a square paper piece.",
+      "b": "A person folds a piece of paper.",
+      "score": 0.75
+    },
+    {
+      "a": "The boy is playing the piano.",
+      "b": "The woman is pouring oil into the pan.",
+      "score": 0.0
+    }
+  ]
+}

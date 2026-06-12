@@ -1,157 +1,158 @@
 [
   {
-    "name": "mistrallite:7b",
-    "disk_gb": 4.1,
-    "role": "worker"
+    "name": "phi4:14b",
+    "disk_gb": 9.1,
+    "role": "worker",
+    "capabilities": [
+      "completion"
+    ]
   },
   {
-    "name": "orca2:13b",
-    "disk_gb": 7.4,
-    "role": "worker"
+    "name": "qwen3-embedding:0.6b",
+    "disk_gb": 0.6,
+    "role": "utility",
+    "capabilities": [
+      "embedding",
+      "thinking",
+      "tools"
+    ]
   },
   {
-    "name": "orca2:7b",
-    "disk_gb": 3.8,
-    "role": "worker"
-  },
-  {
-    "name": "dolphin-phi:2.7b",
-    "disk_gb": 1.6,
-    "role": "worker"
-  },
-  {
-    "name": "hermes3:8b",
-    "disk_gb": 4.7,
-    "role": "worker"
-  },
-  {
-    "name": "hermes3:3b",
-    "disk_gb": 2.0,
-    "role": "worker"
-  },
-  {
-    "name": "llama3.1:8b",
-    "disk_gb": 4.9,
-    "role": "worker"
-  },
-  {
-    "name": "llama3.2:3b",
-    "disk_gb": 2.0,
-    "role": "router"
-  },
-  {
-    "name": "llama3:8b",
-    "disk_gb": 4.7,
-    "role": "worker"
-  },
-  {
-    "name": "llama3.2-vision:11b",
-    "disk_gb": 7.8,
-    "role": "worker"
-  },
-  {
-    "name": "granite4.1:30b",
-    "disk_gb": 17.5,
-    "role": "worker"
-  },
-  {
-    "name": "granite4.1:8b",
-    "disk_gb": 5.3,
-    "role": "worker"
-  },
-  {
-    "name": "granite4.1:3b",
-    "disk_gb": 2.1,
-    "role": "router"
-  },
-  {
-    "name": "deepseek-r1:7b",
-    "disk_gb": 4.7,
-    "role": "worker"
-  },
-  {
-    "name": "deepseek-r1:1.5b",
-    "disk_gb": 1.1,
-    "role": "worker"
-  },
-  {
-    "name": "deepseek-r1:14b",
-    "disk_gb": 9.0,
-    "role": "worker"
-  },
-  {
-    "name": "deepseek-r1:8b",
-    "disk_gb": 5.2,
-    "role": "worker"
-  },
-  {
-    "name": "glm-4.7-flash:latest",
-    "disk_gb": 19.0,
-    "role": "worker"
-  },
-  {
-    "name": "qwen3.5:27b-mlx",
-    "disk_gb": 19.8,
-    "role": "worker"
-  },
-  {
-    "name": "qwen3.5:27b",
-    "disk_gb": 17.4,
-    "role": "worker"
-  },
-  {
-    "name": "gemma4:12b-mlx",
-    "disk_gb": 10.0,
-    "role": "worker"
-  },
-  {
-    "name": "gemma4:12b",
-    "disk_gb": 7.6,
-    "role": "worker"
-  },
-  {
-    "name": "qwen3.6:27b-mlx",
-    "disk_gb": 19.8,
-    "role": "worker"
-  },
-  {
-    "name": "qwen3.6:27b",
-    "disk_gb": 17.4,
-    "role": "worker"
-  },
-  {
-    "name": "gemma4:e2b-mlx",
-    "disk_gb": 7.1,
-    "role": "router"
-  },
-  {
-    "name": "gemma4:latest",
-    "disk_gb": 9.6,
-    "role": "worker"
-  },
-  {
-    "name": "glm-ocr:latest",
-    "disk_gb": 2.2,
-    "role": "worker"
-  },
-  {
-    "name": "qwen3.5:9b",
-    "disk_gb": 6.6,
-    "role": "worker"
+    "name": "qwen2.5vl:3b",
+    "disk_gb": 3.2,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "vision"
+    ]
   },
   {
     "name": "qwen3.5:2b-mlx",
     "disk_gb": 3.1,
-    "role": "router"
-  },
-  {
-    "name": "qwen3.5:4b-mlx",
-    "disk_gb": 4.0,
-    "role": "worker"
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ]
   },
   {
     "name": "qwen3.5:9b-mlx",
     "disk_gb": 8.9,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ]
+  },
+  {
+    "name": "qwen3.5:4b-mlx",
+    "disk_gb": 4.0,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ]
+  },
+  {
+    "name": "nomic-embed-text:latest",
+    "disk_gb": 0.3,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ]
+  },
+  {
+    "name": "glm-ocr:latest",
+    "disk_gb": 2.2,
+    "role": "utility",
+    "capabilities": [
+      "completion",
+      "tools",
+      "vision"
+    ]
+  },
+  {
+    "name": "gemma4:latest",
+    "disk_gb": 9.6,
+    "role": "worker",
+    "capabilities": [
+      "audio",
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ]
+  },
+  {
+    "name": "gemma4:e2b-mlx",
+    "disk_gb": 7.1,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ]
+  },
+  {
+    "name": "gemma4:12b",
+    "disk_gb": 7.6,
+    "role": "worker",
+    "capabilities": [
+      "audio",
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ]
+  },
+  {
+    "name": "qwen3.5:27b-mlx",
+    "disk_gb": 19.8,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ]
+  },
+  {
+    "name": "granite4.1:3b",
+    "disk_gb": 2.1,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ]
+  },
+  {
+    "name": "llama3.2:3b",
+    "disk_gb": 2.0,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ]
+  },
+  {
+    "name": "mistral-small:24b",
+    "disk_gb": 14.3,
+    "role": "worker"
+  },
+  {
+    "name": "qwen2.5vl:7b",
+    "disk_gb": 6.0,
+    "role": "worker"
+  },
+  {
+    "name": "mistral:7b",
+    "disk_gb": 4.4,
     "role": "worker"
   }
 ]

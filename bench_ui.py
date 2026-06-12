@@ -95,6 +95,11 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Aptitude", _cmd(apt, *x), role_in_extra)]
     if cmd == "update":
         return [("Update Registry", _cmd(REPO/"update_registry.py", *x), None)]
+    if cmd == "vision":
+        # Capability-routed (vision cap → role=utility + workers); no role filter.
+        return [("Vision (Battery V)", _cmd(REPO/"vision.py", *x), None)]
+    if cmd == "embedding":
+        return [("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x), None)]
     if cmd == "batteries":
         return [
             ("Battery A", _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
@@ -418,7 +423,7 @@ class BenchUI(App):
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
-COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update"}
+COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding"}
 
 def _usage() -> None:
     print("""
@@ -430,6 +435,8 @@ Commands:
   aptitude    Single aptitude battery (default: B)
   batteries   All aptitude batteries A → B → C → D
   all         Full pipeline: standard → ladder → A → B → C → D
+  vision      Battery V — vision models (capability-routed, head-to-head)
+  embedding   Battery EMB — embedding models (capability-routed)
   update      Sync models.json from Ollama
 
 Flags (passed through to the Python scripts):

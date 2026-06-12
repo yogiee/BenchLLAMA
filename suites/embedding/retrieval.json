@@ -1,0 +1,159 @@
+{
+  "source": "seed (curated)",
+  "docs": [
+    {
+      "id": "d1",
+      "text": "To reset your password, open Settings, choose Security, then 'Change password'."
+    },
+    {
+      "id": "d2",
+      "text": "Our API enforces a rate limit of 100 requests per minute per API key."
+    },
+    {
+      "id": "d3",
+      "text": "Postgres uses B-tree indexes by default to accelerate equality and range queries."
+    },
+    {
+      "id": "d4",
+      "text": "Use exponential backoff with jitter when retrying failed HTTP requests."
+    },
+    {
+      "id": "d5",
+      "text": "A memory leak occurs when allocated objects are never released back to the heap."
+    },
+    {
+      "id": "d6",
+      "text": "JSON Web Tokens encode claims and are signed to verify their authenticity."
+    },
+    {
+      "id": "d7",
+      "text": "Streaming reads a file in fixed-size chunks so it never loads fully into RAM."
+    },
+    {
+      "id": "d8",
+      "text": "Database migrations should be reversible; always provide a down migration."
+    },
+    {
+      "id": "d9",
+      "text": "Gzip compression reduces payload size for text responses over HTTP."
+    },
+    {
+      "id": "d10",
+      "text": "Connection pooling reuses open database connections to cut latency."
+    },
+    {
+      "id": "d11",
+      "text": "The bakery's sourdough needs a 24-hour cold proof in the refrigerator."
+    },
+    {
+      "id": "d12",
+      "text": "Mount Everest is the highest mountain above sea level on Earth."
+    },
+    {
+      "id": "d13",
+      "text": "Photosynthesis converts sunlight, water, and CO2 into glucose and oxygen."
+    },
+    {
+      "id": "d14",
+      "text": "The 2008 financial crisis was triggered by subprime mortgage defaults."
+    },
+    {
+      "id": "d15",
+      "text": "Regular stretching improves flexibility and reduces injury risk."
+    },
+    {
+      "id": "d16",
+      "text": "Use prepared statements to prevent SQL injection attacks."
+    },
+    {
+      "id": "d17",
+      "text": "Caching frequently-read values in Redis lowers load on the primary database."
+    },
+    {
+      "id": "d18",
+      "text": "A load balancer distributes incoming traffic across multiple servers."
+    },
+    {
+      "id": "d19",
+      "text": "TLS encrypts data in transit between the client and the server."
+    },
+    {
+      "id": "d20",
+      "text": "Pagination returns results in pages to avoid huge single responses."
+    }
+  ],
+  "queries": [
+    {
+      "id": "q1",
+      "text": "How do I change my account password?",
+      "relevant": [
+        "d1"
+      ]
+    },
+    {
+      "id": "q2",
+      "text": "What happens if I send too many API requests?",
+      "relevant": [
+        "d2"
+      ]
+    },
+    {
+      "id": "q3",
+      "text": "How can I make my SQL lookups faster?",
+      "relevant": [
+        "d3",
+        "d17"
+      ]
+    },
+    {
+      "id": "q4",
+      "text": "What's the right way to retry a failed request?",
+      "relevant": [
+        "d4"
+      ]
+    },
+    {
+      "id": "q5",
+      "text": "Why does my service keep using more and more memory?",
+      "relevant": [
+        "d5"
+      ]
+    },
+    {
+      "id": "q6",
+      "text": "How are auth tokens verified?",
+      "relevant": [
+        "d6",
+        "d19"
+      ]
+    },
+    {
+      "id": "q7",
+      "text": "How do I process a file too big for memory?",
+      "relevant": [
+        "d7"
+      ]
+    },
+    {
+      "id": "q8",
+      "text": "How do I protect against SQL injection?",
+      "relevant": [
+        "d16"
+      ]
+    },
+    {
+      "id": "q9",
+      "text": "How do I reduce HTTP response size?",
+      "relevant": [
+        "d9"
+      ]
+    },
+    {
+      "id": "q10",
+      "text": "How do I spread traffic across servers?",
+      "relevant": [
+        "d18"
+      ]
+    }
+  ]
+}

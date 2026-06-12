@@ -6,7 +6,7 @@ Design spec: suites/suite-design.md
 13 tests across 5 dimensions:
   Personality (4)       : hello, who_are_you, pushback, overwhelmed
   Reasoning (4)         : bat_ball, two_cities, cylinder, farm_heads
-  Research Depth (2)    : jpeg, rag_finetune
+  Research Depth (2)    : jpeg_formats, rag_finetune
   Instruction Follow (2): format_3, no_eiffel
   Tool Use (1)          : calculate
 
@@ -68,6 +68,12 @@ model_args = [a for a in sys.argv[1:] if not a.startswith("--")
 NUM_CTX  = 16384
 TIMEOUT  = 480
 COOLDOWN = 0 if fast_mode else 300
+
+# Roles that belong to the completion (chat) pipeline. The 'utility' lane
+# (embedding / vision specialists) is benchmarked by embedding.py / vision.py,
+# selected by capability — never fed the standard chat suite (it'd fail every
+# text test).
+COMPLETION_ROLES = {"worker", "router"}
 
 # ── System prompts ─────────────────────────────────────────────────────────────
 
@@ -182,8 +188,10 @@ QUALITY_TESTS = [
 
     # ── Research Depth ────────────────────────────────────────────────────────
 
-    # JPEG — signal-based coverage (7 signals, pass ≥4)
-    {"id": "jpeg", "category": "research", "max_tokens": 1500,
+    # JPEG formats — signal-based coverage (7 signals, pass ≥4).
+    # NOTE: a research/knowledge test about the JPEG format family — NO image is
+    # sent. Named jpeg_formats (not 'jpeg') so it isn't mistaken for a vision test.
+    {"id": "jpeg_formats", "category": "research", "max_tokens": 1500,
      "auto_check": lambda r: _jpeg_coverage(r),
      "prompt": (
          "Give a concise, not-too-technical but detailed comparison of "
@@ -436,7 +444,7 @@ def write_summary(results, out_md: Path, fast_mode: bool = False):
         "|-------|------|:---:|:------:|:---:|:----:|:----:|:------:|:------:|:----:|",
     ]
     for r in results:
-        jpeg  = r["tests"].get("jpeg", {})
+        jpeg  = r["tests"].get("jpeg_formats", {})
         cd    = jpeg.get("check_detail", {})
         jpeg_s = f"{cd['score']}/7" if cd else ("✓" if jpeg.get("correct") else "?")
         tc_s  = "✓" if r["tests"].get("calculate", {}).get("correct") else "✗"
@@ -478,7 +486,8 @@ def write_summary(results, out_md: Path, fast_mode: bool = False):
     lines += ["", "## Research Depth Responses", ""]
     for r in results:
         lines += [f"### `{r['model']}` ({r.get('role','worker')})", ""]
-        for tid, label in [("jpeg", "JPEG Comparison"), ("rag_finetune", "RAG vs Fine-tuning")]:
+        for tid, label in [("jpeg_formats", "JPEG Formats (format knowledge — no image)"),
+                           ("rag_finetune", "RAG vs Fine-tuning")]:
             resp = _r(r, tid, "response", _r(r, tid, "error", "—"))
             cd   = r["tests"].get(tid, {}).get("check_detail", {})
             cov  = f"  (coverage: {cd['score']}/7)" if cd else ""
@@ -570,7 +579,8 @@ if __name__ == "__main__":
             for m in model_args
         ]
     else:
-        MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry]
+        MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry
+                  if m.get("role") in COMPLETION_ROLES]
 
     preflight(MODELS, ollama_host)
     cd   = 0 if fast_mode else COOLDOWN
@@ -606,7 +616,7 @@ if __name__ == "__main__":
 
     # ── Roster change warning (full run only) ─────────────────────────────────
     if not model_args and not force and completed:
-        registry_names = {m["name"] for m in registry}
+        registry_names = {m["name"] for m in registry if m.get("role") in COMPLETION_ROLES}
         done_names     = {r["model"] for r in all_results}
         new_models     = registry_names - done_names
         if new_models:
@@ -639,7 +649,7 @@ if __name__ == "__main__":
     print("\n| Model | Role | RAM | tok/s | Bat | Cities | Cyl | Farm | JPEG | Fmt | Eiffel | Tool |")
     print("|-------|------|-----|-------|:---:|:------:|:---:|:----:|:----:|:---:|:------:|:----:|")
     for r in all_results:
-        jpeg  = r["tests"].get("jpeg", {}).get("check_detail", {})
+        jpeg  = r["tests"].get("jpeg_formats", {}).get("check_detail", {})
         jpeg_s = f"{jpeg.get('score','?')}/7" if jpeg else "?"
         tc_s  = "✓" if r["tests"].get("calculate", {}).get("correct") else "✗"
         print(

@@ -221,7 +221,7 @@ Token cap: 400
 | 6 | `two_cities` | Reasoning | objective | 800 | auto |
 | 7 | `cylinder` | Reasoning | objective | 800 | auto |
 | 8 | `farm_heads` | Reasoning | objective | 800 | auto |
-| 9 | `jpeg` | Research | signal-based | 1500 | 0–7 |
+| 9 | `jpeg_formats` | Research | signal-based | 1500 | 0–7 |
 | 10 | `rag_finetune` | Research | subjective | 1500 | 1–5 |
 | 11 | `format_3` | Instruction | objective | 200 | auto |
 | 12 | `no_eiffel` | Instruction | objective | 600 | auto |
@@ -362,8 +362,51 @@ as a "ceiling test" for research/reasoning models, not in the standard suite as 
 
 ---
 
+## Modality Batteries (capability-routed)
+
+Vision and embedding are **not** gated by the standard suite — they're separate
+modality tracks selected by the `capabilities` array in `models.json`, not by role.
+A model runs the battery for each capability it has (a vision-capable worker runs
+both the chat pipeline and Battery V). See CLAUDE.md → Capability Routing.
+
+### Battery V — Vision (`vision.py`)
+
+Selector: `vision` capability. Graded objectively against PIL-generated ground
+truth (`suites/vision/generate.py` → images + `ground_truth.json`). Judge-free.
+
+| Task | Type | Scoring |
+|------|------|---------|
+| `ocr` | transcribe a text block | difflib fuzzy ratio vs exact string (pass ≥0.80) |
+| `count` | count red circles among distractors | exact integer (answer ∈ extracted numbers) |
+| `chart` | read a labelled bar's value | numeric within tolerance (±3) |
+| `spatial` | relative position of two shapes | yes/no keyword |
+| `describe` | multi-element scene | signal-count (JPEG-style, pass ≥60% of signals) |
+
+Composite = mean of per-task units in [0,1]. Reports composite, avg tok/s, load.
+Purpose: does a vision specialist (qwen2.5vl, glm-ocr) earn its keep over a
+generalist that also sees (qwen3.5, gemma4)?
+
+### Battery EMB — Embedding (`embedding.py`)
+
+Selector: `embedding` capability. Fully objective, numpy-only (no scipy/sklearn).
+Datasets in `suites/embedding/` (run `build_seed.py`; `fetch.py` upgrades `sts`
+to the real STS-B dev slice — the standard half of the hybrid strategy).
+
+| Task | Metric |
+|------|--------|
+| `sts` | Spearman(cosine, human score) on STS-B |
+| `triplet` | % where sim(anchor, positive) > sim(anchor, negative) + mean margin |
+| `retrieval` | recall@5, MRR, nDCG@10 over a doc/query set |
+| `clustering` | centroid purity + intra/inter separation |
+
+Composite = mean of [sts→[0,1], triplet acc, nDCG@10, purity]. Also reports
+vector dim, embeddings/sec, disk MB, and **quality-per-GB** (the keep/cut verdict).
+
+---
+
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-06-06 | Initial design from benchmark session findings |
+| 1.1 | 2026-06-12 | Renamed `jpeg` → `jpeg_formats` (research test, no image). Added capability-routed modality batteries: V (vision) + EMB (embedding); `utility` role lane. |

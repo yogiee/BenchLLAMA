@@ -1,0 +1,76 @@
+{
+  "tasks": [
+    {
+      "id": "ocr_1",
+      "type": "ocr",
+      "image": "ocr_1.png",
+      "prompt": "Transcribe ALL text in this image exactly, preserving line breaks.",
+      "answer": "Invoice #4827\nDate: 2026-03-14\nItem: Mechanical Keyboard\nQuantity: 3\nUnit Price: $89.00\nTotal Due: $267.00",
+      "max_tokens": 300
+    },
+    {
+      "id": "count_1",
+      "type": "count",
+      "image": "count_1.png",
+      "prompt": "How many RED circles are in this image? Reply with just the number.",
+      "answer": 7,
+      "max_tokens": 40
+    },
+    {
+      "id": "chart_1",
+      "type": "chart",
+      "image": "chart_1.png",
+      "prompt": "This is a bar chart. What is the value of the bar labelled 'C'? Reply with just the number.",
+      "answer": 40,
+      "tolerance": 3,
+      "max_tokens": 40
+    },
+    {
+      "id": "spatial_1",
+      "type": "spatial",
+      "image": "spatial_1.png",
+      "prompt": "Is the blue square to the LEFT of the red circle? Answer yes or no.",
+      "answer": "yes",
+      "max_tokens": 40
+    },
+    {
+      "id": "spatial_2",
+      "type": "spatial",
+      "image": "spatial_2.png",
+      "prompt": "Is the blue square to the LEFT of the red circle? Answer yes or no.",
+      "answer": "no",
+      "max_tokens": 40
+    },
+    {
+      "id": "describe_1",
+      "type": "describe",
+      "image": "describe_1.png",
+      "prompt": "Describe everything you see in this image \u2014 shapes, colours, and any text.",
+      "signals": {
+        "green_triangle": [
+          "green triangle",
+          "triangle"
+        ],
+        "orange_circle": [
+          "orange circle",
+          "sun",
+          "orange"
+        ],
+        "purple_rect": [
+          "purple",
+          "rectangle",
+          "purple square"
+        ],
+        "yellow_star": [
+          "star",
+          "yellow star",
+          "gold"
+        ],
+        "word_cloud": [
+          "cloud"
+        ]
+      },
+      "max_tokens": 400
+    }
+  ]
+}
