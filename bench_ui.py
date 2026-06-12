@@ -16,7 +16,7 @@ import json
 import re
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -46,6 +46,7 @@ class ModelState:
     tps:    Optional[float] = None
     status: str             = "pending"   # pending | running | done | error | skip
     active: bool            = True        # False = greyed out, not part of current phase
+    caps:   list            = field(default_factory=list)  # capabilities (for cap-routed phases)
 
 class BenchState:
     def __init__(self):
@@ -63,7 +64,8 @@ def load_all_models() -> list[ModelState]:
     """Load full model list from registry, preserving any roles already set."""
     try:
         return [
-            ModelState(name=m["name"], role=m.get("role") or None)
+            ModelState(name=m["name"], role=m.get("role") or None,
+                       caps=m.get("capabilities", []))
             for m in json.loads(MODELS_FILE.read_text())
         ]
     except Exception:
@@ -96,10 +98,10 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
     if cmd == "update":
         return [("Update Registry", _cmd(REPO/"update_registry.py", *x), None)]
     if cmd == "vision":
-        # Capability-routed (vision cap → role=utility + workers); no role filter.
-        return [("Vision (Battery V)", _cmd(REPO/"vision.py", *x), None)]
+        # Capability-routed: highlight only models with the vision cap (utility + workers).
+        return [("Vision (Battery V)", _cmd(REPO/"vision.py", *x), "cap:vision")]
     if cmd == "embedding":
-        return [("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x), None)]
+        return [("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x), "cap:embedding")]
     if cmd == "batteries":
         return [
             ("Battery A", _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
@@ -300,10 +302,20 @@ class BenchUI(App):
             self._run_log_fh.close()
             self._run_log_fh = None
 
-    def _set_active_for_phase(self, role_filter: Optional[str]) -> None:
-        """Mark models active/inactive for the current phase and reset active models to pending."""
+    def _set_active_for_phase(self, filt: Optional[str]) -> None:
+        """Mark models active/inactive for the current phase and reset active models to pending.
+
+        filt:  None         → all models active (standard / ladder)
+               "cap:<name>"  → active if <name> in the model's capabilities (vision / embedding)
+               "<role>"      → active if model role matches (router / worker batteries)
+        """
         for ms in self._state.models:
-            ms.active = (role_filter is None) or (ms.role == role_filter)
+            if filt is None:
+                ms.active = True
+            elif filt.startswith("cap:"):
+                ms.active = filt[4:] in (ms.caps or [])
+            else:
+                ms.active = (ms.role == filt)
             if ms.active:
                 ms.status = "pending"
 
