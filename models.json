@@ -1,5 +1,65 @@
 [
   {
+    "name": "snowflake-arctic-embed2:568m",
+    "disk_gb": 1.2,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ]
+  },
+  {
+    "name": "snowflake-arctic-embed:137m",
+    "disk_gb": 0.3,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ]
+  },
+  {
+    "name": "bge-m3:567m",
+    "disk_gb": 1.2,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ]
+  },
+  {
+    "name": "minicpm-v4.6:1b",
+    "disk_gb": 1.6,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ]
+  },
+  {
+    "name": "qwen3-embedding:4b",
+    "disk_gb": 2.5,
+    "role": "utility",
+    "capabilities": [
+      "embedding",
+      "tools"
+    ]
+  },
+  {
+    "name": "granite-embedding:30m",
+    "disk_gb": 0.1,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ]
+  },
+  {
+    "name": "embeddinggemma:300m",
+    "disk_gb": 0.6,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ]
+  },
+  {
     "name": "phi4:14b",
     "disk_gb": 9.1,
     "role": "worker",
@@ -139,20 +199,5 @@
       "completion",
       "tools"
     ]
-  },
-  {
-    "name": "mistral-small:24b",
-    "disk_gb": 14.3,
-    "role": "worker"
-  },
-  {
-    "name": "qwen2.5vl:7b",
-    "disk_gb": 6.0,
-    "role": "worker"
-  },
-  {
-    "name": "mistral:7b",
-    "disk_gb": 4.4,
-    "role": "worker"
   }
 ]
