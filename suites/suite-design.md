@@ -379,10 +379,13 @@ truth (`suites/vision/generate.py` → images + `ground_truth.json`). Judge-free
 | `ocr` | transcribe a text block | difflib fuzzy ratio vs exact string (pass ≥0.80) |
 | `count` | count red circles among distractors | exact integer (answer ∈ extracted numbers) |
 | `chart` | read a labelled bar's value | numeric within tolerance (±3) |
-| `spatial` | relative position of two shapes | yes/no keyword |
+| `spatial` | relative position — **6 rounds**: left/right, above/below, inside/outside (3 yes / 3 no, varied shapes) | yes/no keyword per round |
 | `describe` | multi-element scene | signal-count (JPEG-style, pass ≥60% of signals) |
 
-Composite = mean of per-task units in [0,1]. Reports composite, avg tok/s, load.
+Composite = mean of **per-dimension** scores (ocr, count, chart, spatial, describe),
+where spatial = mean of its 6 rounds — so spatial reliability scales without inflating
+its weight. Balanced 3 yes / 3 no across distinct relations means a blind guesser's
+P(all spatial correct) ≈ 0.5⁶ ≈ 1.6%. Reports composite, dimensions, avg tok/s, load.
 Purpose: does a vision specialist (qwen2.5vl, glm-ocr) earn its keep over a
 generalist that also sees (qwen3.5, gemma4)?
 
@@ -396,11 +399,13 @@ to the real STS-B dev slice — the standard half of the hybrid strategy).
 |------|--------|
 | `sts` | Spearman(cosine, human score) on STS-B |
 | `triplet` | % where sim(anchor, positive) > sim(anchor, negative) + mean margin |
-| `retrieval` | recall@5, MRR, nDCG@10 over a doc/query set |
-| `clustering` | centroid purity + intra/inter separation |
+| `retrieval` | recall@5, MRR, nDCG@10 over a **hard-negative** corpus (33 docs / 12 queries — lexical-overlap distractors + paraphrase-gap queries so ranking metrics don't saturate) |
+| `clustering` | **unsupervised best-of-N k-means** purity (majority-label) + intra/inter separation, over 6 **adjacent** sub-topics (python/js/rust, chemistry/biology/physics) that share vocabulary |
 
 Composite = mean of [sts→[0,1], triplet acc, nDCG@10, purity]. Also reports
 vector dim, embeddings/sec, disk MB, and **quality-per-GB** (the keep/cut verdict).
+Hard sets were chosen after the first run saturated retrieval + clustering at 1.00;
+they now separate models (retrieval MRR/nDCG, clustering separation).
 
 ---
 

@@ -2,124 +2,148 @@
   "source": "seed (curated)",
   "items": [
     {
-      "text": "Add an index to speed up the WHERE clause.",
-      "label": "databases"
+      "text": "Build the sequence with a single list comprehension.",
+      "label": "python"
     },
     {
-      "text": "The query planner chose a sequential scan.",
-      "label": "databases"
+      "text": "A decorator wraps a function to extend its behaviour.",
+      "label": "python"
     },
     {
-      "text": "Normalize the schema to avoid duplicate rows.",
-      "label": "databases"
+      "text": "The GIL serialises thread execution in CPython.",
+      "label": "python"
     },
     {
-      "text": "A foreign key enforces referential integrity.",
-      "label": "databases"
+      "text": "Use a virtual environment to isolate package dependencies.",
+      "label": "python"
     },
     {
-      "text": "Vacuum reclaims space from dead tuples.",
-      "label": "databases"
+      "text": "Generators yield items lazily to save memory.",
+      "label": "python"
     },
     {
-      "text": "Joins combine rows from two related tables.",
-      "label": "databases"
+      "text": "Unpack the tuple into several variables at once.",
+      "label": "python"
     },
     {
-      "text": "Whisk the eggs before folding in the flour.",
-      "label": "cooking"
+      "text": "Promises handle asynchronous work without nested callbacks.",
+      "label": "javascript"
     },
     {
-      "text": "Let the dough rest for thirty minutes.",
-      "label": "cooking"
+      "text": "Prefer const and let over var for block scoping.",
+      "label": "javascript"
     },
     {
-      "text": "Sear the steak on high heat for two minutes.",
-      "label": "cooking"
+      "text": "The event loop drains the callback queue on each tick.",
+      "label": "javascript"
     },
     {
-      "text": "Season the soup with salt and fresh thyme.",
-      "label": "cooking"
+      "text": "Destructure the object to pull out named fields.",
+      "label": "javascript"
     },
     {
-      "text": "Preheat the oven to 200 degrees Celsius.",
-      "label": "cooking"
+      "text": "Arrow functions capture the surrounding this binding.",
+      "label": "javascript"
     },
     {
-      "text": "Caramelize the onions slowly over low heat.",
-      "label": "cooking"
+      "text": "Use async and await to flatten promise chains.",
+      "label": "javascript"
     },
     {
-      "text": "The telescope captured a distant spiral galaxy.",
-      "label": "astronomy"
+      "text": "The borrow checker enforces ownership at compile time.",
+      "label": "rust"
     },
     {
-      "text": "A solar eclipse occurs when the Moon blocks the Sun.",
-      "label": "astronomy"
+      "text": "Propagate errors with Result and the question-mark operator.",
+      "label": "rust"
     },
     {
-      "text": "Jupiter is the largest planet in the solar system.",
-      "label": "astronomy"
+      "text": "Lifetimes describe how long a reference stays valid.",
+      "label": "rust"
     },
     {
-      "text": "Light from that star took millions of years to arrive.",
-      "label": "astronomy"
+      "text": "Pattern-match an enum with the match expression.",
+      "label": "rust"
     },
     {
-      "text": "Black holes warp spacetime around them.",
-      "label": "astronomy"
+      "text": "Box moves a value onto the heap.",
+      "label": "rust"
     },
     {
-      "text": "The rover collected samples from the Martian surface.",
-      "label": "astronomy"
+      "text": "Traits define shared behaviour across types.",
+      "label": "rust"
     },
     {
-      "text": "The central bank raised interest rates again.",
-      "label": "finance"
+      "text": "A covalent bond shares electrons between two atoms.",
+      "label": "chemistry"
     },
     {
-      "text": "Diversify the portfolio to spread risk.",
-      "label": "finance"
+      "text": "The reaction is exothermic and releases heat.",
+      "label": "chemistry"
     },
     {
-      "text": "Quarterly earnings beat analyst expectations.",
-      "label": "finance"
+      "text": "Acids donate protons when dissolved in water.",
+      "label": "chemistry"
     },
     {
-      "text": "Inflation eroded the currency's purchasing power.",
-      "label": "finance"
+      "text": "Balancing the equation conserves every atom.",
+      "label": "chemistry"
     },
     {
-      "text": "The bond yield rose after the announcement.",
-      "label": "finance"
+      "text": "A catalyst lowers the activation energy of a reaction.",
+      "label": "chemistry"
     },
     {
-      "text": "Investors moved capital into safer assets.",
-      "label": "finance"
+      "text": "The periodic table groups elements by electron shells.",
+      "label": "chemistry"
     },
     {
-      "text": "Do three sets of ten squats with good form.",
-      "label": "fitness"
+      "text": "Mitochondria generate the ATP that powers the cell.",
+      "label": "biology"
     },
     {
-      "text": "Stretch your hamstrings after a long run.",
-      "label": "fitness"
+      "text": "DNA stores the instructions for building proteins.",
+      "label": "biology"
     },
     {
-      "text": "Cardio raises your heart rate for endurance.",
-      "label": "fitness"
+      "text": "Enzymes catalyse reactions inside living cells.",
+      "label": "biology"
     },
     {
-      "text": "Rest days let muscles recover and grow.",
-      "label": "fitness"
+      "text": "Natural selection favours traits that aid survival.",
+      "label": "biology"
     },
     {
-      "text": "Stay hydrated during a high-intensity workout.",
-      "label": "fitness"
+      "text": "The cell membrane controls what enters and leaves.",
+      "label": "biology"
     },
     {
-      "text": "Proper posture prevents back injuries when lifting.",
-      "label": "fitness"
+      "text": "Ribosomes translate messenger RNA into proteins.",
+      "label": "biology"
+    },
+    {
+      "text": "Force equals mass times acceleration.",
+      "label": "physics"
+    },
+    {
+      "text": "Energy is conserved within a closed system.",
+      "label": "physics"
+    },
+    {
+      "text": "A photon carries a quantum of electromagnetic energy.",
+      "label": "physics"
+    },
+    {
+      "text": "Momentum is the product of mass and velocity.",
+      "label": "physics"
+    },
+    {
+      "text": "Gravity curves spacetime around massive bodies.",
+      "label": "physics"
+    },
+    {
+      "text": "Friction converts kinetic energy into heat.",
+      "label": "physics"
     }
   ]
 }

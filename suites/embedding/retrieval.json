@@ -3,156 +3,222 @@
   "docs": [
     {
       "id": "d1",
-      "text": "To reset your password, open Settings, choose Security, then 'Change password'."
+      "text": "To reset your password, open Settings \u2192 Security and choose 'Change password'."
     },
     {
       "id": "d2",
-      "text": "Our API enforces a rate limit of 100 requests per minute per API key."
+      "text": "Account lockout policy: five failed login attempts trigger a 30-minute lock."
     },
     {
       "id": "d3",
-      "text": "Postgres uses B-tree indexes by default to accelerate equality and range queries."
+      "text": "To lock your account and block all sign-ins, use Privacy \u2192 Freeze account."
     },
     {
       "id": "d4",
-      "text": "Use exponential backoff with jitter when retrying failed HTTP requests."
+      "text": "Delete your account permanently under Settings \u2192 Danger Zone."
     },
     {
       "id": "d5",
-      "text": "A memory leak occurs when allocated objects are never released back to the heap."
+      "text": "Passwords must be at least 12 characters and include one symbol."
     },
     {
       "id": "d6",
-      "text": "JSON Web Tokens encode claims and are signed to verify their authenticity."
+      "text": "Two-factor authentication sends a one-time code to your phone at each login."
     },
     {
       "id": "d7",
-      "text": "Streaming reads a file in fixed-size chunks so it never loads fully into RAM."
+      "text": "Add a B-tree index so the query planner skips a full table scan."
     },
     {
       "id": "d8",
-      "text": "Database migrations should be reversible; always provide a down migration."
+      "text": "Cache hot query results in Redis to avoid repeated database hits."
     },
     {
       "id": "d9",
-      "text": "Gzip compression reduces payload size for text responses over HTTP."
+      "text": "Upgrade to an NVMe SSD to cut database file read latency."
     },
     {
       "id": "d10",
-      "text": "Connection pooling reuses open database connections to cut latency."
+      "text": "Run VACUUM nightly to reclaim disk space from dead tuples."
     },
     {
       "id": "d11",
-      "text": "The bakery's sourdough needs a 24-hour cold proof in the refrigerator."
+      "text": "Connection pooling reuses open sockets to lower per-request overhead."
     },
     {
       "id": "d12",
-      "text": "Mount Everest is the highest mountain above sea level on Earth."
+      "text": "Shard the table across nodes to spread write load."
     },
     {
       "id": "d13",
-      "text": "Photosynthesis converts sunlight, water, and CO2 into glucose and oxygen."
+      "text": "Back off exponentially and retry when you receive HTTP 429 (rate limited)."
     },
     {
       "id": "d14",
-      "text": "The 2008 financial crisis was triggered by subprime mortgage defaults."
+      "text": "A 500 Internal Server Error means an unhandled exception on the server."
     },
     {
       "id": "d15",
-      "text": "Regular stretching improves flexibility and reduces injury risk."
+      "text": "Use gzip to compress large JSON response bodies over HTTP."
     },
     {
       "id": "d16",
-      "text": "Use prepared statements to prevent SQL injection attacks."
+      "text": "Paginate results with limit and offset to avoid returning huge payloads."
     },
     {
       "id": "d17",
-      "text": "Caching frequently-read values in Redis lowers load on the primary database."
+      "text": "Set a 30-second client timeout to abort stalled requests."
     },
     {
       "id": "d18",
-      "text": "A load balancer distributes incoming traffic across multiple servers."
+      "text": "A memory leak is allocated objects that are never released back to the heap."
     },
     {
       "id": "d19",
-      "text": "TLS encrypts data in transit between the client and the server."
+      "text": "Stream a file in fixed-size chunks so it never fully loads into RAM."
     },
     {
       "id": "d20",
-      "text": "Pagination returns results in pages to avoid huge single responses."
+      "text": "Increase the JVM heap with -Xmx to allow larger allocations."
+    },
+    {
+      "id": "d21",
+      "text": "Take a heap dump to find which objects dominate retained memory."
+    },
+    {
+      "id": "d22",
+      "text": "Use parameterized queries to prevent SQL injection."
+    },
+    {
+      "id": "d23",
+      "text": "Hash passwords with bcrypt before storing them."
+    },
+    {
+      "id": "d24",
+      "text": "Escape HTML output to prevent cross-site scripting (XSS)."
+    },
+    {
+      "id": "d25",
+      "text": "TLS encrypts data in transit between the client and the server."
+    },
+    {
+      "id": "d26",
+      "text": "Validate and sanitize all user input on the server side."
+    },
+    {
+      "id": "d27",
+      "text": "A load balancer distributes incoming requests across multiple backend servers."
+    },
+    {
+      "id": "d28",
+      "text": "Mount Everest is the highest mountain above sea level on Earth."
+    },
+    {
+      "id": "d29",
+      "text": "The bakery's sourdough needs a 24-hour cold proof in the refrigerator."
+    },
+    {
+      "id": "d30",
+      "text": "Photosynthesis converts sunlight, water, and CO2 into glucose and oxygen."
+    },
+    {
+      "id": "d31",
+      "text": "The 2008 financial crisis was triggered by subprime mortgage defaults."
+    },
+    {
+      "id": "d32",
+      "text": "Regular stretching improves flexibility and reduces injury risk."
+    },
+    {
+      "id": "d33",
+      "text": "A solar eclipse occurs when the Moon passes between the Earth and the Sun."
     }
   ],
   "queries": [
     {
       "id": "q1",
-      "text": "How do I change my account password?",
+      "text": "I'm locked out and can't sign in \u2014 how do I get back in?",
       "relevant": [
         "d1"
       ]
     },
     {
       "id": "q2",
-      "text": "What happens if I send too many API requests?",
+      "text": "My read query is slow \u2014 how do I speed it up?",
       "relevant": [
-        "d2"
+        "d7",
+        "d8"
       ]
     },
     {
       "id": "q3",
-      "text": "How can I make my SQL lookups faster?",
+      "text": "The API keeps saying I've sent too many requests.",
       "relevant": [
-        "d3",
-        "d17"
+        "d13"
       ]
     },
     {
       "id": "q4",
-      "text": "What's the right way to retry a failed request?",
+      "text": "RAM usage climbs forever until the service crashes.",
       "relevant": [
-        "d4"
+        "d18",
+        "d21"
       ]
     },
     {
       "id": "q5",
-      "text": "Why does my service keep using more and more memory?",
+      "text": "Stop attackers from injecting SQL through my form.",
       "relevant": [
-        "d5"
+        "d22"
       ]
     },
     {
       "id": "q6",
-      "text": "How are auth tokens verified?",
+      "text": "Block other people from signing into my account while I'm away.",
       "relevant": [
-        "d6",
-        "d19"
+        "d3"
       ]
     },
     {
       "id": "q7",
-      "text": "How do I process a file too big for memory?",
+      "text": "Shrink the size of my JSON API responses.",
       "relevant": [
-        "d7"
+        "d15"
       ]
     },
     {
       "id": "q8",
-      "text": "How do I protect against SQL injection?",
+      "text": "What's the safe way to store user passwords?",
       "relevant": [
-        "d16"
+        "d23"
       ]
     },
     {
       "id": "q9",
-      "text": "How do I reduce HTTP response size?",
+      "text": "Protect my web app against XSS.",
       "relevant": [
-        "d9"
+        "d24"
       ]
     },
     {
       "id": "q10",
-      "text": "How do I spread traffic across servers?",
+      "text": "Process a CSV far bigger than my available memory.",
       "relevant": [
-        "d18"
+        "d19"
+      ]
+    },
+    {
+      "id": "q11",
+      "text": "Spread incoming web traffic across several servers.",
+      "relevant": [
+        "d27"
+      ]
+    },
+    {
+      "id": "q12",
+      "text": "Keep the database from running out of disk over time.",
+      "relevant": [
+        "d10"
       ]
     }
   ]

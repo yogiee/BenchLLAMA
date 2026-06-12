@@ -126,6 +126,43 @@ def _spearman(x, y):
         return 0.0
     return float(np.corrcoef(rx, ry)[0, 1])
 
+def _kmeans(X, k, start, iters=50):
+    """Deterministic spherical k-means (cosine) from one farthest-first seed.
+    Returns (labels, objective) where objective = summed point→centroid cosine."""
+    n = len(X)
+    chosen = [start]
+    dist = np.full(n, np.inf)
+    for _ in range(1, k):
+        dist = np.minimum(dist, 1.0 - X @ X[chosen[-1]])
+        chosen.append(int(np.argmax(dist)))
+    C = X[chosen].copy()
+    labels = np.full(n, -1)
+    for _ in range(iters):
+        new = np.argmax(X @ C.T, axis=1)
+        if np.array_equal(new, labels):
+            break
+        labels = new
+        for j in range(k):
+            pts = X[labels == j]
+            if len(pts):
+                c = pts.mean(axis=0)
+                nrm = np.linalg.norm(c)
+                C[j] = c / nrm if nrm else C[j]
+    obj = float(sum((X[labels == j] @ C[j]).sum() for j in range(k) if (labels == j).any()))
+    return labels, obj
+
+def _kmeans_best(X, k, n_init=8):
+    """Best-of-N k-means (MTEB-style n_init) with spread, deterministic seeds.
+    Keeps the tightest clustering (highest objective) — robust to init luck."""
+    n = len(X)
+    starts = sorted({int(round(i * (n - 1) / max(1, n_init - 1))) for i in range(n_init)})
+    best_lab, best_obj = None, -np.inf
+    for s in starts:
+        lab, obj = _kmeans(X, k, start=s)
+        if obj > best_obj:
+            best_obj, best_lab = obj, lab
+    return best_lab
+
 # ── Task scorers ─────────────────────────────────────────────────────────────────
 
 def score_sts(model):
@@ -191,21 +228,32 @@ def score_clustering(model):
     mat, w = embed_texts(model, texts)
     mat = _normalize(mat)
     label_set = sorted(set(labs))
-    centroids = np.array([mat[[i for i, l in enumerate(labs) if l == lab]].mean(axis=0)
-                          for lab in label_set])
-    centroids = _normalize(centroids)
-    sims = mat @ centroids.T
-    pred = [label_set[j] for j in np.argmax(sims, axis=1)]
-    purity = sum(1 for p, t in zip(pred, labs) if p == t) / len(labs)
-    # intra vs inter separation
+    k = len(label_set)
+
+    # Unsupervised k-means purity (MTEB-style): cluster blind, then score each
+    # discovered cluster by its majority true label. Harder than nearest-labelled-
+    # centroid — fuzzy embeddings merge/split adjacent topics and purity drops.
+    assign = _kmeans_best(mat, k)
+    purity = 0
+    for j in range(k):
+        idx = [i for i in range(len(labs)) if assign[i] == j]
+        if not idx:
+            continue
+        counts = {}
+        for i in idx:
+            counts[labs[i]] = counts.get(labs[i], 0) + 1
+        purity += max(counts.values())
+    purity /= len(labs)
+
+    # intra vs inter cosine separation (secondary signal)
     full = mat @ mat.T
     intra, inter = [], []
     for i in range(len(items)):
-        for j in range(i + 1, len(items)):
-            (intra if labs[i] == labs[j] else inter).append(full[i, j])
+        for j2 in range(i + 1, len(items)):
+            (intra if labs[i] == labs[j2] else inter).append(full[i, j2])
     sep = float(np.mean(intra) - np.mean(inter)) if intra and inter else 0.0
     return {"purity": round(purity, 4), "separation": round(sep, 4),
-            "n": len(items), "k": len(label_set),
+            "n": len(items), "k": k, "metric": "kmeans_majority",
             "source": data.get("source", "?")}, w
 
 # ── Per-model runner ─────────────────────────────────────────────────────────────

@@ -33,6 +33,7 @@ import sys
 import time
 import requests
 import numpy as np
+from collections import defaultdict
 from pathlib import Path
 from datetime import date
 from bench_utils import cooldown
@@ -177,7 +178,8 @@ def _task_unit(tid, res):
 def run_model(model_name, disk_gb, tasks):
     print(f"\n{'='*60}\nMODEL: {model_name}  ({disk_gb} GB disk)  [vision]\n{'='*60}", flush=True)
     result = {"model": model_name, "disk_gb": disk_gb, "tests": {}, "errors": []}
-    tps_samples, units, load = [], [], None
+    tps_samples, load = [], None
+    dim_units = defaultdict(list)   # group task units by type → one dimension each
     for task in tasks:
         tid = task["id"]; ttype = task["type"]
         print(f"  [{tid}]", end=" ", flush=True)
@@ -191,7 +193,7 @@ def run_model(model_name, disk_gb, tasks):
             result["tests"][tid] = res
             if res["tps"]: tps_samples.append(res["tps"])
             if load is None: load = load_s(data)
-            units.append(_task_unit(ttype, res))
+            dim_units[ttype].append(_task_unit(ttype, res))
             mark = res.get("correct")
             mk = "✓" if mark else ("✗" if mark is False else "·")
             extra = f"ratio={res['ratio']}" if ttype == "ocr" else \
@@ -201,12 +203,16 @@ def run_model(model_name, disk_gb, tasks):
         except Exception as e:
             print(f"FAILED: {e}", flush=True)
             result["tests"][tid] = {"error": str(e), "correct": False}
-            units.append(0.0)
+            dim_units[ttype].append(0.0)
 
-    result["load_s"]    = load
-    result["avg_tps"]   = round(sum(tps_samples) / len(tps_samples), 1) if tps_samples else None
-    result["composite"] = round(float(np.mean(units)), 4) if units else 0.0
-    print(f"\n  composite={result['composite']}  avg_tps={result['avg_tps']}  load={result['load_s']}s", flush=True)
+    result["load_s"]  = load
+    result["avg_tps"] = round(sum(tps_samples) / len(tps_samples), 1) if tps_samples else None
+    # Dimension-weighted: each task TYPE is one dimension (spatial = mean of its
+    # rounds), so adding spatial rounds raises reliability without inflating weight.
+    dims = {d: round(float(np.mean(u)), 4) for d, u in dim_units.items()}
+    result["dimensions"] = dims
+    result["composite"]  = round(float(np.mean(list(dims.values()))), 4) if dims else 0.0
+    print(f"\n  composite={result['composite']}  dims={dims}  avg_tps={result['avg_tps']}  load={result['load_s']}s", flush=True)
     return result
 
 # ── Status + unload ──────────────────────────────────────────────────────────────
@@ -229,10 +235,16 @@ def unload(model):
 def _cell(t, tid):
     r = t.get(tid, {})
     if "error" in r: return "ERR"
-    if tid == "ocr":      return f"{r.get('ratio','?')}"
-    if tid == "describe": return f"{r.get('score','?')}/{r.get('max','?')}"
+    if tid == "ocr_1":      return f"{r.get('ratio','?')}"
+    if tid == "describe_1": return f"{r.get('score','?')}/{r.get('max','?')}"
     c = r.get("correct")
     return "✓" if c else ("✗" if c is False else "?")
+
+def _spatial_cell(t):
+    sp = [v for k, v in t.items() if k.startswith("spatial")]
+    if not sp: return "—"
+    passed = sum(1 for v in sp if v.get("correct") is True)
+    return f"{passed}/{len(sp)}"
 
 def write_summary(results, out_md, fast_mode):
     flag = " ⚠ FAST (no cool-down)" if fast_mode else ""
@@ -249,7 +261,7 @@ def write_summary(results, out_md, fast_mode):
         lines.append(
             f"| `{r['model']}` | {r['disk_gb']}GB | {r.get('avg_tps','?')} "
             f"| {_cell(t,'ocr_1')} | {_cell(t,'count_1')} | {_cell(t,'chart_1')} "
-            f"| {_cell(t,'spatial_1')} | {_cell(t,'describe_1')} | **{r.get('composite','?')}** |")
+            f"| {_spatial_cell(t)} | {_cell(t,'describe_1')} | **{r.get('composite','?')}** |")
     lines += ["", "## Responses", ""]
     for r in results:
         lines += [f"### `{r['model']}` (composite {r.get('composite','?')})", ""]

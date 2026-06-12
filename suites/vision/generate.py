@@ -128,6 +128,50 @@ def gen_spatial_no():
             "prompt": "Is the blue square to the LEFT of the red circle? Answer yes or no.",
             "answer": "no", "max_tokens": 40}
 
+# Six spatial rounds total across THREE relations (left/right, above/below,
+# inside/outside) with DIFFERENT shapes+colours each, balanced 3 yes / 3 no.
+# A blind guesser's P(all 6 correct) = 0.5^6 ≈ 1.6%; a yes-biased pattern-matcher
+# (glm-ocr) can't fluke it, and varied shapes defeat memorised associations.
+
+def _triangle(d, cx, top_y, fill, h=90, w=110):
+    d.polygon([(cx, top_y), (cx - w // 2, top_y + h), (cx + w // 2, top_y + h)], fill=fill)
+
+def gen_spatial_above():
+    img = Image.new("RGB", (640, 360), "white"); d = ImageDraw.Draw(img)
+    _triangle(d, 320, 40, "green")                          # green triangle, TOP
+    d.ellipse([270, 230, 370, 330], fill="gold")           # yellow circle, BOTTOM
+    img.save(HERE / "spatial_3.png")
+    return {"id": "spatial_3", "type": "spatial", "image": "spatial_3.png",
+            "prompt": "Is the green triangle ABOVE the yellow circle? Answer yes or no.",
+            "answer": "yes", "max_tokens": 40}
+
+def gen_spatial_above_no():
+    img = Image.new("RGB", (640, 360), "white"); d = ImageDraw.Draw(img)
+    d.ellipse([270, 30, 370, 130], fill="gold")            # yellow circle, TOP
+    _triangle(d, 320, 230, "green")                        # green triangle, BOTTOM
+    img.save(HERE / "spatial_4.png")
+    return {"id": "spatial_4", "type": "spatial", "image": "spatial_4.png",
+            "prompt": "Is the green triangle ABOVE the yellow circle? Answer yes or no.",
+            "answer": "no", "max_tokens": 40}
+
+def gen_spatial_inside():
+    img = Image.new("RGB", (640, 360), "white"); d = ImageDraw.Draw(img)
+    d.rectangle([200, 80, 440, 300], outline="black", width=5)   # black rectangle outline
+    d.ellipse([290, 150, 350, 230], fill="red")                  # red circle INSIDE
+    img.save(HERE / "spatial_5.png")
+    return {"id": "spatial_5", "type": "spatial", "image": "spatial_5.png",
+            "prompt": "Is the red circle inside the black rectangle? Answer yes or no.",
+            "answer": "yes", "max_tokens": 40}
+
+def gen_spatial_inside_no():
+    img = Image.new("RGB", (640, 360), "white"); d = ImageDraw.Draw(img)
+    d.rectangle([120, 110, 320, 280], outline="black", width=5)  # black rectangle outline
+    d.ellipse([480, 160, 560, 240], fill="red")                  # red circle OUTSIDE (right)
+    img.save(HERE / "spatial_6.png")
+    return {"id": "spatial_6", "type": "spatial", "image": "spatial_6.png",
+            "prompt": "Is the red circle inside the black rectangle? Answer yes or no.",
+            "answer": "no", "max_tokens": 40}
+
 
 # ── DESCRIBE ──────────────────────────────────────────────────────────────────────
 def gen_describe():
@@ -161,7 +205,10 @@ def gen_describe():
 
 def main():
     tasks = [gen_ocr(), gen_count(), gen_chart(),
-             gen_spatial(), gen_spatial_no(), gen_describe()]
+             gen_spatial(), gen_spatial_no(),
+             gen_spatial_above(), gen_spatial_above_no(),
+             gen_spatial_inside(), gen_spatial_inside_no(),
+             gen_describe()]
     (HERE / "ground_truth.json").write_text(json.dumps({"tasks": tasks}, indent=2))
     print(f"Wrote {len(tasks)} fixtures + ground_truth.json → {HERE}/")
     for t in tasks:

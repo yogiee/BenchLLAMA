@@ -104,79 +104,108 @@ TRIPLET = [
      "Set up chairs for the flaky wedding guests."),
 ]
 
-# ── Retrieval: each query has one or more relevant docs by id. ──────────────────
+# ── Retrieval: HARD. Hard-negative distractors (lexical overlap with the query
+#    but wrong) + paraphrase-gap queries (share no keywords with the answer) so
+#    recall/nDCG/MRR separate models instead of saturating at 1.0. ─────────────
 RETRIEVAL_DOCS = [
-    ("d1",  "To reset your password, open Settings, choose Security, then 'Change password'."),
-    ("d2",  "Our API enforces a rate limit of 100 requests per minute per API key."),
-    ("d3",  "Postgres uses B-tree indexes by default to accelerate equality and range queries."),
-    ("d4",  "Use exponential backoff with jitter when retrying failed HTTP requests."),
-    ("d5",  "A memory leak occurs when allocated objects are never released back to the heap."),
-    ("d6",  "JSON Web Tokens encode claims and are signed to verify their authenticity."),
-    ("d7",  "Streaming reads a file in fixed-size chunks so it never loads fully into RAM."),
-    ("d8",  "Database migrations should be reversible; always provide a down migration."),
-    ("d9",  "Gzip compression reduces payload size for text responses over HTTP."),
-    ("d10", "Connection pooling reuses open database connections to cut latency."),
-    ("d11", "The bakery's sourdough needs a 24-hour cold proof in the refrigerator."),
-    ("d12", "Mount Everest is the highest mountain above sea level on Earth."),
-    ("d13", "Photosynthesis converts sunlight, water, and CO2 into glucose and oxygen."),
-    ("d14", "The 2008 financial crisis was triggered by subprime mortgage defaults."),
-    ("d15", "Regular stretching improves flexibility and reduces injury risk."),
-    ("d16", "Use prepared statements to prevent SQL injection attacks."),
-    ("d17", "Caching frequently-read values in Redis lowers load on the primary database."),
-    ("d18", "A load balancer distributes incoming traffic across multiple servers."),
-    ("d19", "TLS encrypts data in transit between the client and the server."),
-    ("d20", "Pagination returns results in pages to avoid huge single responses."),
+    # password / account / auth — heavy lexical overlap between these
+    ("d1",  "To reset your password, open Settings → Security and choose 'Change password'."),
+    ("d2",  "Account lockout policy: five failed login attempts trigger a 30-minute lock."),
+    ("d3",  "To lock your account and block all sign-ins, use Privacy → Freeze account."),
+    ("d4",  "Delete your account permanently under Settings → Danger Zone."),
+    ("d5",  "Passwords must be at least 12 characters and include one symbol."),
+    ("d6",  "Two-factor authentication sends a one-time code to your phone at each login."),
+    # database performance
+    ("d7",  "Add a B-tree index so the query planner skips a full table scan."),
+    ("d8",  "Cache hot query results in Redis to avoid repeated database hits."),
+    ("d9",  "Upgrade to an NVMe SSD to cut database file read latency."),
+    ("d10", "Run VACUUM nightly to reclaim disk space from dead tuples."),
+    ("d11", "Connection pooling reuses open sockets to lower per-request overhead."),
+    ("d12", "Shard the table across nodes to spread write load."),
+    # HTTP / API
+    ("d13", "Back off exponentially and retry when you receive HTTP 429 (rate limited)."),
+    ("d14", "A 500 Internal Server Error means an unhandled exception on the server."),
+    ("d15", "Use gzip to compress large JSON response bodies over HTTP."),
+    ("d16", "Paginate results with limit and offset to avoid returning huge payloads."),
+    ("d17", "Set a 30-second client timeout to abort stalled requests."),
+    # memory
+    ("d18", "A memory leak is allocated objects that are never released back to the heap."),
+    ("d19", "Stream a file in fixed-size chunks so it never fully loads into RAM."),
+    ("d20", "Increase the JVM heap with -Xmx to allow larger allocations."),
+    ("d21", "Take a heap dump to find which objects dominate retained memory."),
+    # security
+    ("d22", "Use parameterized queries to prevent SQL injection."),
+    ("d23", "Hash passwords with bcrypt before storing them."),
+    ("d24", "Escape HTML output to prevent cross-site scripting (XSS)."),
+    ("d25", "TLS encrypts data in transit between the client and the server."),
+    ("d26", "Validate and sanitize all user input on the server side."),
+    ("d27", "A load balancer distributes incoming requests across multiple backend servers."),
+    # off-topic filler (grows the corpus, lowers accidental hits)
+    ("d28", "Mount Everest is the highest mountain above sea level on Earth."),
+    ("d29", "The bakery's sourdough needs a 24-hour cold proof in the refrigerator."),
+    ("d30", "Photosynthesis converts sunlight, water, and CO2 into glucose and oxygen."),
+    ("d31", "The 2008 financial crisis was triggered by subprime mortgage defaults."),
+    ("d32", "Regular stretching improves flexibility and reduces injury risk."),
+    ("d33", "A solar eclipse occurs when the Moon passes between the Earth and the Sun."),
 ]
 RETRIEVAL_QUERIES = [
-    ("q1", "How do I change my account password?",            ["d1"]),
-    ("q2", "What happens if I send too many API requests?",   ["d2"]),
-    ("q3", "How can I make my SQL lookups faster?",            ["d3", "d17"]),
-    ("q4", "What's the right way to retry a failed request?", ["d4"]),
-    ("q5", "Why does my service keep using more and more memory?", ["d5"]),
-    ("q6", "How are auth tokens verified?",                    ["d6", "d19"]),
-    ("q7", "How do I process a file too big for memory?",      ["d7"]),
-    ("q8", "How do I protect against SQL injection?",          ["d16"]),
-    ("q9", "How do I reduce HTTP response size?",              ["d9"]),
-    ("q10", "How do I spread traffic across servers?",         ["d18"]),
+    # paraphrase gap to the answer; hard negatives (shown) share surface words
+    ("q1",  "I'm locked out and can't sign in — how do I get back in?",     ["d1"]),       # vs d2/d3 (lock*)
+    ("q2",  "My read query is slow — how do I speed it up?",                ["d7", "d8"]), # vs d9/d10/d11/d12
+    ("q3",  "The API keeps saying I've sent too many requests.",            ["d13"]),      # vs d14/d17
+    ("q4",  "RAM usage climbs forever until the service crashes.",          ["d18", "d21"]), # vs d19/d20
+    ("q5",  "Stop attackers from injecting SQL through my form.",           ["d22"]),      # vs d26/d24
+    ("q6",  "Block other people from signing into my account while I'm away.", ["d3"]),    # vs d1/d2/d4
+    ("q7",  "Shrink the size of my JSON API responses.",                    ["d15"]),      # vs d16
+    ("q8",  "What's the safe way to store user passwords?",                 ["d23"]),      # vs d5/d22
+    ("q9",  "Protect my web app against XSS.",                              ["d24"]),      # vs d26/d22
+    ("q10", "Process a CSV far bigger than my available memory.",           ["d19"]),      # vs d18/d20
+    ("q11", "Spread incoming web traffic across several servers.",          ["d27"]),      # vs d12/d11
+    ("q12", "Keep the database from running out of disk over time.",        ["d10"]),      # vs d9/d7
 ]
 
-# ── Clustering: labelled sentences across well-separated topics. ────────────────
+# ── Clustering: HARD. Six ADJACENT sub-topics in two families (programming
+#    languages; physical sciences) that share vocabulary, so centroid purity
+#    drops below 1.0 and separates models. ────────────────────────────────────
 CLUSTERING = [
-    # databases
-    ("Add an index to speed up the WHERE clause.", "databases"),
-    ("The query planner chose a sequential scan.", "databases"),
-    ("Normalize the schema to avoid duplicate rows.", "databases"),
-    ("A foreign key enforces referential integrity.", "databases"),
-    ("Vacuum reclaims space from dead tuples.", "databases"),
-    ("Joins combine rows from two related tables.", "databases"),
-    # cooking
-    ("Whisk the eggs before folding in the flour.", "cooking"),
-    ("Let the dough rest for thirty minutes.", "cooking"),
-    ("Sear the steak on high heat for two minutes.", "cooking"),
-    ("Season the soup with salt and fresh thyme.", "cooking"),
-    ("Preheat the oven to 200 degrees Celsius.", "cooking"),
-    ("Caramelize the onions slowly over low heat.", "cooking"),
-    # astronomy
-    ("The telescope captured a distant spiral galaxy.", "astronomy"),
-    ("A solar eclipse occurs when the Moon blocks the Sun.", "astronomy"),
-    ("Jupiter is the largest planet in the solar system.", "astronomy"),
-    ("Light from that star took millions of years to arrive.", "astronomy"),
-    ("Black holes warp spacetime around them.", "astronomy"),
-    ("The rover collected samples from the Martian surface.", "astronomy"),
-    # finance
-    ("The central bank raised interest rates again.", "finance"),
-    ("Diversify the portfolio to spread risk.", "finance"),
-    ("Quarterly earnings beat analyst expectations.", "finance"),
-    ("Inflation eroded the currency's purchasing power.", "finance"),
-    ("The bond yield rose after the announcement.", "finance"),
-    ("Investors moved capital into safer assets.", "finance"),
-    # fitness
-    ("Do three sets of ten squats with good form.", "fitness"),
-    ("Stretch your hamstrings after a long run.", "fitness"),
-    ("Cardio raises your heart rate for endurance.", "fitness"),
-    ("Rest days let muscles recover and grow.", "fitness"),
-    ("Stay hydrated during a high-intensity workout.", "fitness"),
-    ("Proper posture prevents back injuries when lifting.", "fitness"),
+    # Family A — programming languages (share function / variable / callback / heap)
+    ("Build the sequence with a single list comprehension.", "python"),
+    ("A decorator wraps a function to extend its behaviour.", "python"),
+    ("The GIL serialises thread execution in CPython.", "python"),
+    ("Use a virtual environment to isolate package dependencies.", "python"),
+    ("Generators yield items lazily to save memory.", "python"),
+    ("Unpack the tuple into several variables at once.", "python"),
+    ("Promises handle asynchronous work without nested callbacks.", "javascript"),
+    ("Prefer const and let over var for block scoping.", "javascript"),
+    ("The event loop drains the callback queue on each tick.", "javascript"),
+    ("Destructure the object to pull out named fields.", "javascript"),
+    ("Arrow functions capture the surrounding this binding.", "javascript"),
+    ("Use async and await to flatten promise chains.", "javascript"),
+    ("The borrow checker enforces ownership at compile time.", "rust"),
+    ("Propagate errors with Result and the question-mark operator.", "rust"),
+    ("Lifetimes describe how long a reference stays valid.", "rust"),
+    ("Pattern-match an enum with the match expression.", "rust"),
+    ("Box moves a value onto the heap.", "rust"),
+    ("Traits define shared behaviour across types.", "rust"),
+    # Family B — physical sciences (share reaction / energy / cell / atom)
+    ("A covalent bond shares electrons between two atoms.", "chemistry"),
+    ("The reaction is exothermic and releases heat.", "chemistry"),
+    ("Acids donate protons when dissolved in water.", "chemistry"),
+    ("Balancing the equation conserves every atom.", "chemistry"),
+    ("A catalyst lowers the activation energy of a reaction.", "chemistry"),
+    ("The periodic table groups elements by electron shells.", "chemistry"),
+    ("Mitochondria generate the ATP that powers the cell.", "biology"),
+    ("DNA stores the instructions for building proteins.", "biology"),
+    ("Enzymes catalyse reactions inside living cells.", "biology"),
+    ("Natural selection favours traits that aid survival.", "biology"),
+    ("The cell membrane controls what enters and leaves.", "biology"),
+    ("Ribosomes translate messenger RNA into proteins.", "biology"),
+    ("Force equals mass times acceleration.", "physics"),
+    ("Energy is conserved within a closed system.", "physics"),
+    ("A photon carries a quantum of electromagnetic energy.", "physics"),
+    ("Momentum is the product of mass and velocity.", "physics"),
+    ("Gravity curves spacetime around massive bodies.", "physics"),
+    ("Friction converts kinetic energy into heat.", "physics"),
 ]
 
 

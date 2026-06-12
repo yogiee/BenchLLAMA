@@ -42,6 +42,38 @@
       "max_tokens": 40
     },
     {
+      "id": "spatial_3",
+      "type": "spatial",
+      "image": "spatial_3.png",
+      "prompt": "Is the green triangle ABOVE the yellow circle? Answer yes or no.",
+      "answer": "yes",
+      "max_tokens": 40
+    },
+    {
+      "id": "spatial_4",
+      "type": "spatial",
+      "image": "spatial_4.png",
+      "prompt": "Is the green triangle ABOVE the yellow circle? Answer yes or no.",
+      "answer": "no",
+      "max_tokens": 40
+    },
+    {
+      "id": "spatial_5",
+      "type": "spatial",
+      "image": "spatial_5.png",
+      "prompt": "Is the red circle inside the black rectangle? Answer yes or no.",
+      "answer": "yes",
+      "max_tokens": 40
+    },
+    {
+      "id": "spatial_6",
+      "type": "spatial",
+      "image": "spatial_6.png",
+      "prompt": "Is the red circle inside the black rectangle? Answer yes or no.",
+      "answer": "no",
+      "max_tokens": 40
+    },
+    {
       "id": "describe_1",
       "type": "describe",
       "image": "describe_1.png",
