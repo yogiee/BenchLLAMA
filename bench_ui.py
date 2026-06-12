@@ -117,6 +117,8 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
             ("Battery B",      _cmd(apt, "--battery", "B", "--role", "worker", *x),              "worker"),
             ("Battery C",      _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x), "worker"),
             ("Battery D",      _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x), "worker"),
+            ("Vision (Battery V)",      _cmd(REPO/"vision.py", *x),                              "cap:vision"),
+            ("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x),                           "cap:embedding"),
         ]
     return []
 
@@ -446,7 +448,7 @@ Commands:
   ladder      num_ctx characterisation
   aptitude    Single aptitude battery (default: B)
   batteries   All aptitude batteries A → B → C → D
-  all         Full pipeline: standard → ladder → A → B → C → D
+  all         Full pipeline: standard → ladder → A → B → C → D → Vision → Embedding
   vision      Battery V — vision models (capability-routed, head-to-head)
   embedding   Battery EMB — embedding models (capability-routed)
   update      Sync models.json from Ollama

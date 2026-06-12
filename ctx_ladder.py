@@ -30,7 +30,7 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
-from bench_utils import cooldown, preflight
+from bench_utils import cooldown, preflight, latest_result
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -385,36 +385,41 @@ if __name__ == "__main__":
     print(f"Output: {OUT_JSON}\n", flush=True)
 
     # ── Resume / merge logic ──────────────────────────────────────────────────
-    # Same semantics as runner.py: 72h resume window, merge on targeted runs,
-    # --force clears the full-run resume guard. See runner.py for full notes.
+    # Same semantics as runner.py: resume SOURCE = today's file if present, else
+    # the most recent ctx_ladder within 72h (cross-day). Always writes today's file.
     all_results = []
     completed   = set()
 
-    if OUT_JSON.exists() and not (force and not model_args):
-        age_h = (time.time() - OUT_JSON.stat().st_mtime) / 3600
-        if model_args or age_h < 72:
-            try:
-                existing = json.load(OUT_JSON.open())
-                if model_args:
-                    target_names = {m for m, *_ in MODELS}
-                    all_results  = [r for r in existing if r["model"] not in target_names]
-                else:
-                    all_results = existing
-                    completed   = {r["model"] for r in all_results if "error" not in r}
-                    if completed:
-                        print(f"  Resuming — {len(completed)} model(s) already done: {sorted(completed)}", flush=True)
-            except Exception:
-                all_results, completed = [], set()
+    source = None
+    if not (force and not model_args):
+        source = OUT_JSON if OUT_JSON.exists() else latest_result(RESULTS_DIR, "ctx_ladder", fast_mode, 72)
 
-    # ── Roster change warning (full run only) ─────────────────────────────────
+    if source is not None:
+        try:
+            existing = json.load(source.open())
+            if model_args:
+                target_names = {m for m, *_ in MODELS}
+                all_results  = [r for r in existing if r["model"] not in target_names]
+            else:
+                # Drop errored entries so a retry replaces (not duplicates) them.
+                all_results = [r for r in existing if "error" not in r]
+                completed   = {r["model"] for r in all_results}
+                if completed:
+                    via = "" if source == OUT_JSON else f" (carried from {source.name})"
+                    print(f"  Resuming — {len(completed)} model(s) already done{via}: {sorted(completed)}", flush=True)
+        except Exception:
+            all_results, completed = [], set()
+
+    # ── New-model notice (full run only) ──────────────────────────────────────
+    # Not in the resume source → the loop below runs them now and merges them in.
     if not model_args and not force and completed:
         eligible_names = {m["name"] for m in registry if m.get("role") in CTX_LADDER}
         done_names     = {r["model"] for r in all_results}
         new_models     = eligible_names - done_names
         if new_models:
-            joined = " ".join(sorted(new_models))
-            print(f"  ⚠ {len(new_models)} new model(s) in models.json not in last run: {sorted(new_models)}", flush=True)
-            print(f"    → './bench.sh ladder {joined}' to add them, or '--force' to rebaseline.", flush=True)
+            print(f"  + {len(new_models)} new model(s) not in the resumed results — "
+                  f"running now, existing models skipped: {sorted(new_models)}", flush=True)
+            print(f"    (pass --force to re-baseline everything instead.)", flush=True)
 
     first_run = True
     for model_name, disk_gb, role in MODELS:

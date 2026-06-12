@@ -26,7 +26,7 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
-from bench_utils import cooldown, preflight
+from bench_utils import cooldown, preflight, latest_result
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -1714,20 +1714,22 @@ if __name__ == "__main__":
     print(f"Output: {OUT_JSON}", flush=True)
 
     # ── Resume logic ──────────────────────────────────────────────────────────
-    # If the output file exists and is < 24h old, resume — skip models that
-    # already completed successfully. --force disables resume and overwrites.
+    # Resume SOURCE = today's battery file if present, else the most recent file
+    # for THIS battery within 24h (cross-day — filenames embed the date). Skip
+    # models already completed; --force disables resume. Always writes today's file.
     all_results = []
     completed   = set()
-    if OUT_JSON.exists() and not force:
-        age_h = (time.time() - OUT_JSON.stat().st_mtime) / 3600
-        if age_h < 24:
-            try:
-                all_results = json.load(OUT_JSON.open())
-                completed   = {r["model"] for r in all_results if "error" not in r}
-                if completed:
-                    print(f"  Resuming — {len(completed)} model(s) already done: {sorted(completed)}", flush=True)
-            except Exception:
-                all_results, completed = [], set()
+    source = OUT_JSON if OUT_JSON.exists() else (None if force else latest_result(RESULTS_DIR, pfx, fast_mode, 24))
+    if source is not None and not force:
+        try:
+            loaded      = json.load(source.open())
+            all_results = [r for r in loaded if "error" not in r]   # retry replaces, no dupes
+            completed   = {r["model"] for r in all_results}
+            if completed:
+                via = "" if source == OUT_JSON else f" (carried from {source.name})"
+                print(f"  Resuming — {len(completed)} model(s) already done{via}: {sorted(completed)}", flush=True)
+        except Exception:
+            all_results, completed = [], set()
 
     apt_done  = []
     first_run = True

@@ -166,3 +166,27 @@ def preflight(models, host):
         for w in warn:
             print(w, flush=True)
         print()
+
+
+# ── Cross-day resume source ───────────────────────────────────────────────────
+
+def latest_result(results_dir, prefix, fast, hours):
+    """Most recent results/<prefix>_<date>[_fast].json within `hours` (by mtime), or None.
+
+    Enables cross-day resume. Output filenames embed the date, so checking only
+    today's file can never see yesterday's run — the 'resume within N hours'
+    promise would be dead across midnight. This scans every matching file and
+    returns the newest one inside the window. `fast` selects the _fast variant
+    (True → only *_fast.json; False → only the non-fast files).
+    """
+    best, best_m = None, -1.0
+    for f in results_dir.glob(f"{prefix}_*.json"):
+        name = f.name
+        if "status" in name:
+            continue
+        if name.endswith("_fast.json") != fast:
+            continue
+        m = f.stat().st_mtime
+        if (time.time() - m) / 3600 < hours and m > best_m:
+            best, best_m = f, m
+    return best

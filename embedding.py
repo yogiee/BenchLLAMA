@@ -31,6 +31,7 @@ import requests
 import numpy as np
 from pathlib import Path
 from datetime import date
+from bench_utils import latest_result
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -363,17 +364,20 @@ if __name__ == "__main__":
     print(f"ollama={ollama_host} | models: {[m[0] for m in MODELS]}", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
-    # Resume (24h) unless --force
+    # Resume SOURCE = today's file if present, else most recent embedding within
+    # 24h (cross-day). Writes today's file, carrying prior results forward.
     all_results, completed = [], set()
-    if OUT_JSON.exists() and not force:
-        if (time.time() - OUT_JSON.stat().st_mtime) / 3600 < 24:
-            try:
-                all_results = json.load(OUT_JSON.open())
-                completed = {r["model"] for r in all_results if not r.get("errors")}
-                if completed:
-                    print(f"  Resuming — done: {sorted(completed)}", flush=True)
-            except Exception:
-                all_results, completed = [], set()
+    source = OUT_JSON if OUT_JSON.exists() else (None if force else latest_result(RESULTS_DIR, "embedding", False, 24))
+    if source is not None and not force:
+        try:
+            loaded      = json.load(source.open())
+            all_results = [r for r in loaded if not r.get("errors")]   # retry replaces, no dupes
+            completed   = {r["model"] for r in all_results}
+            if completed:
+                via = "" if source == OUT_JSON else f" (carried from {source.name})"
+                print(f"  Resuming — done{via}: {sorted(completed)}", flush=True)
+        except Exception:
+            all_results, completed = [], set()
 
     for model_name, disk_gb in MODELS:
         if model_name in completed:

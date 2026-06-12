@@ -30,7 +30,7 @@ import sys
 import time
 import requests
 from pathlib import Path
-from bench_utils import cooldown, preflight
+from bench_utils import cooldown, preflight, latest_result
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -591,28 +591,36 @@ if __name__ == "__main__":
     print(f"Output: {OUT_JSON}", flush=True)
 
     # ── Resume / merge logic ──────────────────────────────────────────────────
-    # Full run, no --force: resume within 72h, skip already-completed models.
-    # Targeted run (model args given): merge into existing JSON regardless of age.
-    # --force, no model args: fresh overwrite, ignore any existing file.
-    # --force with model args: re-run those models, replace their entries in the file.
+    # Resume SOURCE = today's file if it exists, else the most recent benchmark
+    # within 72h (cross-day resume — filenames embed the date, so without this the
+    # window dies at midnight). Results always WRITE to today's OUT_JSON, carrying
+    # the prior baseline forward and merging only the new models in.
+    #   Full run, no --force: skip already-completed models, run the rest.
+    #   Targeted run (model args): replace those models' entries, keep the others.
+    #   --force, no model args: fresh overwrite, ignore any source.
+    #   --force with model args: re-run those models, replace their entries.
     all_results = []
     completed   = set()
 
-    if OUT_JSON.exists() and not (force and not model_args):
-        age_h = (time.time() - OUT_JSON.stat().st_mtime) / 3600
-        if model_args or age_h < 72:
-            try:
-                existing = json.load(OUT_JSON.open())
-                if model_args:
-                    target_names = {m for m, *_ in MODELS}
-                    all_results  = [r for r in existing if r["model"] not in target_names]
-                else:
-                    all_results = existing
-                    completed   = {r["model"] for r in all_results if "error" not in r}
-                    if completed:
-                        print(f"  Resuming — {len(completed)} model(s) already done: {sorted(completed)}", flush=True)
-            except Exception:
-                all_results, completed = [], set()
+    source = None
+    if not (force and not model_args):
+        source = OUT_JSON if OUT_JSON.exists() else latest_result(RESULTS_DIR, "benchmark", fast_mode, 72)
+
+    if source is not None:
+        try:
+            existing = json.load(source.open())
+            if model_args:
+                target_names = {m for m, *_ in MODELS}
+                all_results  = [r for r in existing if r["model"] not in target_names]
+            else:
+                # Drop errored entries so a retry replaces (not duplicates) them.
+                all_results = [r for r in existing if "error" not in r]
+                completed   = {r["model"] for r in all_results}
+                if completed:
+                    via = "" if source == OUT_JSON else f" (carried from {source.name})"
+                    print(f"  Resuming — {len(completed)} model(s) already done{via}: {sorted(completed)}", flush=True)
+        except Exception:
+            all_results, completed = [], set()
 
     # ── New-model notice (full run only) ──────────────────────────────────────
     # Models in models.json but not in today's results file aren't in `completed`,
