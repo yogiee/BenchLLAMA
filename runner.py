@@ -614,15 +614,18 @@ if __name__ == "__main__":
             except Exception:
                 all_results, completed = [], set()
 
-    # ── Roster change warning (full run only) ─────────────────────────────────
+    # ── New-model notice (full run only) ──────────────────────────────────────
+    # Models in models.json but not in today's results file aren't in `completed`,
+    # so the resume loop below runs them now and merges them in — no separate
+    # command needed. (Use --force to also re-baseline the already-done models.)
     if not model_args and not force and completed:
         registry_names = {m["name"] for m in registry if m.get("role") in COMPLETION_ROLES}
         done_names     = {r["model"] for r in all_results}
         new_models     = registry_names - done_names
         if new_models:
-            joined = " ".join(sorted(new_models))
-            print(f"  ⚠ {len(new_models)} new model(s) in models.json not in last run: {sorted(new_models)}", flush=True)
-            print(f"    → './bench.sh standard {joined}' to add them, or '--force' to rebaseline.", flush=True)
+            print(f"  + {len(new_models)} new model(s) not in today's results — "
+                  f"benchmarking now, existing models skipped: {sorted(new_models)}", flush=True)
+            print(f"    (pass --force to re-baseline everything instead.)", flush=True)
 
     first_run = True
     for model_name, disk_gb, role in MODELS:
