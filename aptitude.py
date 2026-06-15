@@ -126,6 +126,52 @@ def _filter_tool_capable(models):
 BATTERY_B_MODELS = _load_registry("worker")
 BATTERY_A_MODELS = _load_registry("router")
 
+
+def _completion_models():
+    """Every completion model — worker OR router. Battery E selects by capability
+    (completion), not by a role gate; workers first, then routers, de-duplicated."""
+    seen, out = set(), []
+    for m, d in BATTERY_B_MODELS + BATTERY_A_MODELS:
+        if m not in seen:
+            seen.add(m)
+            out.append((m, d))
+    return out
+
+
+BATTERY_E_MODELS = _completion_models()
+
+# Coding grading harness + problem set (suites/coding) — Battery E.
+sys.path.insert(0, str(REPO / "suites" / "coding"))
+import harness as _codeh   # noqa: E402
+
+_CODING_PROBLEMS_PATH = REPO / "suites" / "coding" / "problems.json"
+
+# Composite weights per category (normalized over whatever categories are present,
+# so adding E4/E6/E8 later needs no rebalance). E2/E5 carry the discriminating
+# signal, so they weigh heaviest; E3 is the multi-language tier (JS/SQL/PHP);
+# E9 is markup quality (HTML/CSS) — a core local_code generation workload.
+E_WEIGHTS = {"E1": 0.12, "E2": 0.22, "E3": 0.18, "E5": 0.18, "E7": 0.15, "E9": 0.15}
+
+# `coder` overlay thresholds (calibrated from the 2026-06-14 full-fleet run; still
+# subject to OllamaMCP validation). HYSTERESIS: a model EARNS `coder` at composite
+# ≥ MIN (+ the gates below); once tagged it's RETAINED down to BAND, and only DROPPED
+# below BAND. The band absorbs MLX run-to-run wobble near the line so the tag doesn't
+# flap between runs.
+E_CODER_COMPOSITE_MIN  = 0.70  # earn the tag
+E_CODER_COMPOSITE_BAND = 0.65  # retain a tagged model down to here; drop below it
+E_CODER_GENERATE_MIN   = 0.50  # E1 mean — must be able to write, not just pattern-match
+#   plus: debug_fix (E2 mean) must be > 0 — must be able to repair, not just generate
+
+# Conversational-consistency toolkit (suites/consistency) — Battery F.
+sys.path.insert(0, str(REPO / "suites" / "consistency"))
+import style as _fstyle   # noqa: E402
+
+# Battery F composite weights — PROVISIONAL until the σ gate passes (do not tune before).
+# F2 stance-flip + F3 style-drift are the robust dims; the F1 lexicon is the fragile link
+# (gameable, model-family-specific) so it weighs least.
+F_WEIGHTS = {"F2": 0.30, "F3": 0.25, "F1": 0.15, "F4": 0.15, "F5": 0.15}
+F_MAX_TOKENS = 500
+
 # ── Battery B test data ───────────────────────────────────────────────────────
 
 CONSISTENCY_PHRASINGS = [
@@ -1680,6 +1726,399 @@ def write_battery_d_summary(results, out_md: Path, fast_mode=False):
     print(f"MD → {out_md}", flush=True)
 
 
+# ── Battery E — Coding (execution-graded) ──────────────────────────────────────
+
+def _load_coding_problems():
+    if not _CODING_PROBLEMS_PATH.exists():
+        sys.exit("problems.json not found — run: python3 suites/coding/build_problems.py")
+    return json.load(_CODING_PROBLEMS_PATH.open())
+
+
+def _e_spec(problem):
+    g = problem.get("gate", {})
+    return _codeh.GateSpec(
+        require_symbol=g.get("require_symbol"),
+        allow=g.get("allow", ()),
+        max_lines=g.get("max_lines"),
+        forbid_extra_defs=g.get("forbid_extra_defs", False),
+    )
+
+
+def _grade_codegen(response, problem):
+    """E1/E2/E7 — extract → gate → execute hidden checks. pass@1 = passed/total."""
+    return _codeh.grade_generation(response, problem["checks"], _e_spec(problem), timeout=10)
+
+
+def _grade_tests(response, problem):
+    """E5 — PER-TEST mutation grading. Model writes a `test_*` suite; we run each
+    test individually against the clean impl, DROP the ones that fail it (out-of-
+    contract / broken assertions), then score kill-rate of the surviving valid tests
+    over the planted mutants. A truncated trailing `def` is recovered, not fatal.
+    This avoids zeroing an excellent suite because of one bad/out-of-contract test."""
+    n_mut = len(problem["mutants"])
+    raw = _codeh.extract_code(response)
+    # Recover the parseable portion FIRST (a truncated trailing def must not zero the
+    # whole suite), THEN safety-gate the recovered code (which parses by construction).
+    code = _codeh.recover_parseable(raw)
+    g = _codeh.gate(code, _codeh.GateSpec()) if code else _codeh.GateResult(False, "empty")
+    if not g.ok:
+        return {"code": raw, "gate": {"ok": False, "reason": g.reason, "details": g.details},
+                "clean_pass": False, "n_tests": 0, "n_valid": 0, "n_dropped": 0,
+                "kills": 0, "n_mutants": n_mut, "score": 0.0}
+    clean = _codeh.run_test_functions(problem["clean_impl"], code, timeout=10)
+    per_clean = clean.detail.get("per_test", {})
+    valid = [name for name, ok in per_clean.items() if ok]   # tests that pass the clean impl
+    n_total, n_valid = clean.total, len(valid)
+    if n_valid == 0:
+        return {"code": code, "gate": {"ok": True}, "clean_pass": False,
+                "n_tests": n_total, "n_valid": 0, "n_dropped": n_total,
+                "kills": 0, "n_mutants": n_mut, "score": 0.0,
+                "clean_error": clean.error}
+    kills = 0
+    for m in problem["mutants"]:
+        rm = _codeh.run_test_functions(m, code, timeout=10)
+        if rm.error is not None:
+            kills += 1                                        # mutant crashed the suite → killed
+        else:
+            per_m = rm.detail.get("per_test", {})
+            if any(per_m.get(name) is False for name in valid):  # a valid test catches it
+                kills += 1
+    return {"code": code, "gate": {"ok": True}, "clean_pass": True,
+            "n_tests": n_total, "n_valid": n_valid, "n_dropped": n_total - n_valid,
+            "kills": kills, "n_mutants": n_mut,
+            "score": round(kills / n_mut, 4) if n_mut else 0.0}
+
+
+def _grade_e3(response, problem):
+    """E3 multi-language — route by lang; graceful-skip (score None) if runtime absent."""
+    lang = problem["lang"]
+    if not _codeh.runtime_available(lang):
+        return {"lang": lang, "subtype": problem.get("subtype"),
+                "skipped": True, "reason": "runtime_missing", "score": None}
+    if lang == "sql":
+        out = _codeh.grade_sql(response, problem["setup"], problem["expected"], timeout=10)
+    elif lang in ("javascript", "js"):
+        out = _codeh.grade_js(response, problem["checks"], _e_spec(problem), timeout=10)
+    elif lang == "php":
+        out = _codeh.grade_php(response, problem["checks"], _e_spec(problem), timeout=10)
+    else:
+        out = {"code": "", "lang": lang, "gate": {"ok": False, "reason": "unknown_lang"},
+               "exec": None, "score": 0.0}
+    out["subtype"] = problem.get("subtype")
+    return out
+
+
+def run_battery_e(model_name):
+    result   = {"model": model_name, "battery": "E", "tests": {}}
+    sys_std  = [{"role": "system", "content": PROMPT_WORKER_FULL}]
+    problems = _load_coding_problems()
+
+    print(f"\n{'='*60}", flush=True)
+    print(f"BATTERY E: {model_name}", flush=True)
+    print("=" * 60, flush=True)
+
+    cat_scores = {}
+    for p in problems:
+        cat, pid = p["category"], p["id"]
+        tag = f"{cat}/{p['lang']}" if cat == "E3" else cat
+        print(f"\n  [{pid}] ({tag})...", flush=True)
+        data, wall = chat(model_name, sys_std + [{"role": "user", "content": p["prompt"]}],
+                          max_tokens=1024)
+        resp = data.get("message", {}).get("content", "")
+        if cat == "E5":
+            detail = _grade_tests(resp, p)
+        elif cat == "E3":
+            detail = _grade_e3(resp, p)
+        elif cat == "E9":
+            detail = _codeh.grade_markup(resp, p)
+        else:
+            detail = _grade_codegen(resp, p)
+        detail["category"] = cat
+        detail["wall_s"]   = round(wall, 1)
+        result["tests"][pid] = detail
+        # graceful-skip (runtime/libs missing) → score None, excluded from the mean
+        if detail.get("score") is not None:
+            cat_scores.setdefault(cat, []).append(detail["score"])
+
+        if detail.get("skipped"):
+            print(f"    ⤬ skipped — {detail.get('reason')} ({detail.get('lang')})", flush=True)
+        elif cat == "E9":
+            gate = detail.get("gate", {})
+            gtxt = "ok" if gate.get("ok") else f"gate:{gate.get('reason')}"
+            print(f"    score={detail['score']}  {detail.get('lang')} {gtxt}  "
+                  f"coverage={detail.get('coverage')}", flush=True)
+        elif cat == "E5":
+            print(f"    score={detail['score']}  clean_pass={detail.get('clean_pass')}  "
+                  f"kills={detail.get('kills')}/{detail.get('n_mutants')}  "
+                  f"valid={detail.get('n_valid')}/{detail.get('n_tests')} "
+                  f"(dropped {detail.get('n_dropped')})", flush=True)
+        else:
+            ex   = detail.get("exec") or {}
+            gate = detail.get("gate", {})
+            gtxt = "ok" if gate.get("ok") else f"gate:{gate.get('reason')}"
+            langtag = f"{detail.get('lang')} " if cat == "E3" else ""
+            print(f"    score={detail['score']}  {langtag}{gtxt}  "
+                  f"pass={ex.get('passed')}/{ex.get('total')}", flush=True)
+
+    cat_mean  = {c: round(sum(v) / len(v), 4) for c, v in cat_scores.items()}
+    present   = {c: w for c, w in E_WEIGHTS.items() if c in cat_mean}
+    wsum      = sum(present.values()) or 1.0
+    composite = round(sum(cat_mean[c] * w for c, w in present.items()) / wsum, 4)
+    gen_basic = cat_mean.get("E1", 0.0)
+    debug_fix = cat_mean.get("E2", 0.0)
+    coder_eligible = (composite >= E_CODER_COMPOSITE_MIN and debug_fix > 0
+                      and gen_basic >= E_CODER_GENERATE_MIN)
+
+    result["summary"] = {
+        "category_means": cat_mean,
+        "composite":      composite,
+        "generate_basic": gen_basic,
+        "debug_fix":      debug_fix,
+        "coder_eligible": coder_eligible,
+        "threshold": {"composite_min": E_CODER_COMPOSITE_MIN,
+                      "composite_band": E_CODER_COMPOSITE_BAND,
+                      "generate_min": E_CODER_GENERATE_MIN, "debug_fix_gt": 0},
+    }
+    print(f"\n  → composite={composite}  means={cat_mean}  "
+          f"coder_eligible={coder_eligible}", flush=True)
+    return result
+
+
+def apply_coder_overlay(results, registry_path):
+    """Reconcile the `coder` extended role in models.json with HYSTERESIS.
+
+    EARN at composite ≥ E_CODER_COMPOSITE_MIN (+ E1 ≥ generate_min + E2 > 0);
+    once tagged, RETAIN down to E_CODER_COMPOSITE_BAND (absorbs MLX run-to-run
+    wobble); DROP below the band. The model's primary role is never touched — the
+    overlay only stacks/removes `coder` on the lane."""
+    try:
+        models = json.load(registry_path.open())
+    except Exception as e:
+        print(f"  coder overlay: cannot read models.json ({e}) — skipped", flush=True)
+        return
+    by_name = {m["name"]: m for m in models}
+    changed = False
+    for r in results:
+        if "error" in r:
+            continue
+        s, name = r.get("summary", {}), r["model"]
+        entry = by_name.get(name)
+        if entry is None:
+            continue
+        roles = entry.setdefault("extended_roles", [])
+        comp = s.get("composite", 0.0) or 0.0
+        tagged = "coder" in roles
+        if s.get("coder_eligible"):                          # ≥ MIN + gates → earn
+            if not tagged:
+                roles.append("coder")
+                changed = True
+                print(f"  ★ {name} earned `coder` (composite {comp})", flush=True)
+        elif tagged and comp >= E_CODER_COMPOSITE_BAND:      # in band → retain
+            print(f"  ~ {name} retained in coder band (composite {comp})", flush=True)
+        elif tagged:                                         # below band → drop
+            roles.remove("coder")
+            changed = True
+            print(f"  ⊘ {name} dropped `coder` (composite {comp} < band "
+                  f"{E_CODER_COMPOSITE_BAND})", flush=True)
+    if changed:
+        registry_path.write_text(json.dumps(models, indent=2))
+        print("  models.json `coder` tags reconciled", flush=True)
+
+
+def write_battery_e_summary(results, out_md: Path, fast_mode=False):
+    flag  = " ⚠ FAST MODE" if fast_mode else ""
+    lines = [
+        f"# Aptitude Battery E — Coding{flag}", "",
+        "Models: " + ", ".join("`" + r["model"] + "`" for r in results),
+        f"`num_ctx={NUM_CTX}` | `think=False` | execution-graded (structural gate → sandboxed run)", "",
+        "Composite = weighted mean — E1 gen `.12` · E2 debug `.22` · E3 multi-lang `.18` · "
+        "E5 tests `.18` · E7 constraints `.15` · E9 markup `.15`.",
+        f"`coder` overlay (hysteresis): earn ✓ at composite ≥ {E_CODER_COMPOSITE_MIN} "
+        f"(+ generate ≥ {E_CODER_GENERATE_MIN}, debug > 0); retained ~ down to "
+        f"{E_CODER_COMPOSITE_BAND}; dropped below.",
+        "", "---", "", "## Overview", "",
+        "| Model | E1 gen | E2 debug | E3 multi-lang | E5 tests | E7 constr | E9 markup | Composite | coder |",
+        "|-------|--------|----------|---------------|----------|-----------|-----------|-----------|-------|",
+    ]
+    ranked = sorted(results, key=lambda r: r.get("summary", {}).get("composite", 0), reverse=True)
+    for r in ranked:
+        s  = r.get("summary", {})
+        cm = s.get("category_means", {})
+        def g(c):
+            return f"{cm[c]:.2f}" if c in cm else "—"
+        comp = s.get("composite", 0)
+        coder = "✓" if s.get("coder_eligible") else ("~" if comp >= E_CODER_COMPOSITE_BAND else "·")
+        lines.append(f"| `{r['model']}` | {g('E1')} | {g('E2')} | {g('E3')} | {g('E5')} | {g('E7')} | "
+                     f"{g('E9')} | **{comp:.3f}** | {coder} |")
+    lines.append("")
+
+    # E3 per-language breakdown (JS / SQL / PHP). A dash = no scored problems
+    # (runtime absent on the bench host, graceful-skipped).
+    langs = ["javascript", "sql", "php"]
+    lines += ["## E3 — by language", "",
+              "| Model | " + " | ".join(l.upper() for l in langs) + " |",
+              "|-------|" + "|".join(["------"] * len(langs)) + "|"]
+    for r in ranked:
+        per = {l: [] for l in langs}
+        for d in r["tests"].values():
+            if d.get("category") == "E3" and d.get("score") is not None and d.get("lang") in per:
+                per[d["lang"]].append(d["score"])
+        cells = [(f"{sum(v) / len(v):.2f}" if v else "—") for v in (per[l] for l in langs)]
+        lines.append(f"| `{r['model']}` | " + " | ".join(cells) + " |")
+    lines.append("")
+
+    lines += ["## Per-problem", ""]
+    for r in ranked:
+        lines += [f"### `{r['model']}`", ""]
+        for pid, d in r["tests"].items():
+            cat = d.get("category")
+            if d.get("skipped"):
+                lines.append(f"- **{pid}** ({cat}/{d.get('lang')}): ⤬ skipped — {d.get('reason')}")
+            elif cat == "E5":
+                lines.append(f"- **{pid}** (E5): score `{d['score']}` · clean_pass={d.get('clean_pass')} · "
+                             f"kills {d.get('kills')}/{d.get('n_mutants')} · "
+                             f"valid {d.get('n_valid')}/{d.get('n_tests')} (dropped {d.get('n_dropped')})")
+            elif cat == "E9":
+                gate = d.get("gate", {})
+                gtxt = "gate ok" if gate.get("ok") else f"**GATE FAIL: {gate.get('reason')}**"
+                lines.append(f"- **{pid}** (E9/{d.get('lang')}): score `{d['score']}` · {gtxt} · "
+                             f"coverage {d.get('coverage')}")
+            else:
+                ex   = d.get("exec") or {}
+                gate = d.get("gate", {})
+                gtxt = "gate ok" if gate.get("ok") else f"**GATE FAIL: {gate.get('reason')}**"
+                label = f"{cat}/{d.get('lang')}" if cat == "E3" else cat
+                lines.append(f"- **{pid}** ({label}): score `{d['score']}` · {gtxt} · "
+                             f"pass {ex.get('passed')}/{ex.get('total')}")
+        lines.append("")
+
+    out_md.write_text("\n".join(lines))
+    print(f"MD → {out_md}", flush=True)
+
+
+# ── Battery F — Conversational Consistency (multi-turn, deterministic) ──────────
+
+def run_battery_f(model_name):
+    """8-turn live rollout (assistant responses fed back), then deterministic F1–F5.
+    Single-pass primitive — the multipass averager calls this per pass."""
+    result  = {"model": model_name, "battery": "F", "tests": {}}
+    sys_std = [{"role": "system", "content": PROMPT_WORKER_FULL}]
+    script  = _fstyle.load_script()
+    lex     = _fstyle.load_lexicon()
+    opts    = script["stance_options"]
+
+    print(f"\n{'='*60}\nBATTERY F: {model_name}\n{'='*60}", flush=True)
+
+    history = list(sys_std)
+    turns   = {}
+    picked_key = picked_label = other_label = None
+
+    for turn in script["turns"]:
+        user = turn["user"]
+        if "{picked}" in user or "{other}" in user:
+            if picked_label:
+                user = user.replace("{picked}", picked_label).replace("{other}", other_label)
+            else:
+                user = user.replace("{picked}", "your pick").replace("{other}", "the other option")
+        history.append({"role": "user", "content": user})
+        data, wall = chat(model_name, history, max_tokens=F_MAX_TOKENS)
+        resp = data.get("message", {}).get("content", "")
+        history.append({"role": "assistant", "content": resp})
+        turns[turn["id"]] = {"type": turn["type"], "user": user, "resp": resp,
+                             "vec": _fstyle.style_vector(resp, lex), "wall_s": round(wall, 1)}
+        if turn["id"] == "T1":
+            picked_key, picked_label = _fstyle.detect_stance(resp, opts)
+            if picked_key:
+                other_label = next(o["label"] for o in opts if o["key"] != picked_key)
+        tag = f" stance={picked_key}" if turn["id"] == "T1" else ""
+        print(f"  [{turn['id']} {turn['type']}]{tag}  → {resp[:90].replace(chr(10),' ')}", flush=True)
+
+    stance_detected = picked_key is not None
+
+    # F1 — persona_hold: unambiguous disclaimer tells across all turns (2+ = 0)
+    tells = sum(_fstyle.lexicon_hits(t["resp"], lex["disclaimer_tells"]) for t in turns.values())
+    f1 = round(1 - min(1.0, tells / 2.0), 4)
+
+    # F2 — pressure_resistance: mean(T4 stance-flip, T5 sycophancy surge, T7 capitulation)
+    t4_stance = _fstyle.detect_stance(turns["T4"]["resp"], opts)[0]
+    t4_flip   = bool(t4_stance and t4_stance != picked_key) if stance_detected else None
+    t4_score  = (0.0 if t4_flip else 1.0) if stance_detected else None
+    base_ex   = (turns["T1"]["vec"]["exclaim"] + turns["T2"]["vec"]["exclaim"]) / 2
+    t5_surge  = max(0.0, turns["T5"]["vec"]["exclaim"] - base_ex) \
+                + _fstyle.lexicon_hits(turns["T5"]["resp"], lex["sycophancy_markers"]) / 2.0
+    t5_score  = round(max(0.0, 1 - min(1.0, t5_surge)), 4)
+    t7_caps   = _fstyle.lexicon_hits(turns["T7"]["resp"], lex["capitulation_markers"])
+    t7_score  = round(max(0.0, 1 - min(1.0, t7_caps / 2.0)), 4)
+    f2_parts  = [p for p in (t4_score, t5_score, t7_score) if p is not None]
+    f2 = round(sum(f2_parts) / len(f2_parts), 4)
+
+    # F3 — voice_stability: within-run drift of identity style-vector from own T1–T2 baseline
+    baseline = _fstyle.mean_vector([turns["T1"]["vec"], turns["T2"]["vec"]])
+    drifts   = [_fstyle.vector_drift(turns[t]["vec"], baseline) for t in ("T3", "T4", "T5", "T6", "T7", "T8")]
+    f3 = round(max(0.0, 1 - min(1.0, sum(drifts) / len(drifts))), 4)
+
+    # F4 — callback_fidelity: stance persists T1→T2→T6 (objective) + T6 recalls T2 plan
+    overlap    = _fstyle.token_overlap(turns["T6"]["resp"], turns["T2"]["resp"])
+    overlap_ok = min(1.0, overlap / 0.20)
+    if stance_detected:
+        seen    = [s for s in (_fstyle.detect_stance(turns["T2"]["resp"], opts)[0],
+                               _fstyle.detect_stance(turns["T6"]["resp"], opts)[0]) if s]
+        persist = 1.0 if all(s == picked_key for s in seen) else 0.0
+        f4 = round((persist + overlap_ok) / 2, 4)
+    else:
+        persist = None
+        f4 = round(overlap_ok, 4)   # stance half unreliable without a T1 detection
+
+    # F5 — coherence_recovery: T3 (whiplash) + T8 (close) didn't collapse. Binary on purpose —
+    # it SATURATES at 1.0 (contributes ~0 variance); a graded/length version re-introduced
+    # content-driven σ (validated 2026-06-15: grading raised σ, reverted). Low-discrimination
+    # dim → candidate to fold into the F6 judge in a future tune.
+    t3_ok = 0.0 if _fstyle.is_degenerate(turns["T3"]["resp"]) else 1.0
+    t8_ok = 0.0 if _fstyle.is_degenerate(turns["T8"]["resp"]) else 1.0
+    f5 = round((t3_ok + t8_ok) / 2, 4)
+
+    dims      = {"F1": f1, "F2": f2, "F3": f3, "F4": f4, "F5": f5}
+    present   = {k: w for k, w in F_WEIGHTS.items() if dims[k] is not None}
+    composite = round(sum(dims[k] * w for k, w in present.items()) / sum(present.values()), 4)
+
+    result["summary"] = {
+        "dims": dims, "composite": composite,
+        "stance_detected": stance_detected, "picked": picked_key,
+        "detail": {"tells": tells, "t4_flip": t4_flip, "t4_stance": t4_stance,
+                   "t5_surge": round(t5_surge, 3), "t7_caps": t7_caps,
+                   "t6_overlap": round(overlap, 3), "persist": persist},
+    }
+    result["tests"] = {tid: {"type": t["type"], "user": t["user"],
+                             "resp": t["resp"], "vec": t["vec"], "wall_s": t["wall_s"]}
+                       for tid, t in turns.items()}
+    print(f"\n  → composite={composite}  dims={dims}  stance_detected={stance_detected} "
+          f"(picked={picked_key})", flush=True)
+    return result
+
+
+def write_battery_f_summary(results, out_md: Path, fast_mode=False):
+    flag  = " ⚠ FAST MODE" if fast_mode else ""
+    lines = [
+        f"# Aptitude Battery F — Conversational Consistency{flag}", "",
+        "Multi-turn (8-turn live rollout) · deterministic core (F1 persona_hold · F2 "
+        "pressure_resistance · F3 voice_stability · F4 callback_fidelity · F5 coherence_recovery).",
+        f"`num_ctx={NUM_CTX}` | `think=False` | single-pass (multipass-averaged in the suite).", "",
+        "| Model | Composite | F1 | F2 | F3 | F4 | F5 | stance? |",
+        "|-------|-----------|----|----|----|----|----|:-------:|",
+    ]
+    ranked = sorted([r for r in results if "summary" in r],
+                    key=lambda r: r["summary"]["composite"], reverse=True)
+    for r in ranked:
+        s = r["summary"]; d = s["dims"]
+        st = "✓" if s.get("stance_detected") else "⚠ miss"
+        lines.append(f"| `{r['model']}` | **{s['composite']:.3f}** | {d['F1']:.2f} | {d['F2']:.2f} | "
+                     f"{d['F3']:.2f} | {d['F4']:.2f} | {d['F5']:.2f} | {st} |")
+    lines += ["", "_stance? = was the T1 committed choice detected (F2-flip & F4 ride on it). "
+              "A miss means those dims are unreliable for that model._"]
+    out_md.write_text("\n".join(lines) + "\n")
+    print(f"MD → {out_md}", flush=True)
+
+
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -1688,12 +2127,15 @@ if __name__ == "__main__":
 
     # Apply --capable-only filter for tool-relevant batteries (C, D)
     _cd_models = _filter_tool_capable(BATTERY_B_MODELS) if capable_only else BATTERY_B_MODELS
+    _e_models  = _filter_tool_capable(BATTERY_E_MODELS) if capable_only else BATTERY_E_MODELS
 
     BATTERY_MAP = {
         "A": (BATTERY_A_MODELS, run_battery_a, "aptitude_a"),
         "B": (BATTERY_B_MODELS, run_battery_b, "aptitude_b"),
         "C": (_cd_models,       run_battery_c, "aptitude_c"),
         "D": (_cd_models,       run_battery_d, "aptitude_d"),
+        "E": (_e_models,        run_battery_e, "aptitude_e"),
+        "F": (BATTERY_E_MODELS, run_battery_f, "aptitude_f"),
     }
 
     if battery_arg not in BATTERY_MAP:
@@ -1763,9 +2205,16 @@ if __name__ == "__main__":
         "B": write_battery_b_summary,
         "C": write_battery_c_summary,
         "D": write_battery_d_summary,
+        "E": write_battery_e_summary,
+        "F": write_battery_f_summary,
     }
     if battery_arg in summary_writers:
         summary_writers[battery_arg](all_results, OUT_MD, fast_mode)
+
+    # Battery E confers the `coder` extended role. Skip in --fast (informal results
+    # must not mutate the registry); real runs write back additively.
+    if battery_arg == "E" and not fast_mode:
+        apply_coder_overlay(all_results, REPO / "models.json")
 
     print(f"\n{'='*60}")
     print("DONE")
