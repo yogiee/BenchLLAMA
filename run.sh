@@ -26,11 +26,6 @@ else
     SCRIPT="$REPO/runner.py"
 fi
 
-osascript -e "tell application \"Terminal\"
-  set w to do script \"python3 '$REPO/monitor.py' $MONITOR_ARGS\"
-  set bounds of front window to {50, 50, 700, 520}
-end tell" 2>/dev/null
-
-sleep 0.5
-
+# (legacy) monitor.py removed — for live monitoring use `./bench.sh <cmd>` (web) or
+# `./bench.sh <cmd> --console`. This wrapper now just runs the script directly.
 python3 "$SCRIPT" $ARGS
