@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""
+BenchLLAMA — neutral results/rankings export.
+
+Writes `rankings/rankings.json`: the machine-readable twin of `rankings/master.md`.
+`master.md` stays the human view; this is the consumer-facing data feed. It aggregates
+the latest canonical (non-`_fast`) result file of every battery into one model-keyed
+structure plus per-category ranking lists.
+
+PROJECT-AGNOSTIC by design: the producer knows nothing about its consumers. This file
+contains only WHAT WAS MEASURED — no consumer tool names (no `local_code`, no
+`local_embed`). Each consumer (OllamaMCP, LookingGlass, MemoryCentral) reads the lists
+it cares about and maps them to its own purpose on its side.
+
+  python3 export.py                 # → rankings/rankings.json
+  python3 export.py --print         # also dump a short summary to stdout
+
+Regenerate alongside any master.md update.
+"""
+
+import json
+import sys
+import glob
+import os
+from pathlib import Path
+from datetime import datetime, timezone
+
+REPO = Path(__file__).parent
+RESULTS = REPO / "results"
+OUT = REPO / "rankings" / "rankings.json"
+# Well-known consumer location — the published source of truth every consumer
+# (OllamaMCP, LookingGlass, MemoryCentral, …) reads from. Overwritten each run;
+# the date lives inside the data (`generated`). Decoupled from this repo's layout.
+PUBLISH = Path.home() / ".config" / "ollama-consumers" / "benchllama-rankings.json"
+
+SCHEMA = 1
+HOST_PROFILE = "M1 Max 32GB"
+PROTOCOL = {"num_ctx": 16384, "think": False}
+
+
+def _latest(prefix):
+    """Newest canonical result file for a battery prefix, or None. Skips informal /
+    intermediate variants: _fast (no-cooldown), _run{k} (per-run averaging inputs)."""
+    skip = ("_fast", "_run")
+    files = [f for f in glob.glob(str(RESULTS / f"{prefix}_*.json"))
+             if not any(s in os.path.basename(f) for s in skip)]
+    return max(files, key=os.path.getmtime) if files else None
+
+
+def _load(prefix):
+    f = _latest(prefix)
+    if not f:
+        return {}, None
+    try:
+        data = json.load(open(f))
+        return {r["model"]: r for r in data if "model" in r}, os.path.basename(f)
+    except Exception:
+        return {}, None
+
+
+def _standard_summary(rec):
+    """Objective standard-suite signals from a benchmark record."""
+    t = rec.get("tests", {})
+    def ok(name):
+        return bool(t.get(name, {}).get("correct"))
+    reasoning = sum(ok(x) for x in ("bat_ball", "two_cities", "cylinder", "farm_heads"))
+    instr = sum(ok(x) for x in ("format_3", "no_eiffel"))
+    jpeg = t.get("jpeg_formats", {}).get("signals")
+    return {"reasoning": reasoning, "instr": instr, "tool": ok("calculate"),
+            **({"jpeg": jpeg} if jpeg is not None else {})}
+
+
+def build():
+    registry = json.load((REPO / "models.json").open())
+    std, std_f = _load("benchmark")
+    coding, cod_f = _load("aptitude_e")
+    cons, cons_f = _load("aptitude_f")
+    vision, vis_f = _load("vision")
+    emb, emb_f = _load("embedding")
+
+    models, sources = [], {k: v for k, v in {
+        "standard": std_f, "coding": cod_f, "consistency": cons_f,
+        "vision": vis_f, "embedding": emb_f}.items() if v}
+
+    for entry in registry:
+        name = entry["name"]
+        m = {
+            "name": name,
+            "disk_gb": entry.get("disk_gb"),
+            "role": entry.get("role"),
+            "extended_roles": entry.get("extended_roles", []),
+            "capabilities": entry.get("capabilities", []),
+        }
+        s = std.get(name)
+        if s:
+            m["tps"] = s.get("avg_tps")
+            m["ram_gb"] = s.get("ram_gb")
+            m["standard"] = _standard_summary(s)
+        c = coding.get(name)
+        if c and c.get("summary"):
+            cs = c["summary"]
+            comp = cs.get("composite")
+            disk = m.get("disk_gb")
+            m["coding"] = {
+                "composite": comp,
+                "category_means": cs.get("category_means", {}),
+                "coder_eligible": cs.get("coder_eligible"),
+                "composite_stdev": cs.get("composite_stdev", 0.0),   # consistency (σ over runs)
+                "composite_spread": cs.get("composite_spread", 0.0),
+                "runs": cs.get("n_runs", 1),
+                # quality-per-GB — lets the consumer trade quality vs footprint directly
+                "quality_per_gb": round(comp / disk, 4) if (comp is not None and disk) else None,
+            }
+        fr = cons.get(name)
+        if fr and fr.get("summary"):
+            fs = fr["summary"]
+            # consistency is a SUB-METRIC of chat/workers, not its own ranking list —
+            # consumers weigh it against the workers ranking themselves.
+            m["consistency"] = {"composite": fs.get("composite"),
+                                 "composite_stdev": fs.get("composite_stdev"),
+                                 "dims": fs.get("dims", {}),
+                                 "runs": fs.get("n_runs", 1)}
+        v = vision.get(name)
+        if v:
+            m["vision"] = {"composite": v.get("composite"),
+                           "dimensions": v.get("dimensions", {})}
+        e = emb.get(name)
+        if e:
+            m["embedding"] = {"composite": e.get("composite"),
+                              "composite_long": e.get("composite_long"),
+                              "quality_per_gb": e.get("quality_per_gb")}
+        models.append(m)
+
+    by_name = {m["name"]: m for m in models}
+
+    def ranked(names, key, reverse=True):
+        have = [n for n in names if key(by_name[n]) is not None]
+        return sorted(have, key=lambda n: key(by_name[n]), reverse=reverse)
+
+    completion = [m["name"] for m in models if m["role"] in ("worker", "router")]
+    routers = [m["name"] for m in models if m["role"] == "router"]
+    workers = [m["name"] for m in models if m["role"] == "worker"]
+    has_vis = [m["name"] for m in models if "vision" in m]
+    has_emb = [m["name"] for m in models if "embedding" in m]
+
+    def worker_quality(m):
+        st = m.get("standard")
+        if not st:
+            return None
+        return st["reasoning"] + st["instr"] + (1 if st["tool"] else 0)
+
+    def vis_ocr(m):
+        return (m.get("vision") or {}).get("dimensions", {}).get("ocr")
+
+    rankings = {
+        "routers": ranked(routers, lambda m: m.get("tps")),
+        "workers": ranked(workers, worker_quality),
+        "coders": ranked(completion, lambda m: (m.get("coding") or {}).get("composite")),
+        "vision": ranked(has_vis, lambda m: (m.get("vision") or {}).get("composite")),
+        "vision_fast_ocr": ranked(has_vis, lambda m: ((vis_ocr(m), m.get("tps") or 0)
+                                                      if vis_ocr(m) is not None else None)),
+        "embedding_short": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite")),
+        "embedding_long": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite_long")),
+    }
+
+    return {
+        "schema": SCHEMA,
+        "generated": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "source": "BenchLLAMA",
+        "host_profile": HOST_PROFILE,
+        "protocol": PROTOCOL,
+        "result_files": sources,
+        "models": models,
+        "rankings": rankings,
+    }
+
+
+def main():
+    OUT.parent.mkdir(exist_ok=True)
+    data = build()
+    payload = json.dumps(data, indent=2)
+    OUT.write_text(payload)                                   # in-repo copy (provenance)
+    PUBLISH.parent.mkdir(parents=True, exist_ok=True)
+    PUBLISH.write_text(payload)                               # published source of truth
+    print(f"→ wrote {OUT}  ({len(data['models'])} models)")
+    print(f"→ published {PUBLISH}")
+    print(f"  sources: {data['result_files']}")
+    if "--print" in sys.argv:
+        for cat, lst in data["rankings"].items():
+            print(f"  {cat:16} {lst}")
+
+
+if __name__ == "__main__":
+    main()
