@@ -9,3 +9,5 @@ rankings/
 .DS_Store
 .claude/
 CLAUDE.md
+*.bak
+WORKSPACE/

@@ -1,23 +1,52 @@
 [
   {
-    "name": "snowflake-arctic-embed2:568m",
-    "disk_gb": 1.2,
-    "role": "utility",
+    "name": "opencoder:8b",
+    "disk_gb": 4.7,
+    "role": "worker",
     "capabilities": [
-      "embedding"
+      "completion"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "deepseek-coder-v2:16b",
+    "disk_gb": 8.9,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "insert"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "deepseek-coder:6.7b",
+    "disk_gb": 3.8,
+    "role": "worker",
+    "capabilities": [
+      "completion"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "codegemma:7b",
+    "disk_gb": 5.0,
+    "role": "worker",
+    "capabilities": [
+      "completion"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
     "name": "snowflake-arctic-embed:137m",
     "disk_gb": 0.3,
-    "role": "utility",
-    "capabilities": [
-      "embedding"
-    ]
-  },
-  {
-    "name": "bge-m3:567m",
-    "disk_gb": 1.2,
     "role": "utility",
     "capabilities": [
       "embedding"
@@ -32,16 +61,8 @@
       "thinking",
       "tools",
       "vision"
-    ]
-  },
-  {
-    "name": "qwen3-embedding:4b",
-    "disk_gb": 2.5,
-    "role": "utility",
-    "capabilities": [
-      "embedding",
-      "tools"
-    ]
+    ],
+    "extended_roles": []
   },
   {
     "name": "granite-embedding:30m",
@@ -65,16 +86,9 @@
     "role": "worker",
     "capabilities": [
       "completion"
-    ]
-  },
-  {
-    "name": "qwen3-embedding:0.6b",
-    "disk_gb": 0.6,
-    "role": "utility",
-    "capabilities": [
-      "embedding",
-      "thinking",
-      "tools"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -84,17 +98,9 @@
     "capabilities": [
       "completion",
       "vision"
-    ]
-  },
-  {
-    "name": "qwen3.5:2b-mlx",
-    "disk_gb": 3.1,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -106,6 +112,9 @@
       "thinking",
       "tools",
       "vision"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -117,24 +126,9 @@
       "thinking",
       "tools",
       "vision"
-    ]
-  },
-  {
-    "name": "nomic-embed-text:latest",
-    "disk_gb": 0.3,
-    "role": "utility",
-    "capabilities": [
-      "embedding"
-    ]
-  },
-  {
-    "name": "glm-ocr:latest",
-    "disk_gb": 2.2,
-    "role": "utility",
-    "capabilities": [
-      "completion",
-      "tools",
-      "vision"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -147,16 +141,9 @@
       "thinking",
       "tools",
       "vision"
-    ]
-  },
-  {
-    "name": "gemma4:e2b-mlx",
-    "disk_gb": 7.1,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -169,6 +156,9 @@
       "thinking",
       "tools",
       "vision"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -180,6 +170,9 @@
       "thinking",
       "tools",
       "vision"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -189,6 +182,9 @@
     "capabilities": [
       "completion",
       "tools"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -198,6 +194,9 @@
     "capabilities": [
       "completion",
       "tools"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   }
 ]

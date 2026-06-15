@@ -163,6 +163,7 @@ if __name__ == "__main__":
             # 'utility' — migrate any deprecated role=vision/embedding here too.
             if lane == "completion":
                 entry.setdefault("role", "worker")
+                entry.setdefault("extended_roles", [])   # earned by Battery E (coder)
             elif entry.get("role") != "utility":
                 entry["role"] = "utility"
                 changed = True
@@ -174,6 +175,8 @@ if __name__ == "__main__":
                 "role":         LANE_DEFAULT_ROLE[lane],
                 "capabilities": caps_list,
             }
+            if lane == "completion":
+                entry["extended_roles"] = []   # earned by Battery E (coder)
             added.append((name, lane))
         proposed.append(entry)
 
