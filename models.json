@@ -1,16 +1,5 @@
 [
   {
-    "name": "opencoder:8b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
     "name": "deepseek-coder-v2:16b",
     "disk_gb": 8.9,
     "role": "worker",
@@ -34,17 +23,6 @@
     ]
   },
   {
-    "name": "codegemma:7b",
-    "disk_gb": 5.0,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
     "name": "snowflake-arctic-embed:137m",
     "disk_gb": 0.3,
     "role": "utility",
@@ -55,7 +33,7 @@
   {
     "name": "minicpm-v4.6:1b",
     "disk_gb": 1.6,
-    "role": "worker",
+    "role": "router",
     "capabilities": [
       "completion",
       "thinking",
@@ -78,17 +56,6 @@
     "role": "utility",
     "capabilities": [
       "embedding"
-    ]
-  },
-  {
-    "name": "phi4:14b",
-    "disk_gb": 9.1,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": [
-      "coder"
     ]
   },
   {
