@@ -23,7 +23,11 @@ Sync rules:
   - New models are added with the default role for their lane.
   - Existing entries keep their role (respects manual edits + router promotions);
     disk_gb and capabilities are always refreshed from Ollama.
-  - Models no longer installed are flagged but kept (may be temporarily unloaded).
+  - Models no longer installed are PRUNED by default. `/api/tags` (what `ollama list`
+    reads) returns every installed model regardless of load state, so an absent entry
+    has genuinely been `ollama rm`'d — not merely unloaded. Pass --keep-missing to
+    retain absent entries instead (e.g. when syncing against a different/remote Ollama
+    host that doesn't hold your full local set).
 
 Note: a "specialist" lane model (e.g. glm-ocr) reports `completion` but is excluded
 from the chat pipeline by architecture — it still belongs in the vision battery, so
@@ -32,6 +36,7 @@ it is admitted here rather than dropped.
 Usage:
   python3 update_registry.py
   python3 update_registry.py --ollama http://host:11434
+  python3 update_registry.py --keep-missing   # retain entries not installed locally
   python3 update_registry.py --dry-run
 """
 
@@ -60,8 +65,9 @@ def _arg(name, default=None):
             return sys.argv[idx + 1]
     return default
 
-host    = _arg("--ollama", "http://localhost:11434")
-dry_run = "--dry-run" in sys.argv
+host         = _arg("--ollama", "http://localhost:11434")
+dry_run      = "--dry-run" in sys.argv
+keep_missing = "--keep-missing" in sys.argv
 
 
 def classify(caps, arch):
@@ -145,7 +151,7 @@ if __name__ == "__main__":
 
     existing = load_registry()
     proposed = []
-    added, updated, unchanged, missing = [], [], [], []
+    added, updated, unchanged, missing, pruned = [], [], [], [], []
 
     for name, (lane, info) in laned.items():
         caps_list = sorted(info["capabilities"])
@@ -182,8 +188,11 @@ if __name__ == "__main__":
 
     for name, entry in existing.items():
         if name not in laned:
-            missing.append(name)
-            proposed.append(entry)  # keep as-is
+            if keep_missing:
+                missing.append(name)
+                proposed.append(entry)  # retained (--keep-missing)
+            else:
+                pruned.append(name)     # no longer installed → dropped
 
     # ── Print summary ──────────────────────────────────────────────────────────
 
@@ -203,12 +212,19 @@ if __name__ == "__main__":
         print()
 
     if missing:
-        print("In registry but not installed (kept):")
+        print("In registry but not installed (kept — --keep-missing):")
         for name in missing:
             print(f"  ? {name}")
         print()
 
-    if not added and not updated and not missing:
+    if pruned:
+        print("Pruned (no longer installed — removed from registry):")
+        for name in pruned:
+            print(f"  - {name}")
+        print("  (pass --keep-missing to retain absent entries instead)")
+        print()
+
+    if not added and not updated and not missing and not pruned:
         print("Registry is already up to date.")
 
     # ── Write ──────────────────────────────────────────────────────────────────
