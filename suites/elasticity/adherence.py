@@ -73,26 +73,38 @@ def render_constraints(rung, ladder):
 
 
 def score_rung(rung, ladder, responses):
-    """Per-constraint satisfaction rate across `responses`, then their mean = rung adherence.
-    Returns {adherence, per_constraint}. adherence is None only for a constraint-free rung."""
+    """Per-constraint satisfaction rate across `responses`, split by constraint CLASS.
+
+    word_cap is a continuous, verbosity-correlated signal; the other constraints are binary
+    obey-or-ignore. Averaging them together lets verbosity masquerade as prompt-insensitivity
+    (LookingGlass validation 2026-06-21), so we aggregate the two classes SEPARATELY:
+      • instruction_adherence — mean of the binary-obedience constraints (verdict driver)
+      • length_adherence      — mean of the length/verbosity constraints (standalone meter)
+    `adherence` is kept as the all-constraint mean for reference. Each class field is None when
+    that class has no constraint in the rung (e.g. the minimal rung carries length only)."""
     defs = ladder["constraints"]
-    per_constraint = {}
+    per_constraint, instr, length = {}, [], []
     for c in rung["constraints"]:
         params = defs[c].get("params", {})
         sat    = [check(c, params, r) for r in responses]
-        rate   = (sum(1 for s in sat if s) / len(sat)) if sat else 0.0
-        per_constraint[c] = round(rate, 4)
-    adherence = round(statistics.mean(per_constraint.values()), 4) if per_constraint else None
-    return {"adherence": adherence, "per_constraint": per_constraint}
+        rate   = round((sum(1 for s in sat if s) / len(sat)) if sat else 0.0, 4)
+        per_constraint[c] = rate
+        (length if defs[c].get("class") == "length" else instr).append(rate)
+    mean = lambda xs: round(statistics.mean(xs), 4) if xs else None
+    return {"adherence": mean(list(per_constraint.values())),
+            "instruction_adherence": mean(instr),
+            "length_adherence": mean(length),
+            "per_constraint": per_constraint}
 
 
-def classify(prompt_sigma, adherence, cutoffs):
-    """Producer-side categorical verdict from DECLARED cutoffs. Keeps the disambiguation on
-    the producer so no consumer reads prompt-σ alone and draws the wrong conclusion."""
+def classify(prompt_sigma, instruction_adherence, cutoffs):
+    """Producer-side categorical verdict from DECLARED cutoffs, keyed on INSTRUCTION adherence
+    (binary obey-or-ignore) — NOT the verbosity-correlated length cap. Keeps the disambiguation
+    on the producer so no consumer reads prompt-σ alone and draws the wrong conclusion."""
     flat = prompt_sigma < cutoffs["sigma_hi"]
-    if flat and adherence >= cutoffs["adherence_hi"]:
+    if flat and instruction_adherence >= cutoffs["adherence_hi"]:
         return "robust"
-    if flat and adherence < cutoffs["adherence_lo"]:
+    if flat and instruction_adherence < cutoffs["adherence_lo"]:
         return "prompt-deaf"
     return "prompt-sensitive"
 
@@ -126,24 +138,34 @@ if __name__ == "__main__":
     for c in ladder["rungs"][-1]["constraints"]:
         expect(ladder["constraints"][c]["instruction"] in block, f"render missing {c}")
 
-    # score_rung: a perfectly-obedient heavy-rung set → adherence 1.0
+    # score_rung: a perfectly-obedient heavy-rung set → both class adherences 1.0
     heavy = ladder["rungs"][-1]
     good  = ["NB: short prose answer ending in a query?"] * 8
     s_good = score_rung(heavy, ladder, good)
     expect(s_good["adherence"] == 1.0, f"score_rung obedient → {s_good['adherence']}")
+    expect(s_good["instruction_adherence"] == 1.0, f"obedient instr → {s_good['instruction_adherence']}")
+    expect(s_good["length_adherence"] == 1.0, f"obedient length → {s_good['length_adherence']}")
 
-    # a flagrantly-disobedient set → adherence well below adherence_lo
-    bad = ["WOW!!! here is a list:\n- a\n- b\n" + ("word " * 200)] * 8
-    s_bad = score_rung(heavy, ladder, bad)
-    expect(s_bad["adherence"] < ladder["verdict_cutoffs"]["adherence_lo"],
-           f"score_rung disobedient → {s_bad['adherence']}")
+    # the split's whole point: a VERBOSE-but-otherwise-obedient set → instruction 1.0, length 0.0
+    verbose = ["NB: " + ("word " * 200) + "and so on?"] * 8   # obeys prefix/question/prose/no-!, blows the cap
+    s_verb = score_rung(heavy, ladder, verbose)
+    expect(s_verb["instruction_adherence"] == 1.0, f"verbose instr should stay 1.0 → {s_verb['instruction_adherence']}")
+    expect(s_verb["length_adherence"] == 0.0, f"verbose length should crater → {s_verb['length_adherence']}")
 
-    # verdict regions
+    # minimal rung is length-only → instruction_adherence is None there
+    s_min = score_rung(ladder["rungs"][0], ladder, good)
+    expect(s_min["instruction_adherence"] is None, "minimal rung has no instruction class")
+    expect(s_min["length_adherence"] is not None, "minimal rung has length class")
+
+    # verdict regions (keyed on instruction_adherence)
     cut = ladder["verdict_cutoffs"]
     expect(classify(0.02, 0.95, cut) == "robust", "verdict robust")
     expect(classify(0.02, 0.20, cut) == "prompt-deaf", "verdict prompt-deaf")
     expect(classify(0.25, 0.95, cut) == "prompt-sensitive", "verdict sensitive (high σ)")
-    expect(classify(0.02, 0.65, cut) == "prompt-sensitive", "verdict sensitive (mid adherence)")
+    expect(classify(0.02, 0.65, cut) == "prompt-sensitive", "verdict sensitive (mid instr-adherence)")
+    # the verbose case must NOT flip the verdict: high instr adherence → robust regardless of length
+    expect(classify(0.04, s_verb["instruction_adherence"], cut) == "robust",
+           "verbose-but-obedient stays robust")
 
     if fails:
         print("SELF-TEST FAILED:")
@@ -151,4 +173,5 @@ if __name__ == "__main__":
             print("  ✗", f)
         raise SystemExit(1)
     print("adherence.py self-test: ✓ all checks pass "
-          f"(obedient adherence={s_good['adherence']}, disobedient={s_bad['adherence']})")
+          f"(obedient instr/len={s_good['instruction_adherence']}/{s_good['length_adherence']}, "
+          f"verbose instr/len={s_verb['instruction_adherence']}/{s_verb['length_adherence']})")

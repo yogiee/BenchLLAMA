@@ -2138,25 +2138,36 @@ def run_battery_f_elastic(model_name):
             "rung": rung["id"], "label": rung.get("label", rung["id"]),
             "constraints": rung["constraints"], "constraints_n": len(rung["constraints"]),
             "composite": g["composite"], "run_sigma": None,   # single-pass; populated by Phase-2 averager
-            "adherence": adh["adherence"], "per_constraint": adh["per_constraint"],
+            "adherence": adh["adherence"],
+            "instruction_adherence": adh["instruction_adherence"],
+            "length_adherence": adh["length_adherence"],
+            "per_constraint": adh["per_constraint"],
             "dims": g["dims"], "stance_detected": g["stance_detected"],
         })
         composites.append(g["composite"])
         tests[rung["id"]] = {tid: {"type": t["type"], "resp": t["resp"], "wall_s": t["wall_s"]}
                              for tid, t in g["turns"].items()}
-        print(f"  → rung={rung['id']} n={len(rung['constraints'])} "
-              f"composite={g['composite']} adherence={adh['adherence']}", flush=True)
+        print(f"  → rung={rung['id']} n={len(rung['constraints'])} composite={g['composite']} "
+              f"instr_adh={adh['instruction_adherence']} len_adh={adh['length_adherence']}", flush=True)
 
-    prompt_sigma = round(statistics.pstdev(composites), 4) if len(composites) > 1 else 0.0
-    adherence    = round(statistics.mean([r["adherence"] for r in per_rung]), 4)
-    cutoffs      = ladder["verdict_cutoffs"]
-    verdict      = _elastic.classify(prompt_sigma, adherence, cutoffs)
+    _avg = lambda key: (round(statistics.mean(v), 4)
+                        if (v := [r[key] for r in per_rung if r[key] is not None]) else None)
+    prompt_sigma          = round(statistics.pstdev(composites), 4) if len(composites) > 1 else 0.0
+    instruction_adherence = _avg("instruction_adherence")   # verdict driver (binary obedience)
+    length_adherence      = _avg("length_adherence")        # standalone verbosity meter
+    adherence             = _avg("adherence")               # all-constraint mean (legacy reference)
+    cutoffs               = ladder["verdict_cutoffs"]
+    verdict               = _elastic.classify(prompt_sigma, instruction_adherence, cutoffs)
 
-    print(f"\n  → prompt_sigma={prompt_sigma}  adherence={adherence}  verdict={verdict}", flush=True)
+    print(f"\n  → prompt_sigma={prompt_sigma}  instruction_adherence={instruction_adherence}  "
+          f"length_adherence={length_adherence}  verdict={verdict}", flush=True)
     return {
         "model": model_name, "battery": "F-elastic",
-        "summary": {"prompt_sigma": prompt_sigma, "adherence": adherence, "verdict": verdict,
-                    "cutoffs": cutoffs, "per_rung": per_rung},
+        "summary": {"prompt_sigma": prompt_sigma,
+                    "instruction_adherence": instruction_adherence,
+                    "length_adherence": length_adherence,
+                    "adherence": instruction_adherence,   # co-equal alias: the pairing is prompt-σ + instruction-adherence
+                    "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung},
         "tests": tests,
     }
 
@@ -2166,39 +2177,48 @@ def write_battery_f_elastic_summary(results, out_md: Path, fast_mode=False):
     ladder = _elastic.load_ladder()
     rungs  = ladder["rungs"]
     c      = ladder["verdict_cutoffs"]
+    fnum  = lambda v: "—" if v is None else f"{v:.2f}"
+    fnum3 = lambda v: "—" if v is None else f"{v:.3f}"   # headline instr-adh: 3dp so cutoff-boundary cases read honestly
     lines  = [
         f"# Aptitude Battery F-elastic — Prompt-Elasticity (prompt-σ){flag}", "",
         "How a model's conversational-consistency composite (F1–F5) moves as a function of "
         "**system-prompt complexity** over a synthetic, persona-neutral capability-constraint "
-        "ladder. **prompt-σ and adherence are co-equal** — a low prompt-σ alone is ambiguous "
-        "(robust vs prompt-deaf); adherence disambiguates, and the verdict is computed here.",
+        "ladder. **prompt-σ and instruction-adherence are co-equal** — a low prompt-σ alone is "
+        "ambiguous (robust vs prompt-deaf); adherence disambiguates, and the verdict is computed "
+        "here. Adherence is **split by constraint class**: `instr` = binary obey-or-ignore "
+        "(no-exclamation / no-lists / end-with-question / required-prefix) **drives the verdict**; "
+        "`len` = the word-cap (a standalone verbosity meter) does **not**, so wordiness can't "
+        "masquerade as prompt-insensitivity.",
         f"`num_ctx={NUM_CTX}` | `think=False` | single-pass | rungs = "
         + " → ".join(f"{r['id']}({len(r['constraints'])})" for r in rungs), "",
-        f"**Declared verdict cutoffs** ({c.get('_status','')}): "
-        f"`robust` = σ < {c['sigma_hi']} AND adherence ≥ {c['adherence_hi']}; "
-        f"`prompt-deaf` = σ < {c['sigma_hi']} AND adherence < {c['adherence_lo']}; "
+        f"**Declared verdict cutoffs** (keyed on `instruction_adherence`; {c.get('_status','')}): "
+        f"`robust` = σ < {c['sigma_hi']} AND instr ≥ {c['adherence_hi']}; "
+        f"`prompt-deaf` = σ < {c['sigma_hi']} AND instr < {c['adherence_lo']}; "
         f"`prompt-sensitive` = otherwise.", "",
-        "| Model | Verdict | prompt-σ | adherence | "
-        + " | ".join(f"{r['id']} (c·a)" for r in rungs) + " |",
-        "|-------|---------|----------|-----------|"
+        "| Model | Verdict | prompt-σ | instr-adh | len-adh | "
+        + " | ".join(f"{r['id']} (c·i)" for r in rungs) + " |",
+        "|-------|---------|----------|-----------|---------|"
         + "|".join(["----------"] * len(rungs)) + "|",
     ]
     order = {"robust": 0, "prompt-sensitive": 1, "prompt-deaf": 2}
     ranked = sorted([r for r in results if "summary" in r],
                     key=lambda r: (order.get(r["summary"]["verdict"], 9),
-                                   -r["summary"]["adherence"]))
+                                   -(r["summary"].get("instruction_adherence") or 0)))
     for r in ranked:
         s = r["summary"]
         by_id = {pr["rung"]: pr for pr in s["per_rung"]}
         cells = []
         for rg in rungs:
             pr = by_id.get(rg["id"])
-            cells.append(f"{pr['composite']:.2f}·{pr['adherence']:.2f}" if pr else "—")
+            cells.append(f"{pr['composite']:.2f}·{fnum(pr.get('instruction_adherence'))}" if pr else "—")
         lines.append(f"| `{r['model']}` | **{s['verdict']}** | {s['prompt_sigma']:.3f} | "
-                     f"{s['adherence']:.2f} | " + " | ".join(cells) + " |")
-    lines += ["", "_Per-rung cells are `composite·adherence`. prompt-σ = pstdev of the per-rung "
-              "composites; a high σ means consistency stretches under instruction load. "
-              "Cutoffs are PROVISIONAL until the cross-family gating pass calibrates them._"]
+                     f"{fnum3(s.get('instruction_adherence'))} | {fnum(s.get('length_adherence'))} | "
+                     + " | ".join(cells) + " |")
+    lines += ["", "_Per-rung cells are `composite·instr-adh` (instruction adherence; `—` = rung "
+              "has no instruction-class constraint). prompt-σ = pstdev of the per-rung composites; "
+              "a high σ means consistency stretches under instruction load. `len-adh` is a "
+              "verbosity meter, not a verdict input. Cutoffs are PROVISIONAL until the cross-family "
+              "gating pass calibrates them._"]
     out_md.write_text("\n".join(lines) + "\n")
     print(f"MD → {out_md}", flush=True)
 

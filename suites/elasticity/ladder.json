@@ -6,25 +6,31 @@
   "constraints": {
     "word_cap": {
       "instruction": "Keep every reply to 120 words or fewer.",
+      "class": "length",
       "params": {"max_words": 120}
     },
     "no_exclamation": {
       "instruction": "Do not use any exclamation marks anywhere in your replies.",
+      "class": "instruction",
       "params": {}
     },
     "no_lists": {
       "instruction": "Write in prose only. Do not use bulleted or numbered lists.",
+      "class": "instruction",
       "params": {}
     },
     "end_with_question": {
       "instruction": "End every reply with a question.",
+      "class": "instruction",
       "params": {}
     },
     "required_prefix": {
       "instruction": "Begin every reply with the exact token 'NB:' followed by a space.",
+      "class": "instruction",
       "params": {"prefix": "NB:"}
     }
   },
+  "_class_note": "word_cap is a CONTINUOUS, verbosity-correlated signal; the other four are BINARY obey-or-ignore. They are aggregated SEPARATELY (instruction_adherence vs length_adherence) so verbosity can't masquerade as prompt-insensitivity — the verdict keys off instruction_adherence; length_adherence is surfaced as a standalone verbosity meter. (LookingGlass validation, benchmark-prompt-elasticity-validation.md 2026-06-21.)",
   "rungs": [
     {"id": "minimal",  "label": "minimal (1 constraint)",  "constraints": ["word_cap"]},
     {"id": "moderate", "label": "moderate (3 constraints)", "constraints": ["word_cap", "no_exclamation", "no_lists"]},
@@ -34,7 +40,8 @@
     "sigma_hi": 0.10,
     "adherence_hi": 0.80,
     "adherence_lo": 0.50,
-    "_status": "PROVISIONAL — calibrate during the cross-family gating pass (qwen/gemma/llama), the way Battery F's sigma gate was calibrated.",
-    "_mapping": "robust = prompt_sigma < sigma_hi AND adherence >= adherence_hi (consistency holds AND constraints obeyed). prompt-deaf = prompt_sigma < sigma_hi AND adherence < adherence_lo (flat composite only because the added prompt is ignored). prompt-sensitive = otherwise (composite moves materially under instruction load, or partial obedience with movement)."
+    "keyed_on": "instruction_adherence",
+    "_status": "PROVISIONAL — calibrate during the cross-family gating pass (qwen/gemma/llama), the way Battery F's sigma gate was calibrated. Per the validation sequencing note: the adherence-composition split (instruction vs length) landed FIRST; these cutoffs are calibrated AFTER, on instruction_adherence (not the verbosity-conflated composite).",
+    "_mapping": "Keyed on instruction_adherence (the BINARY obey-or-ignore meter), NOT the length cap. robust = prompt_sigma < sigma_hi AND instruction_adherence >= adherence_hi (consistency holds AND instructions obeyed; may still be verbose — see length_adherence). prompt-deaf = prompt_sigma < sigma_hi AND instruction_adherence < adherence_lo (flat composite only because the added prompt is ignored). prompt-sensitive = otherwise."
   }
 }
