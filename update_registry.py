@@ -115,6 +115,14 @@ def load_registry():
     return {e["name"]: e for e in json.load(REGISTRY.open())}
 
 
+def is_cloud(name):
+    """Ollama cloud endpoints use the -cloud / :cloud naming convention. Flagging them sets
+    quality-only handling downstream (export nulls tps/disk/Q-GB, excluded from speed lists) and
+    exempts them from the pruner. Newer Ollama lists cloud models in /api/tags, so they flow
+    through the normal builder — detect by name so the flag is set automatically, not by hand."""
+    return name.endswith("-cloud") or name.endswith(":cloud")
+
+
 if __name__ == "__main__":
     print(f"Querying {host} ...", flush=True)
     try:
@@ -173,6 +181,9 @@ if __name__ == "__main__":
             elif entry.get("role") != "utility":
                 entry["role"] = "utility"
                 changed = True
+            if is_cloud(name) and not entry.get("cloud"):   # backfill the flag on existing entries
+                entry["cloud"] = True
+                changed = True
             (updated if changed else unchanged).append(name)
         else:
             entry = {
@@ -181,6 +192,8 @@ if __name__ == "__main__":
                 "role":         LANE_DEFAULT_ROLE[lane],
                 "capabilities": caps_list,
             }
+            if is_cloud(name):
+                entry["cloud"] = True
             if lane == "completion":
                 entry["extended_roles"] = []   # earned by Battery E (coder)
             added.append((name, lane))
