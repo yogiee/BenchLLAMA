@@ -9,18 +9,18 @@
   :root, html[data-theme="dark"] {
     --bg:#17130f; --surface:#1f1a14; --panel:#29221a; --border:#3a3025;
     --text:#f2e8d8; --dim:#a99a85; --accent:#ff8c42; --accent-soft:rgba(255,140,66,.16);
-    --green:#8bbf6b; --red:#e8674c; --yellow:#e8b04a;
+    --green:#8bbf6b; --red:#e8674c; --yellow:#e8b04a; --cloud:#6aa9d8;
   }
   html[data-theme="light"] {
     --bg:#fbf5ea; --surface:#fffaf2; --panel:#f4ead8; --border:#e7d9c3;
     --text:#3b322a; --dim:#8f8270; --accent:#d9772a; --accent-soft:rgba(217,119,42,.12);
-    --green:#5f9a48; --red:#c8503a; --yellow:#bf8a2c;
+    --green:#5f9a48; --red:#c8503a; --yellow:#bf8a2c; --cloud:#3f7fae;
   }
   @media (prefers-color-scheme: light) {
     html[data-theme="system"] {
       --bg:#fbf5ea; --surface:#fffaf2; --panel:#f4ead8; --border:#e7d9c3;
       --text:#3b322a; --dim:#8f8270; --accent:#d9772a; --accent-soft:rgba(217,119,42,.12);
-      --green:#5f9a48; --red:#c8503a; --yellow:#bf8a2c;
+      --green:#5f9a48; --red:#c8503a; --yellow:#bf8a2c; --cloud:#3f7fae;
     }
   }
   * { box-sizing:border-box; }
@@ -70,13 +70,21 @@
   .card.off { opacity:.45; }
   .card.run { border-left-color:var(--accent); }
   .card.s-done { border-left-color:var(--green); } .card.s-error { border-left-color:var(--red); } .card.s-skip { border-left-color:var(--dim); }
+  /* selection mode (idle): cards double as the model picker */
+  .card.selectable { cursor:pointer; transition:border-color .12s, background .12s; }
+  .card.selectable:hover { border-color:var(--accent); }
+  .card.selected { border-left-color:var(--accent); background:var(--accent-soft); }
+  .card .sel-dot { color:var(--dim); }
+  .card.selected .sel-dot { color:var(--accent); }
   .card-top { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
   .cname { font-family:var(--mono,"Geist Mono",ui-monospace,monospace); font-size:13px; font-weight:600;
            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .cname .cdot { font-size:10px; margin-right:4px; }
   .ctps { font-family:var(--mono,"Geist Mono",ui-monospace,monospace); font-size:11px; color:var(--dim); flex:none; }
+  .cbadges { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:6px; }
   .cbadge { display:inline-block; font-size:10px; font-weight:600; letter-spacing:.04em; color:var(--accent);
-            background:var(--accent-soft); border-radius:4px; padding:1px 7px; margin-top:6px; }
+            background:var(--accent-soft); border-radius:4px; padding:1px 7px; }
+  .cbadge.cloud { color:var(--cloud); background:transparent; border:1px solid var(--cloud); }
   .ctags { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
   .ctag { font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); background:var(--bg);
           border:1px solid var(--border); border-radius:3px; padding:1px 5px; }
@@ -102,20 +110,15 @@
   }
   .checks { display:flex; gap:16px; }
   .checks label { flex-direction:row !important; align-items:center; gap:5px; color:var(--text); font-size:13px; }
-  /* ── model multi-select ── */
-  .modelsField { display:flex; flex-direction:column; gap:4px; }
-  .mf-head { font-size:12px; color:var(--dim); display:flex; align-items:center; gap:8px; }
-  .mf-clear { margin-left:auto; background:none; border:1px solid var(--border); color:var(--dim);
+  /* ── model list header tools (role filter + clear); cards ARE the picker ── */
+  #modelsPanel h2 { display:flex; align-items:center; gap:8px; }
+  .mf-tools { margin-left:auto; display:flex; align-items:center; gap:6px; }
+  #roleFilter { background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:5px; padding:1px 6px; font:inherit; font-size:11px; text-transform:none; letter-spacing:0; cursor:pointer; }
+  .mf-clear { background:none; border:1px solid var(--border); color:var(--dim);
     border-radius:5px; padding:1px 8px; font:inherit; font-size:11px; cursor:pointer; }
   .mf-clear:hover { color:var(--text); border-color:var(--accent); }
-  .modelpick { max-height:172px; overflow-y:auto; border:1px solid var(--border);
-    border-radius:6px; padding:4px; background:var(--bg); }
-  .mp-row { display:flex !important; flex-direction:row !important; align-items:center; gap:7px;
-    padding:3px 5px; border-radius:5px; font-size:12.5px; color:var(--text); cursor:pointer; }
-  .mp-row:hover { background:var(--accent-soft); }
-  .mp-name { flex:1; font-family:var(--mono,"Geist Mono",ui-monospace,monospace); }
-  .mp-tag { font-size:10.5px; color:var(--dim); background:var(--panel); border:1px solid var(--border);
-    border-radius:999px; padding:0 7px; }
+  #modelsHint { padding:2px 0 4px; }
   .btn { background:var(--accent); color:#241606; border:none; border-radius:7px; padding:9px 14px;
          font:inherit; font-weight:600; cursor:pointer; }
   .btn:hover { filter:brightness(1.08); }
@@ -139,8 +142,34 @@
   #filesList { width:300px; overflow-y:auto; border-right:1px solid var(--border); padding:10px; }
   .fitem { padding:5px 8px; border-radius:5px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; font-size:12.5px; }
   .fitem:hover { background:var(--panel); } .fitem.sel { background:var(--accent-soft); color:var(--accent); }
-  #fileView { flex:1; margin:0; padding:14px 18px; overflow:auto; white-space:pre-wrap; word-break:break-word;
-              font-family:var(--mono,"Geist Mono",ui-monospace,monospace); font-size:12.5px; }
+  #fileView { flex:1; margin:0; padding:14px 20px; overflow:auto; min-width:0; }
+  #fileView pre.fv-raw { margin:0; white-space:pre-wrap; word-break:break-word;
+              font-family:var(--mono,"Geist Mono",ui-monospace,monospace); font-size:12.5px; color:var(--text); }
+  #fileView .fv-empty { color:var(--dim); }
+  /* rendered markdown */
+  .md-body { max-width:920px; font-size:13.5px; line-height:1.62; color:var(--text); }
+  .md-body > :first-child { margin-top:0; }
+  .md-body h1 { font-size:20px; margin:18px 0 10px; letter-spacing:-.01em; }
+  .md-body h2 { font-size:16px; text-transform:none; letter-spacing:0; color:var(--text);
+                border-bottom:1px solid var(--border); padding-bottom:4px; margin:22px 0 10px; }
+  .md-body h3 { font-size:14px; color:var(--accent); margin:18px 0 6px; }
+  .md-body h4, .md-body h5, .md-body h6 { font-size:13px; margin:14px 0 4px; }
+  .md-body p { margin:8px 0; }
+  .md-body a { color:var(--accent); }
+  .md-body code { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:0 5px;
+                  font-family:var(--mono,"Geist Mono",ui-monospace,monospace); font-size:12px; }
+  .md-body pre.md-pre { background:var(--panel); border:1px solid var(--border); border-radius:8px;
+                  padding:10px 12px; overflow:auto; margin:10px 0; }
+  .md-body pre.md-pre code { background:none; border:none; padding:0; font-size:12px; }
+  .md-body table.md-table { border-collapse:collapse; margin:10px 0; font-size:12.5px; display:block; overflow-x:auto; }
+  .md-body table.md-table th { text-align:left; color:var(--dim); font-weight:600; white-space:nowrap;
+                  padding:5px 11px; border-bottom:1px solid var(--border); background:var(--panel); }
+  .md-body table.md-table td { padding:4px 11px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .md-body table.md-table td code { font-size:11.5px; }
+  .md-body blockquote { border-left:3px solid var(--border); margin:8px 0; padding:2px 12px; color:var(--dim); }
+  .md-body hr { border:none; border-top:1px solid var(--border); margin:16px 0; }
+  .md-body ul, .md-body ol { margin:8px 0; padding-left:22px; }
+  .md-body li { margin:3px 0; }
 
   /* ── mobile / narrow screens: monitor-only, 75/25 sidebar/log ─────────────── */
   @media (max-width: 700px) {
@@ -163,9 +192,8 @@
     .right { flex:1 1 0; min-height:0; }
     #log { padding:10px 14px; font-size:12px; }
 
-    /* no selection screen on mobile — pipeline + models list always visible */
-    #selector, #roNote { display:none !important; }
-    #monitorPanels { display:block !important; }
+    /* no run controls on mobile — monitor only; the models list is always visible */
+    #selector, #roNote, #modelsHint { display:none !important; }
 
     /* compress model cards to 2 lines: [icon name … tps] / [role] */
     .card { padding:6px 9px; }
@@ -220,24 +248,31 @@
             <option value="D">D — tool-heavy</option>
             <option value="E">E — coding (3-run avg)</option>
             <option value="F">F — consistency (3-run avg)</option>
+            <option value="F-elastic">F-elastic — prompt-σ (opt-in)</option>
           </select>
         </label>
         <div class="checks">
           <label><input type="checkbox" id="fast"> fast</label>
           <label><input type="checkbox" id="force"> force</label>
         </div>
-        <div class="modelsField">
-          <div class="mf-head">Models <span class="meta">— none = all eligible</span>
-            <button type="button" id="mfClear" class="mf-clear">clear</button></div>
-          <div id="modelpick" class="modelpick"><span class="meta">loading…</span></div>
-        </div>
         <button type="submit" class="btn" id="startBtn">▶ Start</button>
         <div id="startMsg" class="meta"></div>
       </form>
       <div id="roNote" class="hidden">Read-only (LAN). Start a run from the host, or relaunch with <code>--allow-control</code>.</div>
-      <div id="monitorPanels" class="hidden">
-        <div id="pipeline"></div>
-        <h2>Models <span id="modelcount" class="count"></span></h2>
+      <div id="pipeline"></div>
+      <div id="modelsPanel">
+        <h2>Models <span id="modelcount" class="count"></span>
+          <span class="mf-tools">
+            <select id="roleFilter" title="filter by role">
+              <option value="">all roles</option>
+              <option value="worker">worker</option>
+              <option value="router">router</option>
+              <option value="utility">utility</option>
+            </select>
+            <button type="button" id="mfClear" class="mf-clear">clear</button>
+          </span>
+        </h2>
+        <div id="modelsHint" class="meta">tap cards to select · none = all eligible</div>
         <div id="models"></div>
       </div>
     </div>
@@ -249,7 +284,7 @@
     <section id="view-rankings" class="view hidden"><div id="rankings"></div></section>
     <section id="view-files" class="view hidden">
       <div id="filesList"></div>
-      <pre id="fileView">select a result file…</pre>
+      <div id="fileView"><span class="fv-empty">select a result file…</span></div>
     </section>
   </main>
 
@@ -273,7 +308,18 @@ setTheme(localStorage.bench_theme || "system");
 function fmtElapsed(s){ const h=String((s/3600|0)).padStart(2,"0"),
   m=String((s%3600/60|0)).padStart(2,"0"), x=String(s%60).padStart(2,"0"); return `${h}:${m}:${x}`; }
 
+// ── unified model list: selectable picker when idle, live status when running ──
+let CANDIDATES = null;          // /api/models (selection source)
+let SELECTED   = new Set();     // chosen model names (empty = all eligible)
+let ROLE_FILTER = "";           // sidebar role dropdown
+let RUN_ACTIVE = false;         // a run is in progress (not finished)
+let MODE = null;                // 'idle' | 'run' — guards idle re-renders against snapshot thrash
+let LAST_SNAP = null;
+
+function byFilter(list){ return ROLE_FILTER ? list.filter(m=>(m.role||"")===ROLE_FILTER) : list; }
+
 function render(snap){
+  LAST_SNAP = snap;
   $("#timer").textContent = fmtElapsed(snap.elapsed||0);
   $("#phaseLabel").textContent = snap.phase_label || "";
   const badge = $("#badge");
@@ -281,49 +327,65 @@ function render(snap){
   badge.textContent = snap.aborted ? "■ STOPPED"
     : snap.finished ? "✓ DONE"
     : (snap.pause_remaining>0 ? `next in ${snap.pause_remaining}s` : "running");
+}
 
-  // pipeline (only if >1 phase)
+function renderPipeline(snap){
   const pipe = $("#pipeline");
-  if (snap.phases.length > 1) {
+  if (snap && snap.phases && snap.phases.length > 1) {
     pipe.innerHTML = "<h2>Pipeline</h2>" + snap.phases.map((p,i)=>{
       const cur = (i===snap.current_phase && p.status==="running");
       return `<div class="phase ${cur?'cur':''} ${p.status==='running'?'run':''}">
         <span class="dot s-${p.status}">${ICON[p.status]}</span><span class="name">${esc(p.label)}</span></div>`;
     }).join("");
   } else { pipe.innerHTML = ""; }
-
-  // models
-  renderModels(snap.models, snap.last_tps);
 }
 
-function modelCard(m, lastTps){
+function modelCard(m, lastTps, selectable){
   const run = m.status==="running";
   const tps = run && lastTps ? lastTps : m.tps;
   const ext = (m.extended_roles||[]).map(r=>r.toUpperCase()).join(", ");
-  const badge = m.role ? `<div class="cbadge">${esc(m.role.toUpperCase())}${ext?": "+esc(ext):""}</div>` : "";
+  const roleBadge  = m.role ? `<span class="cbadge">${esc(m.role.toUpperCase())}${ext?": "+esc(ext):""}</span>` : "";
+  const cloudBadge = m.cloud ? `<span class="cbadge cloud">☁ cloud</span>` : "";
+  const badges = (cloudBadge||roleBadge) ? `<div class="cbadges">${cloudBadge}${roleBadge}</div>` : "";
   const tags = (m.caps||[]).map(c=>`<span class="ctag">${esc(c)}</span>`).join("");
-  return `<div class="card ${m.active?'':'off'} ${run?'run':''} s-${m.status}">
+  const sel = selectable && SELECTED.has(m.name);
+  const dot = selectable
+    ? `<span class="cdot sel-dot">${sel?"☑":"☐"}</span>`
+    : `<span class="cdot s-${m.status}">${ICON[m.status]}</span>`;
+  const cls = selectable
+    ? `selectable ${sel?"selected":""}`
+    : `${m.active?"":"off"} ${run?"run":""} s-${m.status}`;
+  return `<div class="card ${cls}" data-name="${esc(m.name)}">
     <div class="card-top">
-      <span class="cname"><span class="cdot s-${m.status}">${ICON[m.status]}</span>${esc(m.name)}</span>
+      <span class="cname">${dot}${esc(m.name)}</span>
       <span class="ctps">${tps!=null?Math.round(tps)+'t/s':''}</span>
     </div>
-    ${badge}
+    ${badges}
     ${tags?`<div class="ctags">${tags}</div>`:""}
   </div>`;
 }
-function renderModels(models, lastTps){
-  const done = models.filter(m=>["done","skip","error"].includes(m.status)).length;
-  $("#modelcount").textContent = models.length ? `${done}/${models.length}` : "";
-  $("#models").innerHTML = models.map(m=>modelCard(m, lastTps)).join("");
+
+function selCount(){
+  $("#modelcount").textContent = SELECTED.size
+    ? `${SELECTED.size} selected`
+    : (CANDIDATES ? `${byFilter(CANDIDATES).length} eligible` : "");
 }
 
-// idle (no active run): show the candidate model list so the mobile sidebar isn't empty
-let CANDIDATES = null;
-async function showIdleCandidates(){
+function renderStatus(models, lastTps){
+  const list = byFilter(models||[]);
+  const done = list.filter(m=>["done","skip","error"].includes(m.status)).length;
+  $("#modelcount").textContent = list.length ? `${done}/${list.length}` : "";
+  $("#models").innerHTML = list.map(m=>modelCard(m, lastTps, false)).join("");
+}
+
+async function renderIdle(){
   if(CANDIDATES===null){ try { CANDIDATES = await (await fetch("/api/models")).json(); } catch { CANDIDATES = []; } }
   $("#pipeline").innerHTML = "";
-  renderModels(CANDIDATES.map(m=>({name:m.name, role:m.role, tps:null, status:"pending",
-    active:true, caps:m.caps, extended_roles:m.extended_roles})), null);
+  const list = byFilter(CANDIDATES);
+  $("#models").innerHTML = list.length
+    ? list.map(m=>modelCard(m, null, true)).join("")
+    : '<span class="meta">no models registered</span>';
+  selCount();
 }
 
 function esc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
@@ -349,38 +411,39 @@ function appendLog(lines){
 let READONLY = false;
 function show(el, on){ $(el).classList.toggle("hidden", !on); }
 function setView({idle, finished}){
-  show("#selector", !READONLY && (idle || finished));
-  show("#monitorPanels", !idle);
-  show("#stopBtn", !READONLY && !idle && !finished);
-  show("#roNote", READONLY && idle);
+  const picking = idle || finished;            // not actively running → cards are a picker
+  show("#selector", !READONLY && picking);
+  show("#stopBtn",  !READONLY && !picking);
+  show("#roNote",   READONLY && picking);
+  show("#modelsHint", !READONLY && picking);   // the models panel itself is always visible
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
 $("#cmd").onchange = e => show("#batWrap", e.target.value === "aptitude");
 
-// model multi-select (populated from /api/models)
-async function loadModelPicker(){
-  const box = $("#modelpick");
-  try {
-    const ms = await (await fetch("/api/models")).json();
-    if(!ms.length){ box.innerHTML = '<span class="meta">no models registered</span>'; return; }
-    box.innerHTML = ms.map(m=>{
-      const ext = (m.extended_roles||[]).join(",");
-      const tag = [m.role, ext].filter(Boolean).join(":");
-      return `<label class="mp-row"><input type="checkbox" value="${esc(m.name)}">
-        <span class="mp-name">${esc(m.name)}</span>${tag?`<span class="mp-tag">${esc(tag)}</span>`:""}</label>`;
-    }).join("");
-  } catch { box.innerHTML = '<span class="meta">could not load models</span>'; }
-}
-loadModelPicker();
-$("#mfClear").onclick = ()=> document.querySelectorAll("#modelpick input:checked").forEach(c=>c.checked=false);
+// cards double as the picker (only when not running) ──────────────────────────
+$("#models").onclick = e => {
+  if(RUN_ACTIVE || READONLY) return;
+  const card = e.target.closest(".card.selectable"); if(!card) return;
+  const name = card.dataset.name; if(!name) return;
+  if(SELECTED.has(name)) SELECTED.delete(name); else SELECTED.add(name);
+  const on = SELECTED.has(name);
+  card.classList.toggle("selected", on);
+  const dot = card.querySelector(".sel-dot"); if(dot) dot.textContent = on ? "☑" : "☐";
+  selCount();
+};
+$("#roleFilter").onchange = e => {
+  ROLE_FILTER = e.target.value;
+  if(RUN_ACTIVE && LAST_SNAP) renderStatus(LAST_SNAP.models, LAST_SNAP.last_tps);
+  else renderIdle();
+};
+$("#mfClear").onclick = () => { SELECTED.clear(); if(!RUN_ACTIVE) renderIdle(); };
 
 $("#selector").onsubmit = async e => {
   e.preventDefault();
-  const picked = [...document.querySelectorAll("#modelpick input:checked")].map(c=>c.value).join(" ");
   const body = {
     cmd: $("#cmd").value, battery: $("#battery").value,
-    fast: $("#fast").checked, force: $("#force").checked, models: picked,
+    fast: $("#fast").checked, force: $("#force").checked, models: [...SELECTED].join(" "),
   };
   $("#startMsg").textContent = "starting…";
   try {
@@ -470,8 +533,65 @@ async function loadFiles(){
 $("#filesList").onclick = async e=>{
   const it=e.target.closest(".fitem"); if(!it) return;
   $("#filesList").querySelectorAll(".fitem").forEach(x=>x.classList.remove("sel")); it.classList.add("sel");
-  $("#fileView").textContent = await (await fetch("/api/results/"+encodeURIComponent(it.dataset.f))).text();
+  const name = it.dataset.f;
+  const text = await (await fetch("/api/results/"+encodeURIComponent(name))).text();
+  $("#fileView").innerHTML = /\.md$/i.test(name) ? mdToHtml(text) : `<pre class="fv-raw">${esc(text)}</pre>`;
 };
+
+// ── minimal, self-contained markdown → HTML (headings/tables/lists/code/inline) ─
+function mdToHtml(src){
+  const lines = String(src).replace(/\r\n?/g,"\n").split("\n");
+  const inline = s => esc(s)
+    .replace(/`([^`]+)`/g,(m,c)=>`<code>${c}</code>`)
+    .replace(/\*\*([^*]+?)\*\*/g,"<strong>$1</strong>")
+    .replace(/\*([^*\n]+?)\*/g,"<em>$1</em>")
+    // underscore italics, but only at word boundaries so identifiers (aptitude_f_elastic) survive
+    .replace(/(^|[\s(])_([^_]+?)_(?=[\s).,;:!?]|$)/g,'$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const splitRow = s => s.trim().replace(/^\|/,"").replace(/\|$/,"").split("|").map(c=>c.trim());
+  const isSep = s => /\|/.test(s) && /^[\s|:-]+$/.test(s) && /-/.test(s);
+  const out=[]; let i=0;
+  while(i<lines.length){
+    const ln = lines[i];
+    if(/^\s*$/.test(ln)){ i++; continue; }
+    if(/^```/.test(ln)){                                   // fenced code
+      const buf=[]; i++;
+      while(i<lines.length && !/^```/.test(lines[i])){ buf.push(lines[i]); i++; }
+      i++; out.push(`<pre class="md-pre"><code>${esc(buf.join("\n"))}</code></pre>`); continue;
+    }
+    const h = ln.match(/^(#{1,6})\s+(.*)$/);               // heading
+    if(h){ out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+    if(/^\s*([-*_])\1{2,}\s*$/.test(ln)){ out.push("<hr>"); i++; continue; }   // hr
+    if(ln.includes("|") && i+1<lines.length && isSep(lines[i+1])){            // table
+      const head = splitRow(ln); i+=2; const rows=[];
+      while(i<lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])){ rows.push(splitRow(lines[i])); i++; }
+      out.push(`<table class="md-table"><thead><tr>${head.map(c=>`<th>${inline(c)}</th>`).join("")}</tr></thead>`
+        + `<tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+      continue;
+    }
+    if(/^\s*>\s?/.test(ln)){                               // blockquote
+      const buf=[];
+      while(i<lines.length && /^\s*>\s?/.test(lines[i])){ buf.push(lines[i].replace(/^\s*>\s?/,"")); i++; }
+      out.push(`<blockquote>${inline(buf.join(" "))}</blockquote>`); continue;
+    }
+    if(/^\s*[-*+]\s+/.test(ln)){                           // unordered list
+      const buf=[];
+      while(i<lines.length && /^\s*[-*+]\s+/.test(lines[i])){ buf.push(lines[i].replace(/^\s*[-*+]\s+/,"")); i++; }
+      out.push(`<ul>${buf.map(x=>`<li>${inline(x)}</li>`).join("")}</ul>`); continue;
+    }
+    if(/^\s*\d+[.)]\s+/.test(ln)){                         // ordered list
+      const buf=[];
+      while(i<lines.length && /^\s*\d+[.)]\s+/.test(lines[i])){ buf.push(lines[i].replace(/^\s*\d+[.)]\s+/,"")); i++; }
+      out.push(`<ol>${buf.map(x=>`<li>${inline(x)}</li>`).join("")}</ol>`); continue;
+    }
+    const buf=[];                                          // paragraph
+    while(i<lines.length && !/^\s*$/.test(lines[i])
+          && !/^(#{1,6}\s|```|\s*[-*+]\s|\s*\d+[.)]\s|\s*>\s)/.test(lines[i])
+          && !(lines[i].includes("|") && isSep(lines[i+1]||""))){ buf.push(lines[i]); i++; }
+    out.push(`<p>${inline(buf.join(" "))}</p>`);
+  }
+  return `<div class="md-body">${out.join("\n")}</div>`;
+}
 
 // ── websocket (auto-reconnect) ────────────────────────────────────────────────
 function connect(){
@@ -481,15 +601,26 @@ function connect(){
     const d = JSON.parse(e.data);
     if("read_only" in d) READONLY = d.read_only;
     if(d.idle){
-      setView({idle:true, finished:false});
+      RUN_ACTIVE = false; LAST_SNAP = null;
       $("#phaseLabel").textContent = "no active run";
       $("#badge").textContent = ""; $("#badge").className = "badge";
       $("#timer").textContent = "00:00:00";
-      showIdleCandidates();
+      if(MODE!=="idle"){ MODE="idle"; renderIdle(); }
+      setView({idle:true, finished:false});
       return;
     }
-    render(d.snapshot); appendLog(d.log);
-    setView({idle:false, finished:d.snapshot.finished});
+    const snap = d.snapshot;
+    render(snap); appendLog(d.log);
+    if(snap.finished){
+      RUN_ACTIVE = false;
+      // back to the selectable candidate list for the next run (results live in Files/Rankings)
+      if(MODE!=="idle"){ MODE="idle"; renderIdle(); }
+    } else {
+      RUN_ACTIVE = true; MODE = "run";
+      renderPipeline(snap);
+      renderStatus(snap.models, snap.last_tps);
+    }
+    setView({idle:false, finished:snap.finished});
   };
   ws.onclose = ()=>{ $("#conn").className="conn down"; $("#conn").textContent="○ disconnected — retrying…"; setTimeout(connect, 1500); };
   ws.onerror = ()=>ws.close();

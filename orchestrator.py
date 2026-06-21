@@ -43,6 +43,7 @@ class ModelState:
     active: bool            = True
     caps:   list            = field(default_factory=list)
     extended_roles: list    = field(default_factory=list)   # earned (e.g. coder)
+    cloud:  bool            = False                          # quality-only cloud model
 
 class BenchState:
     def __init__(self):
@@ -63,7 +64,8 @@ def load_all_models() -> list[ModelState]:
     try:
         return [ModelState(name=m["name"], role=m.get("role") or None,
                            caps=m.get("capabilities", []),
-                           extended_roles=m.get("extended_roles", []))
+                           extended_roles=m.get("extended_roles", []),
+                           cloud=bool(m.get("cloud", False)))
                 for m in json.loads(MODELS_FILE.read_text())]
     except Exception:
         return []
@@ -155,7 +157,7 @@ class Orchestrator:
             "phases": [{"label": p.label, "status": p.status} for p in s.phases],
             "current_phase": s.current_phase, "phase_label": cur,
             "models": [{"name": m.name, "role": m.role, "tps": m.tps,
-                        "status": m.status, "active": m.active,
+                        "status": m.status, "active": m.active, "cloud": m.cloud,
                         "caps": m.caps, "extended_roles": m.extended_roles} for m in s.models],
             "last_tps": s.last_tps, "elapsed": int(time.time() - s.start_time),
             "finished": s.finished, "pause_remaining": s.pause_remaining,
