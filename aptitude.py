@@ -21,6 +21,7 @@ Usage:
 
 import json
 import re
+import statistics
 import sys
 import time
 import requests
@@ -165,6 +166,10 @@ E_CODER_GENERATE_MIN   = 0.50  # E1 mean — must be able to write, not just pat
 # Conversational-consistency toolkit (suites/consistency) — Battery F.
 sys.path.insert(0, str(REPO / "suites" / "consistency"))
 import style as _fstyle   # noqa: E402
+
+# Prompt-elasticity toolkit (suites/elasticity) — Battery F-elastic (opt-in sibling of F).
+sys.path.insert(0, str(REPO / "suites" / "elasticity"))
+import adherence as _elastic   # noqa: E402
 
 # Battery F composite weights — PROVISIONAL until the σ gate passes (do not tune before).
 # F2 stance-flip + F3 style-drift are the robust dims; the F1 lexicon is the fragile link
@@ -1998,18 +2003,17 @@ def write_battery_e_summary(results, out_md: Path, fast_mode=False):
 
 # ── Battery F — Conversational Consistency (multi-turn, deterministic) ──────────
 
-def run_battery_f(model_name):
-    """8-turn live rollout (assistant responses fed back), then deterministic F1–F5.
-    Single-pass primitive — the multipass averager calls this per pass."""
-    result  = {"model": model_name, "battery": "F", "tests": {}}
-    sys_std = [{"role": "system", "content": PROMPT_WORKER_FULL}]
-    script  = _fstyle.load_script()
-    lex     = _fstyle.load_lexicon()
-    opts    = script["stance_options"]
+def _f_rollout_and_grade(model_name, system_prompt, echo_label=""):
+    """One 8-turn live rollout (assistant responses fed back) under `system_prompt`, then the
+    deterministic F1–F5 core. Shared primitive: Battery F calls it with the worker default
+    prompt; Battery F-elastic calls it once per ladder rung with a constraint-augmented prompt.
+    Returns the graded primitives — callers shape the result/summary."""
+    script = _fstyle.load_script()
+    lex    = _fstyle.load_lexicon()
+    opts   = script["stance_options"]
+    pfx    = f"{echo_label} " if echo_label else ""
 
-    print(f"\n{'='*60}\nBATTERY F: {model_name}\n{'='*60}", flush=True)
-
-    history = list(sys_std)
+    history = [{"role": "system", "content": system_prompt}]
     turns   = {}
     picked_key = picked_label = other_label = None
 
@@ -2031,7 +2035,7 @@ def run_battery_f(model_name):
             if picked_key:
                 other_label = next(o["label"] for o in opts if o["key"] != picked_key)
         tag = f" stance={picked_key}" if turn["id"] == "T1" else ""
-        print(f"  [{turn['id']} {turn['type']}]{tag}  → {resp[:90].replace(chr(10),' ')}", flush=True)
+        print(f"  {pfx}[{turn['id']} {turn['type']}]{tag}  → {resp[:90].replace(chr(10),' ')}", flush=True)
 
     stance_detected = picked_key is not None
 
@@ -2081,19 +2085,122 @@ def run_battery_f(model_name):
     present   = {k: w for k, w in F_WEIGHTS.items() if dims[k] is not None}
     composite = round(sum(dims[k] * w for k, w in present.items()) / sum(present.values()), 4)
 
-    result["summary"] = {
-        "dims": dims, "composite": composite,
+    return {
+        "turns": turns, "dims": dims, "composite": composite,
         "stance_detected": stance_detected, "picked": picked_key,
         "detail": {"tells": tells, "t4_flip": t4_flip, "t4_stance": t4_stance,
                    "t5_surge": round(t5_surge, 3), "t7_caps": t7_caps,
                    "t6_overlap": round(overlap, 3), "persist": persist},
     }
-    result["tests"] = {tid: {"type": t["type"], "user": t["user"],
-                             "resp": t["resp"], "vec": t["vec"], "wall_s": t["wall_s"]}
-                       for tid, t in turns.items()}
-    print(f"\n  → composite={composite}  dims={dims}  stance_detected={stance_detected} "
-          f"(picked={picked_key})", flush=True)
-    return result
+
+
+def run_battery_f(model_name):
+    """8-turn live rollout (assistant responses fed back), then deterministic F1–F5.
+    Single-pass primitive — the multipass averager calls this per pass."""
+    print(f"\n{'='*60}\nBATTERY F: {model_name}\n{'='*60}", flush=True)
+    g = _f_rollout_and_grade(model_name, PROMPT_WORKER_FULL)
+    print(f"\n  → composite={g['composite']}  dims={g['dims']}  "
+          f"stance_detected={g['stance_detected']} (picked={g['picked']})", flush=True)
+    return {
+        "model": model_name, "battery": "F",
+        "summary": {"dims": g["dims"], "composite": g["composite"],
+                    "stance_detected": g["stance_detected"], "picked": g["picked"],
+                    "detail": g["detail"]},
+        "tests": {tid: {"type": t["type"], "user": t["user"], "resp": t["resp"],
+                        "vec": t["vec"], "wall_s": t["wall_s"]}
+                  for tid, t in g["turns"].items()},
+    }
+
+
+# ── Battery F-elastic — Prompt-Elasticity (prompt-σ, opt-in) ───────────────────
+
+def run_battery_f_elastic(model_name):
+    """Prompt-elasticity: how the Battery-F composite (F1–F5) moves as a function of
+    system-prompt COMPLEXITY, over a synthetic persona-neutral capability-constraint ladder
+    (suites/elasticity/ladder.json). The same F rollout + grader runs at every rung; the only
+    new surface is the per-rung constraint block and the deterministic adherence meter.
+
+    prompt-σ and adherence are CO-EQUAL — a rung without adherence is invalid, and a low
+    prompt-σ alone is ambiguous (robust vs prompt-deaf). The categorical verdict is computed
+    HERE from the ladder's DECLARED cutoffs so prompt-σ is never read naked. Single-pass
+    primitive (multipass averaging = Phase 2)."""
+    ladder = _elastic.load_ladder()
+    print(f"\n{'='*60}\nBATTERY F-elastic: {model_name}\n{'='*60}", flush=True)
+
+    per_rung, composites, tests = [], [], {}
+    for rung in ladder["rungs"]:
+        block     = _elastic.render_constraints(rung, ladder)
+        sysprompt = PROMPT_WORKER_FULL + "\n\n" + block
+        g         = _f_rollout_and_grade(model_name, sysprompt, echo_label=f"[{rung['id']}]")
+        responses = [t["resp"] for t in g["turns"].values()]
+        adh       = _elastic.score_rung(rung, ladder, responses)
+        per_rung.append({
+            "rung": rung["id"], "label": rung.get("label", rung["id"]),
+            "constraints": rung["constraints"], "constraints_n": len(rung["constraints"]),
+            "composite": g["composite"], "run_sigma": None,   # single-pass; populated by Phase-2 averager
+            "adherence": adh["adherence"], "per_constraint": adh["per_constraint"],
+            "dims": g["dims"], "stance_detected": g["stance_detected"],
+        })
+        composites.append(g["composite"])
+        tests[rung["id"]] = {tid: {"type": t["type"], "resp": t["resp"], "wall_s": t["wall_s"]}
+                             for tid, t in g["turns"].items()}
+        print(f"  → rung={rung['id']} n={len(rung['constraints'])} "
+              f"composite={g['composite']} adherence={adh['adherence']}", flush=True)
+
+    prompt_sigma = round(statistics.pstdev(composites), 4) if len(composites) > 1 else 0.0
+    adherence    = round(statistics.mean([r["adherence"] for r in per_rung]), 4)
+    cutoffs      = ladder["verdict_cutoffs"]
+    verdict      = _elastic.classify(prompt_sigma, adherence, cutoffs)
+
+    print(f"\n  → prompt_sigma={prompt_sigma}  adherence={adherence}  verdict={verdict}", flush=True)
+    return {
+        "model": model_name, "battery": "F-elastic",
+        "summary": {"prompt_sigma": prompt_sigma, "adherence": adherence, "verdict": verdict,
+                    "cutoffs": cutoffs, "per_rung": per_rung},
+        "tests": tests,
+    }
+
+
+def write_battery_f_elastic_summary(results, out_md: Path, fast_mode=False):
+    flag   = " ⚠ FAST MODE" if fast_mode else ""
+    ladder = _elastic.load_ladder()
+    rungs  = ladder["rungs"]
+    c      = ladder["verdict_cutoffs"]
+    lines  = [
+        f"# Aptitude Battery F-elastic — Prompt-Elasticity (prompt-σ){flag}", "",
+        "How a model's conversational-consistency composite (F1–F5) moves as a function of "
+        "**system-prompt complexity** over a synthetic, persona-neutral capability-constraint "
+        "ladder. **prompt-σ and adherence are co-equal** — a low prompt-σ alone is ambiguous "
+        "(robust vs prompt-deaf); adherence disambiguates, and the verdict is computed here.",
+        f"`num_ctx={NUM_CTX}` | `think=False` | single-pass | rungs = "
+        + " → ".join(f"{r['id']}({len(r['constraints'])})" for r in rungs), "",
+        f"**Declared verdict cutoffs** ({c.get('_status','')}): "
+        f"`robust` = σ < {c['sigma_hi']} AND adherence ≥ {c['adherence_hi']}; "
+        f"`prompt-deaf` = σ < {c['sigma_hi']} AND adherence < {c['adherence_lo']}; "
+        f"`prompt-sensitive` = otherwise.", "",
+        "| Model | Verdict | prompt-σ | adherence | "
+        + " | ".join(f"{r['id']} (c·a)" for r in rungs) + " |",
+        "|-------|---------|----------|-----------|"
+        + "|".join(["----------"] * len(rungs)) + "|",
+    ]
+    order = {"robust": 0, "prompt-sensitive": 1, "prompt-deaf": 2}
+    ranked = sorted([r for r in results if "summary" in r],
+                    key=lambda r: (order.get(r["summary"]["verdict"], 9),
+                                   -r["summary"]["adherence"]))
+    for r in ranked:
+        s = r["summary"]
+        by_id = {pr["rung"]: pr for pr in s["per_rung"]}
+        cells = []
+        for rg in rungs:
+            pr = by_id.get(rg["id"])
+            cells.append(f"{pr['composite']:.2f}·{pr['adherence']:.2f}" if pr else "—")
+        lines.append(f"| `{r['model']}` | **{s['verdict']}** | {s['prompt_sigma']:.3f} | "
+                     f"{s['adherence']:.2f} | " + " | ".join(cells) + " |")
+    lines += ["", "_Per-rung cells are `composite·adherence`. prompt-σ = pstdev of the per-rung "
+              "composites; a high σ means consistency stretches under instruction load. "
+              "Cutoffs are PROVISIONAL until the cross-family gating pass calibrates them._"]
+    out_md.write_text("\n".join(lines) + "\n")
+    print(f"MD → {out_md}", flush=True)
 
 
 def write_battery_f_summary(results, out_md: Path, fast_mode=False):
@@ -2136,10 +2243,13 @@ if __name__ == "__main__":
         "D": (_cd_models,       run_battery_d, "aptitude_d"),
         "E": (_e_models,        run_battery_e, "aptitude_e"),
         "F": (BATTERY_E_MODELS, run_battery_f, "aptitude_f"),
+        # Opt-in only — never wired into `all`/`batteries`. ~3× a single F run (one rollout
+        # per rung); the consumer-facing name is `--battery F-elastic`.
+        "F-ELASTIC": (BATTERY_E_MODELS, run_battery_f_elastic, "aptitude_f_elastic"),
     }
 
     if battery_arg not in BATTERY_MAP:
-        print(f"Unknown battery '{battery_arg}'. Available: A, B, C, D")
+        print(f"Unknown battery '{battery_arg}'. Available: A, B, C, D, E, F, F-elastic")
         sys.exit(1)
 
     default_models, runner, pfx = BATTERY_MAP[battery_arg]
@@ -2207,6 +2317,7 @@ if __name__ == "__main__":
         "D": write_battery_d_summary,
         "E": write_battery_e_summary,
         "F": write_battery_f_summary,
+        "F-ELASTIC": write_battery_f_elastic_summary,
     }
     if battery_arg in summary_writers:
         summary_writers[battery_arg](all_results, OUT_MD, fast_mode)

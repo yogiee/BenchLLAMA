@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "battery": "F-elastic",
+  "name": "prompt_elasticity",
+  "notes": "Synthetic, persona-NEUTRAL capability-constraint ladder. Each rung augments the worker system prompt with a nested, growing set of machine-verifiable output constraints (constraints_n is the monotonic complexity axis AND the adherence meter). The SAME 8-turn Battery-F rollout runs at every rung; the F1-F5 grader is reused unchanged. prompt-sigma = pstdev of the per-rung F composites; adherence = mean per-rung constraint-satisfaction rate. Constraints are capability/register-shaped (length, no-exclamation, prose-only, end-with-question, required-prefix) NOT persona — family-agnostic by construction, and the prose-only / no-exclamation / word-cap trio doubles as a deterministic voice-texture probe for LookingGlass's sidecar/eval/lite.py register TODO. Validate cross-family (qwen/gemma/llama) before trusting any prompt-sigma number.",
+  "constraints": {
+    "word_cap": {
+      "instruction": "Keep every reply to 120 words or fewer.",
+      "params": {"max_words": 120}
+    },
+    "no_exclamation": {
+      "instruction": "Do not use any exclamation marks anywhere in your replies.",
+      "params": {}
+    },
+    "no_lists": {
+      "instruction": "Write in prose only. Do not use bulleted or numbered lists.",
+      "params": {}
+    },
+    "end_with_question": {
+      "instruction": "End every reply with a question.",
+      "params": {}
+    },
+    "required_prefix": {
+      "instruction": "Begin every reply with the exact token 'NB:' followed by a space.",
+      "params": {"prefix": "NB:"}
+    }
+  },
+  "rungs": [
+    {"id": "minimal",  "label": "minimal (1 constraint)",  "constraints": ["word_cap"]},
+    {"id": "moderate", "label": "moderate (3 constraints)", "constraints": ["word_cap", "no_exclamation", "no_lists"]},
+    {"id": "heavy",    "label": "heavy (5 constraints)",    "constraints": ["word_cap", "no_exclamation", "no_lists", "end_with_question", "required_prefix"]}
+  ],
+  "verdict_cutoffs": {
+    "sigma_hi": 0.10,
+    "adherence_hi": 0.80,
+    "adherence_lo": 0.50,
+    "_status": "PROVISIONAL — calibrate during the cross-family gating pass (qwen/gemma/llama), the way Battery F's sigma gate was calibrated.",
+    "_mapping": "robust = prompt_sigma < sigma_hi AND adherence >= adherence_hi (consistency holds AND constraints obeyed). prompt-deaf = prompt_sigma < sigma_hi AND adherence < adherence_lo (flat composite only because the added prompt is ignored). prompt-sensitive = otherwise (composite moves materially under instruction load, or partial obedience with movement)."
+  }
+}
