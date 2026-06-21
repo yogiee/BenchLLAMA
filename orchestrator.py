@@ -93,12 +93,15 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
     if cmd == "ladder":
         return [("ctx Ladder", _cmd(REPO/"ctx_ladder.py", *x), role_in_extra)]
     if cmd == "aptitude":
-        # Batteries E (coding) and F (consistency) default to MULTIPASS averaging.
+        # Batteries E (coding), F (consistency) and F-elastic (prompt-σ) default to MULTIPASS
+        # averaging — all grade correctness and are noisy at the boundary on a single run
+        # (F-elastic calibration 2026-06-22 showed single runs flip 5 borderline verdicts).
         bat = (_arg(extra, "--battery") or "B").upper()
-        if bat in ("E", "F"):
-            clean = [a for a in x if a not in ("--battery", "E", "e", "F", "f")]
-            args = (["--battery", "F", *clean] if bat == "F" else clean)
-            return [(f"Battery {bat} (3-run avg)", _cmd(REPO/"average_e_runs.py", *args), "cap:completion")]
+        AVG = {"E": [], "F": ["--battery", "F"], "F-ELASTIC": ["--battery", "F-elastic"]}
+        if bat in AVG:
+            drop = ("--battery", "E", "e", "F", "f", "F-elastic", "f-elastic", "F-ELASTIC")
+            clean = [a for a in x if a not in drop]
+            return [(f"Battery {bat} (3-run avg)", _cmd(REPO/"average_e_runs.py", *AVG[bat], *clean), "cap:completion")]
         return [("Aptitude", _cmd(apt, *x), role_in_extra)]
     if cmd == "update":
         return [("Update Registry", _cmd(REPO/"update_registry.py", *x), None)]

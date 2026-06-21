@@ -54,8 +54,8 @@ _G = {"__name__": "_avg", "__file__": str(REPO / "aptitude.py")}
 exec(compile(_src, "aptitude.py", "exec"), _G)
 
 BAT = _arg("--battery", "E").upper()
-PREFIX = "aptitude_e" if BAT == "E" else "aptitude_f"
-FAST = (BAT == "E")                       # E skips cool-down; F keeps it
+PREFIX = {"E": "aptitude_e", "F": "aptitude_f", "F-ELASTIC": "aptitude_f_elastic"}.get(BAT, "aptitude_f")
+FAST = BAT in ("E", "F-ELASTIC")          # E + F-elastic grade CORRECTNESS (not tok/s) → no cool-down; F keeps it
 WEIGHTS = _G["E_WEIGHTS"] if BAT == "E" else _G["F_WEIGHTS"]
 CMIN, BAND, GMIN = _G["E_CODER_COMPOSITE_MIN"], _G["E_CODER_COMPOSITE_BAND"], _G["E_CODER_GENERATE_MIN"]
 
@@ -163,11 +163,79 @@ def _average_f(run_files):
     return out, len(runs)
 
 
+def _average_f_elastic(run_files):
+    """Average per-rung (composite + per-constraint) across runs, recompose prompt_sigma +
+    instruction/length adherence from the means (never mean-of-final), reclassify the verdict, and
+    surface RUN-TO-RUN CONSISTENCY — the reason multipass matters here: borderline verdicts ride on
+    run noise (e.g. instr 0.797 vs the 0.80 cutoff). per_rung.run_sigma = stdev of that rung's
+    composite across runs; verdict_stable = did every run agree."""
+    runs, models = _load_runs(run_files)
+    elastic = _G["_elastic"]
+    ladder  = elastic.load_ladder()
+    cutoffs = ladder["verdict_cutoffs"]
+    klass   = lambda c: ladder["constraints"][c].get("class")
+    mean    = lambda xs: round(statistics.mean(xs), 4) if xs else None
+    pstd    = lambda xs: round(statistics.pstdev(xs), 4) if len(xs) > 1 else 0.0
+    out = []
+    for name in models:
+        recs = [r[name] for r in runs if name in r]
+        rung_ids = [pr["rung"] for pr in recs[0]["summary"]["per_rung"]]
+        per_rung, composites = [], []
+        for rid in rung_ids:
+            prs = [next(p for p in rec["summary"]["per_rung"] if p["rung"] == rid) for rec in recs]
+            comp_runs = [p["composite"] for p in prs]
+            cons = list(prs[0]["per_constraint"].keys())
+            pc = {c: round(statistics.mean([p["per_constraint"][c] for p in prs]), 4) for c in cons}
+            instr  = [v for c, v in pc.items() if klass(c) != "length"]
+            length = [v for c, v in pc.items() if klass(c) == "length"]
+            composites.append(round(statistics.mean(comp_runs), 4))
+            per_rung.append({"rung": rid, "constraints_n": len(cons),
+                             "composite": composites[-1], "run_sigma": pstd(comp_runs),
+                             "instruction_adherence": mean(instr), "length_adherence": mean(length),
+                             "per_constraint": pc})
+        prompt_sigma = pstd(composites)
+        iadh = mean([r["instruction_adherence"] for r in per_rung if r["instruction_adherence"] is not None])
+        ladh = mean([r["length_adherence"] for r in per_rung if r["length_adherence"] is not None])
+        verdict = elastic.classify(prompt_sigma, iadh, cutoffs)
+        run_verdicts = [rec["summary"]["verdict"] for rec in recs]
+        out.append({"model": name, "battery": "F-elastic", "runs": len(recs), "summary": {
+            "prompt_sigma": prompt_sigma, "instruction_adherence": iadh, "length_adherence": ladh,
+            "adherence": iadh, "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung,
+            "n_runs": len(recs),
+            "prompt_sigma_stdev": pstd([rec["summary"]["prompt_sigma"] for rec in recs]),
+            "instruction_adherence_stdev": pstd([rec["summary"]["instruction_adherence"] for rec in recs
+                                                 if rec["summary"].get("instruction_adherence") is not None]),
+            "per_run_verdicts": run_verdicts, "verdict_stable": len(set(run_verdicts)) == 1}})
+    return out, len(runs)
+
+
 def average(run_files):
-    return _average_e(run_files) if BAT == "E" else _average_f(run_files)
+    if BAT == "E":          return _average_e(run_files)
+    if BAT == "F-ELASTIC":  return _average_f_elastic(run_files)
+    return _average_f(run_files)
 
 
 def write_md(rows, path, k):
+    if BAT == "F-ELASTIC":
+        order = {"robust": 0, "prompt-sensitive": 1, "prompt-deaf": 2}
+        rows = sorted(rows, key=lambda r: (order.get(r["summary"]["verdict"], 9),
+                                           -(r["summary"]["instruction_adherence"] or 0)))
+        fn = lambda v: "—" if v is None else f"{v:.2f}"
+        L = [f"# Aptitude Battery F-elastic — Prompt-Elasticity (averaged over {k} runs)", "",
+             "prompt-σ + **instruction-adherence** co-equal; verdict keyed on instruction-adherence. "
+             "`len-adh` = standalone verbosity meter (not a verdict input). **The σ(run) columns are "
+             "the calibration payload** — run-to-run stdev of prompt-σ and instruction-adherence; "
+             "`stable` = all runs returned the same verdict. Cutoffs PROVISIONAL.", "",
+             "| # | Model | Verdict | stable | prompt-σ | σ(run) | instr-adh | σ(run) | len-adh |",
+             "|---|-------|---------|:------:|----------|--------|-----------|--------|---------|"]
+        for i, r in enumerate(rows, 1):
+            s = r["summary"]
+            L.append(f"| {i} | `{r['model']}` | **{s['verdict']}** | {'✓' if s['verdict_stable'] else '⚠'} | "
+                     f"{s['prompt_sigma']:.3f} | {s.get('prompt_sigma_stdev',0):.3f} | "
+                     f"{fn(s.get('instruction_adherence'))} | {s.get('instruction_adherence_stdev',0):.3f} | "
+                     f"{fn(s.get('length_adherence'))} |")
+        path.write_text("\n".join(L) + "\n")
+        return
     rows = sorted(rows, key=lambda r: r["summary"]["composite"], reverse=True)
     if BAT == "E":
         L = [f"# Aptitude Battery E — Coding (averaged over {k} runs)", "",

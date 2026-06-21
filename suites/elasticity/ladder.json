@@ -36,12 +36,14 @@
     {"id": "moderate", "label": "moderate (3 constraints)", "constraints": ["word_cap", "no_exclamation", "no_lists"]},
     {"id": "heavy",    "label": "heavy (5 constraints)",    "constraints": ["word_cap", "no_exclamation", "no_lists", "end_with_question", "required_prefix"]}
   ],
+  "_neutrality_note": "Cross-family validated 2026-06-22 (20 models × 3-run avg): required_prefix is NOT dialect-biased — llama3.2:1b obeys it perfectly (1.0) while llama3.2:3b ignores it (0.0), and qwen obeys it (mostly 1.0; the lone qwen failure is qwen2.5vl, a vision model). The alarming single-run family means were two idiosyncratic models (llama3.2:3b, qwen2.5vl:3b), not a family/template pattern. No rung reworded.",
   "verdict_cutoffs": {
     "sigma_hi": 0.10,
     "adherence_hi": 0.80,
-    "adherence_lo": 0.50,
+    "adherence_lo": 0.35,
     "keyed_on": "instruction_adherence",
-    "_status": "PROVISIONAL — calibrate during the cross-family gating pass (qwen/gemma/llama), the way Battery F's sigma gate was calibrated. Per the validation sequencing note: the adherence-composition split (instruction vs length) landed FIRST; these cutoffs are calibrated AFTER, on instruction_adherence (not the verbosity-conflated composite).",
+    "_status": "CALIBRATED 2026-06-22 on 20 models × 3-run average (cross-family: gemma/qwen/llama + granite/glm/gpt-oss/minicpm/ZINI). Was PROVISIONAL. REQUIRES 3-run averaging — see _calibration.",
+    "_calibration": "instruction_adherence is bimodal on the roster: 19 models cluster 0.84-1.00, one outlier (qwen2.5vl:3b, vision) at 0.54 -> adherence_hi=0.80 sits in the wide natural gap and is stable under averaging. adherence_lo lowered 0.50->0.35: nothing on the roster is prompt-deaf (the floor is UNANCHORED + conservative), and 0.54 = 'follows half' (sensitive), not 'ignores' (deaf); the deaf floor is reserved for genuine prompt-ignoring (<~1/3 obeyed). prompt-sigma is a LOW-VARIANCE axis here (all averaged sigma 0.006-0.065, none trips sigma_hi): the synthetic formatting ladder barely moves the F1-F5 consistency composite, so the discriminating elasticity signal is instruction-adherence degradation under load, NOT composite-sigma. sigma_hi=0.10 retained as a conservative instability guard; on SINGLE runs sigma-noise can mis-fire near 0.10, so F-elastic MUST be run 3x-AVERAGED (which settles sigma well under the cutoff and stabilized 5 borderline verdicts).",
     "_mapping": "Keyed on instruction_adherence (the BINARY obey-or-ignore meter), NOT the length cap. robust = prompt_sigma < sigma_hi AND instruction_adherence >= adherence_hi (consistency holds AND instructions obeyed; may still be verbose — see length_adherence). prompt-deaf = prompt_sigma < sigma_hi AND instruction_adherence < adherence_lo (flat composite only because the added prompt is ignored). prompt-sensitive = otherwise."
   }
 }
