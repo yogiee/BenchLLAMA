@@ -22,6 +22,7 @@ import json
 import sys
 import glob
 import os
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -40,10 +41,13 @@ PROTOCOL = {"num_ctx": 16384, "think": False}
 
 def _latest(prefix):
     """Newest canonical result file for a battery prefix, or None. Skips informal /
-    intermediate variants: _fast (no-cooldown), _run{k} (per-run averaging inputs)."""
+    intermediate variants: _fast (no-cooldown), _run{k} (per-run averaging inputs).
+    The `_<date>` guard keeps a prefix from matching a LONGER sibling prefix — e.g.
+    `aptitude_f` must not pick up `aptitude_f_elastic_*` (the next segment is a word, not a date)."""
     skip = ("_fast", "_run")
+    pat = re.compile(rf"{re.escape(prefix)}_\d{{4}}-\d\d-\d\d")
     files = [f for f in glob.glob(str(RESULTS / f"{prefix}_*.json"))
-             if not any(s in os.path.basename(f) for s in skip)]
+             if not any(s in os.path.basename(f) for s in skip) and pat.match(os.path.basename(f))]
     return max(files, key=os.path.getmtime) if files else None
 
 
@@ -75,12 +79,13 @@ def build():
     std, std_f = _load("benchmark")
     coding, cod_f = _load("aptitude_e")
     cons, cons_f = _load("aptitude_f")
+    elastic, ela_f = _load("aptitude_f_elastic")
     vision, vis_f = _load("vision")
     emb, emb_f = _load("embedding")
 
     models, sources = [], {k: v for k, v in {
         "standard": std_f, "coding": cod_f, "consistency": cons_f,
-        "vision": vis_f, "embedding": emb_f}.items() if v}
+        "prompt_elasticity": ela_f, "vision": vis_f, "embedding": emb_f}.items() if v}
 
     for entry in registry:
         name = entry["name"]
@@ -127,6 +132,30 @@ def build():
                                  "composite_stdev": fs.get("composite_stdev"),
                                  "dims": fs.get("dims", {}),
                                  "runs": fs.get("n_runs", 1)}
+        pe = elastic.get(name)
+        if pe and pe.get("summary"):
+            pes = pe["summary"]; rc = pes.get("cutoffs", {})
+            # prompt-elasticity is a per-model SUB-BLOCK (like `consistency`), NOT a ranking list:
+            # the verdict is categorical and prompt-σ is only meaningful PAIRED with adherence, so
+            # there's nothing to sort. Emitted only when F-elastic has been run (opt-in battery).
+            # cutoffs trimmed to the DECLARED numeric thresholds (prose rationale lives in
+            # suites/elasticity/ladder.json) so a consumer can re-threshold against its own scope.
+            m["prompt_elasticity"] = {
+                "verdict": pes.get("verdict"),
+                "prompt_sigma": pes.get("prompt_sigma"),
+                "instruction_adherence": pes.get("instruction_adherence"),
+                "length_adherence": pes.get("length_adherence"),
+                "cutoffs": {k: rc.get(k) for k in ("sigma_hi", "adherence_hi", "adherence_lo", "keyed_on")},
+                "verdict_stable": pes.get("verdict_stable"),
+                "prompt_sigma_stdev": pes.get("prompt_sigma_stdev"),
+                "instruction_adherence_stdev": pes.get("instruction_adherence_stdev"),
+                "per_rung": [{"rung": r["rung"], "constraints_n": r["constraints_n"],
+                              "composite": r["composite"], "run_sigma": r.get("run_sigma"),
+                              "instruction_adherence": r["instruction_adherence"],
+                              "length_adherence": r["length_adherence"]}
+                             for r in pes.get("per_rung", [])],
+                "runs": pes.get("n_runs", 1),
+            }
         v = vision.get(name)
         if v:
             m["vision"] = {"composite": v.get("composite"),
