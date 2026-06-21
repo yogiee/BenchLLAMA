@@ -188,9 +188,11 @@ if __name__ == "__main__":
 
     for name, entry in existing.items():
         if name not in laned:
-            if keep_missing:
+            # Cloud endpoints never appear in /api/tags (they're not local) — keep them
+            # regardless, else every sync would prune a registered cloud model.
+            if keep_missing or entry.get("cloud"):
                 missing.append(name)
-                proposed.append(entry)  # retained (--keep-missing)
+                proposed.append(entry)  # retained (--keep-missing or cloud:true)
             else:
                 pruned.append(name)     # no longer installed → dropped
 

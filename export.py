@@ -84,17 +84,24 @@ def build():
 
     for entry in registry:
         name = entry["name"]
+        # Cloud endpoints (e.g. gemma4:31b-cloud) are graded for QUALITY ONLY: their
+        # tok/s and disk are meaningless locally (Ollama reports disk=0, tok/s≈1e10),
+        # so we keep the quality composites (coding/consistency/vision) but suppress
+        # every speed/footprint signal — no tps, no quality-per-GB (the disk=0 guard
+        # below already nulls Q/GB), and never enter the speed-based ranking lists.
+        is_cloud = bool(entry.get("cloud"))
         m = {
             "name": name,
-            "disk_gb": entry.get("disk_gb"),
+            "disk_gb": None if is_cloud else entry.get("disk_gb"),
             "role": entry.get("role"),
             "extended_roles": entry.get("extended_roles", []),
             "capabilities": entry.get("capabilities", []),
+            **({"cloud": True} if is_cloud else {}),
         }
         s = std.get(name)
         if s:
-            m["tps"] = s.get("avg_tps")
-            m["ram_gb"] = s.get("ram_gb")
+            m["tps"] = None if is_cloud else s.get("avg_tps")
+            m["ram_gb"] = None if is_cloud else s.get("ram_gb")
             m["standard"] = _standard_summary(s)
         c = coding.get(name)
         if c and c.get("summary"):
@@ -157,8 +164,9 @@ def build():
         "workers": ranked(workers, worker_quality),
         "coders": ranked(completion, lambda m: (m.get("coding") or {}).get("composite")),
         "vision": ranked(has_vis, lambda m: (m.get("vision") or {}).get("composite")),
-        "vision_fast_ocr": ranked(has_vis, lambda m: ((vis_ocr(m), m.get("tps") or 0)
-                                                      if vis_ocr(m) is not None else None)),
+        # fast-OCR is speed-ranked → require a real tps (excludes cloud / un-timed models)
+        "vision_fast_ocr": ranked(has_vis, lambda m: ((vis_ocr(m), m["tps"])
+                                                      if vis_ocr(m) is not None and m.get("tps") else None)),
         "embedding_short": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite")),
         "embedding_long": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite_long")),
     }
