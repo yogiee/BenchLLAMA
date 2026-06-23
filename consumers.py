@@ -36,7 +36,7 @@ CAP_LIST = {"coding": "coders", "vision": "vision", "ocr": "vision_fast_ocr",
 # consumer (a model used only by an unpublished consumer is invisible → unsafe to drop). Editable;
 # not part of the neutral export (reading manifests already exposes consumer names). Keep in sync
 # as consumers are added/retired.
-EXPECTED_CONSUMERS = {"ollama-local", "memoryCentral", "lookingGlass"}
+EXPECTED_CONSUMERS = {"ollama-mcp", "memoryCentral", "lookingGlass"}
 
 
 def load_manifests():
