@@ -82,10 +82,12 @@ def build():
     elastic, ela_f = _load("aptitude_f_elastic")
     vision, vis_f = _load("vision")
     emb, emb_f = _load("embedding")
+    lctx, lctx_f = _load("longctx")
 
     models, sources = [], {k: v for k, v in {
         "standard": std_f, "coding": cod_f, "consistency": cons_f,
-        "prompt_elasticity": ela_f, "vision": vis_f, "embedding": emb_f}.items() if v}
+        "prompt_elasticity": ela_f, "vision": vis_f, "embedding": emb_f,
+        "long_context": lctx_f}.items() if v}
 
     for entry in registry:
         name = entry["name"]
@@ -105,7 +107,13 @@ def build():
         }
         s = std.get(name)
         if s:
+            # `tps` = DECODE tok/s (back-compat name consumers already read). prefill_tps and
+            # wall_s are the new first-class latency signals: prefill = input-read speed (RAG /
+            # big-prompt cost); wall_s = mean end-to-end seconds per test over the fixed suite
+            # (the number the user actually waits for). Cloud endpoints null all three.
             m["tps"] = None if is_cloud else s.get("avg_tps")
+            m["prefill_tps"] = None if is_cloud else s.get("avg_prefill_tps")
+            m["wall_s"] = None if is_cloud else s.get("avg_wall_s")
             m["ram_gb"] = None if is_cloud else s.get("ram_gb")
             m["standard"] = _standard_summary(s)
         c = coding.get(name)
@@ -165,6 +173,21 @@ def build():
             m["embedding"] = {"composite": e.get("composite"),
                               "composite_long": e.get("composite_long"),
                               "quality_per_gb": e.get("quality_per_gb")}
+        g = lctx.get(name)
+        if g and g.get("summary"):
+            gs = g["summary"]
+            # long-context (Battery G) sub-block: accuracy degradation + speed collapse as the
+            # window FILLS (distinct from C4's num_ctx allocation sweep). clean_depth = deepest
+            # token bucket still ≥ threshold accuracy — the headline "usable to N tokens" number.
+            m["long_context"] = {
+                "composite": gs.get("composite"),
+                "clean_depth": gs.get("clean_depth"),
+                "prefill_collapse": gs.get("prefill_collapse"),
+                "accuracy_by_depth": gs.get("accuracy_by_depth", {}),
+                "prefill_by_depth": gs.get("prefill_by_depth", {}),
+                "position_recall": gs.get("position_recall", {}),
+                "n_depths": gs.get("n_depths"),
+            }
         models.append(m)
 
     by_name = {m["name"]: m for m in models}
@@ -178,6 +201,14 @@ def build():
     workers = [m["name"] for m in models if m["role"] == "worker"]
     has_vis = [m["name"] for m in models if "vision" in m]
     has_emb = [m["name"] for m in models if "embedding" in m]
+    has_lctx = [m["name"] for m in models if "long_context" in m]
+
+    def lctx_key(m):
+        # rank by clean_depth first (deepest usable window), composite as tiebreaker
+        lc = m.get("long_context") or {}
+        if lc.get("composite") is None:
+            return None
+        return (lc.get("clean_depth") or 0, lc.get("composite"))
 
     def worker_quality(m):
         st = m.get("standard")
@@ -198,6 +229,7 @@ def build():
                                                       if vis_ocr(m) is not None and m.get("tps") else None)),
         "embedding_short": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite")),
         "embedding_long": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite_long")),
+        "long_context": ranked(has_lctx, lctx_key),
     }
 
     return {

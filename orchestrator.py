@@ -24,7 +24,7 @@ MODELS_FILE = REPO / "models.json"
 PAUSE_SECS  = 10        # between pipeline phases
 MAX_LOG     = 4000      # capped in-memory log buffer (for late-joining web clients)
 
-COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding"}
+COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx"}
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
@@ -109,6 +109,8 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Vision (Battery V)", _cmd(REPO/"vision.py", *x), "cap:vision")]
     if cmd == "embedding":
         return [("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x), "cap:embedding")]
+    if cmd == "longctx":
+        return [("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x), "cap:completion")]
     if cmd == "batteries":
         return [
             ("Battery A", _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
@@ -128,6 +130,7 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
             ("Battery D",      _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x), "worker"),
             ("Battery E (3-run avg)", _cmd(REPO/"average_e_runs.py", *x),                        "cap:completion"),
             ("Battery F (3-run avg)", _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),      "cap:completion"),
+            ("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x),                            "cap:completion"),
             ("Vision (Battery V)",      _cmd(REPO/"vision.py", *x),                              "cap:vision"),
             ("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x),                           "cap:embedding"),
         ]

@@ -128,9 +128,16 @@ def chat(model, messages, num_ctx, max_tokens=None):
     return r.json(), wall
 
 def tps(data):
+    """Decode (generation) tok/s."""
     ec = data.get("eval_count", 0)
     ed = data.get("eval_duration", 1)
     return round(ec / (ed / 1e9), 1) if ec and ed else None
+
+def prefill_tps(data):
+    """Prefill (prompt-processing) tok/s — input read speed before the first output token."""
+    pc = data.get("prompt_eval_count", 0)
+    pd = data.get("prompt_eval_duration", 0)
+    return round(pc / (pd / 1e9), 1) if pc and pd else None
 
 def load_s(data):
     ld = data.get("load_duration", 0)
@@ -214,14 +221,16 @@ def run_ctx_ladder(model_name, role, disk_gb, ctx_levels):
                               num_ctx=num_ctx, max_tokens=800)
             resp    = data.get("message", {}).get("content", "")
             t       = tps(data)
+            pf      = prefill_tps(data)
             correct = _cylinder_check(resp)
             entry["cylinder"] = {
-                "correct":  correct,
-                "tps":      t,
-                "wall_s":   round(wall, 1),
-                "response": resp,
+                "correct":     correct,
+                "tps":         t,
+                "prefill_tps": pf,
+                "wall_s":      round(wall, 1),
+                "response":    resp,
             }
-            print(f"tps={t}  wall={wall:.1f}s  {'✓' if correct else '✗'}", flush=True)
+            print(f"tps={t}  prefill={pf}  wall={wall:.1f}s  {'✓' if correct else '✗'}", flush=True)
             print(f"    → {resp[:120].replace(chr(10), ' ')}", flush=True)
         except Exception as e:
             print(f"FAILED: {e}", flush=True)
@@ -237,13 +246,15 @@ def run_ctx_ladder(model_name, role, disk_gb, ctx_levels):
                 resp = data.get("message", {}).get("content", "")
                 cov  = _jpeg_coverage(resp)
                 t    = tps(data)
+                pf   = prefill_tps(data)
                 entry["jpeg"] = {
-                    "score":    cov["score"],
-                    "pass":     cov["pass"],
-                    "signals":  {k: v for k, v in cov["signals"].items() if v},
-                    "tps":      t,
-                    "wall_s":   round(wall, 1),
-                    "response": resp,
+                    "score":       cov["score"],
+                    "pass":        cov["pass"],
+                    "signals":     {k: v for k, v in cov["signals"].items() if v},
+                    "tps":         t,
+                    "prefill_tps": pf,
+                    "wall_s":      round(wall, 1),
+                    "response":    resp,
                 }
                 print(f"coverage={cov['score']}/7  {'✓' if cov['pass'] else '✗'}  tps={t}  wall={wall:.1f}s", flush=True)
             except Exception as e:
@@ -277,8 +288,8 @@ def write_summary(results, out_md, fast_mode=False):
         lines += [f"## `{model}` ({role}, {r['disk_gb']} GB)", ""]
 
         # Ladder summary table
-        hdr = "| num_ctx | RAM | Load (s) | tok/s | Cylinder |"
-        sep = "|--------:|----:|:--------:|------:|:--------:|"
+        hdr = "| num_ctx | RAM | Load (s) | Prefill t/s | Decode t/s | Cylinder |"
+        sep = "|--------:|----:|:--------:|------------:|-----------:|:--------:|"
         if has_jpeg:
             hdr += " JPEG |"
             sep += ":----:|"
@@ -287,7 +298,7 @@ def write_summary(results, out_md, fast_mode=False):
         for ctx in levels:
             e = r["levels"][ctx]
             if "error" in e:
-                row = f"| {ctx} | — | — | — | ERROR |"
+                row = f"| {ctx} | — | — | — | — | ERROR |"
                 if has_jpeg:
                     row += " — |"
                 lines.append(row)
@@ -297,8 +308,9 @@ def write_summary(results, out_md, fast_mode=False):
             ld   = f"{e.get('load_s', '?')}s"
             cyl  = e.get("cylinder", {})
             t    = cyl.get("tps", "?")
+            pf   = cyl.get("prefill_tps", "?")
             mark = "✓" if cyl.get("correct") else ("✗" if "correct" in cyl else "?")
-            row  = f"| {ctx:>7} | {ram:>7} | {ld:>8} | {str(t):>5} | {mark:^8} |"
+            row  = f"| {ctx:>7} | {ram:>7} | {ld:>8} | {str(pf):>11} | {str(t):>10} | {mark:^8} |"
             if has_jpeg:
                 j     = e.get("jpeg", {})
                 j_str = f"{j['score']}/7" if "score" in j else ("ERR" if "error" in j else "?")
@@ -444,8 +456,8 @@ if __name__ == "__main__":
     print(f"MD   → {OUT_MD}", flush=True)
 
     # Quick inline summary
-    print("\n| Model | Role | ctx | RAM | tok/s | Cylinder | JPEG |")
-    print("|-------|------|----:|-----|------:|:--------:|:----:|")
+    print("\n| Model | Role | ctx | RAM | prefill t/s | decode t/s | Cylinder | JPEG |")
+    print("|-------|------|----:|-----|------------:|-----------:|:--------:|:----:|")
     for r in all_results:
         for ctx, e in sorted(r["levels"].items()):
             if "error" in e:
@@ -455,6 +467,6 @@ if __name__ == "__main__":
             j_str = f"{jpeg['score']}/7" if "score" in jpeg else "—"
             print(
                 f"| {r['model']} | {r['role']} | {ctx}"
-                f" | {e.get('ram_gb', '?')}GB | {cyl.get('tps', '?')}"
+                f" | {e.get('ram_gb', '?')}GB | {cyl.get('prefill_tps', '?')} | {cyl.get('tps', '?')}"
                 f" | {'✓' if cyl.get('correct') else '✗'} | {j_str} |"
             )

@@ -159,6 +159,34 @@ async def _rankings(request):
     return web.json_response(json.loads(RANKINGS_JSON.read_text()))
 
 
+async def _model_detail(request):
+    """Drill-down evidence for one model: its per-test prompt+response from the newest
+    canonical standard-suite file (skips _fast). Powers the dashboard's click-a-row modal —
+    the structured per-battery numbers come from rankings.json client-side; this serves the
+    'actual prompt + response that produced the score' for the standard suite."""
+    name = request.match_info["name"]
+    files = sorted(
+        [p for p in RESULTS.glob("benchmark_*.json")
+         if "_fast" not in p.name and p.name[10:11].isdigit()],
+        key=lambda p: p.stat().st_mtime, reverse=True)
+    fallback = None  # newest record found, even if it errored with no tests
+    for f in files:
+        try:
+            data = json.loads(f.read_text())
+        except Exception:
+            continue
+        rec = next((r for r in data if r.get("model") == name), None)
+        if rec is None:
+            continue
+        if rec.get("tests"):                       # prefer a record with actual evidence
+            return web.json_response({"source": f.name, "model": rec})
+        if fallback is None:
+            fallback = {"source": f.name, "model": rec}
+    if fallback:
+        return web.json_response(fallback)
+    return web.json_response({"error": "no standard-suite record for this model"}, status=404)
+
+
 async def _results_list(request):
     files = sorted(RESULTS.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
     return web.json_response([{"name": f.name, "mtime": int(f.stat().st_mtime),
@@ -215,6 +243,7 @@ def main():
     app.router.add_post("/api/stop", _stop)
     app.router.add_get("/api/models", _models)
     app.router.add_get("/api/rankings", _rankings)
+    app.router.add_get("/api/model/{name}", _model_detail)
     app.router.add_get("/api/results", _results_list)
     app.router.add_get("/api/results/{name}", _result_file)
     app.router.add_get("/api/master", _master)

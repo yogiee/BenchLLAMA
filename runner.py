@@ -286,9 +286,18 @@ def unload(model_name):
 
 
 def tps(data):
+    """Decode (generation) speed — tok/s spent emitting the response."""
     ec = data.get("eval_count", 0)
     ed = data.get("eval_duration", 1)
     return round(ec / (ed / 1e9), 1) if ec and ed else None
+
+def prefill_tps(data):
+    """Prefill (prompt-processing) speed — tok/s spent reading the input before the
+    first output token. Distinct from decode: a model can decode fast yet prefill slowly,
+    which dominates latency for big system prompts / RAG / long agent contexts."""
+    pc = data.get("prompt_eval_count", 0)
+    pd = data.get("prompt_eval_duration", 0)
+    return round(pc / (pd / 1e9), 1) if pc and pd else None
 
 def load_s(data):
     ld = data.get("load_duration", 0)
@@ -339,6 +348,8 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
         return result
 
     tps_samples = []
+    pf_samples  = []
+    wall_samples = []
     for test in QUALITY_TESTS:
         tid        = test["id"]
         max_tokens = test.get("max_tokens")
@@ -350,9 +361,13 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
                 max_tokens=max_tokens,
             )
             response = data.get("message", {}).get("content", "")
-            t = tps(data)
+            t  = tps(data)
+            pf = prefill_tps(data)
             if t:
                 tps_samples.append(t)
+            if pf:
+                pf_samples.append(pf)
+            wall_samples.append(wall)
 
             checker      = test.get("auto_check")
             correct      = None
@@ -365,7 +380,8 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
                 else:
                     correct = bool(result_check)
 
-            entry = {"response": response, "tps": t, "wall_s": round(wall, 1), "correct": correct}
+            entry = {"prompt": test["prompt"], "response": response,
+                     "tps": t, "prefill_tps": pf, "wall_s": round(wall, 1), "correct": correct}
             if check_detail:
                 entry["check_detail"] = check_detail
             result["tests"][tid] = entry
@@ -382,11 +398,12 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
             result["tests"][tid] = {"error": str(e)}
 
     # Tool-calling test
+    CALC_PROMPT = "Use the calculate tool to compute 17 × 23."
     print("  [calculate]", end=" ", flush=True)
     try:
         data, wall = chat(
             model_name,
-            sys_msgs + [{"role": "user", "content": "Use the calculate tool to compute 17 × 23."}],
+            sys_msgs + [{"role": "user", "content": CALC_PROMPT}],
             max_tokens=400,
             tools=[TOOL_DEF],
         )
@@ -398,20 +415,31 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
              "23" in str(tc.get("function", {}).get("arguments", "")))
             for tc in tool_calls
         ) if called else False
-        t = tps(data)
+        t  = tps(data)
+        pf = prefill_tps(data)
         if t:
             tps_samples.append(t)
+        if pf:
+            pf_samples.append(pf)
+        wall_samples.append(wall)
         result["tests"]["calculate"] = {
+            "prompt": CALC_PROMPT,
             "called": called, "correct_args": correct_args, "tool_calls": tool_calls,
-            "tps": t, "wall_s": round(wall, 1), "correct": called and correct_args,
+            "tps": t, "prefill_tps": pf, "wall_s": round(wall, 1), "correct": called and correct_args,
         }
         print(f"called={called}  correct_args={correct_args}  tps={t}  wall={wall:.1f}s", flush=True)
     except Exception as e:
         print(f"FAILED: {e}", flush=True)
         result["tests"]["calculate"] = {"error": str(e), "correct": False}
 
-    result["avg_tps"] = round(sum(tps_samples) / len(tps_samples), 1) if tps_samples else None
-    print(f"\n  ✓ avg_tps={result['avg_tps']}  ram={result['ram_gb']}GB  load={result['load_s']}s", flush=True)
+    result["avg_tps"]         = round(sum(tps_samples) / len(tps_samples), 1) if tps_samples else None
+    result["avg_prefill_tps"] = round(sum(pf_samples) / len(pf_samples), 1) if pf_samples else None
+    # Mean end-to-end wall over the fixed suite (load excluded). The workload is identical
+    # across models, so it's comparable — and it folds verbosity + prefill + decode into the
+    # single number a user actually waits for ("wall-clock is the only number that matters").
+    result["avg_wall_s"]      = round(sum(wall_samples) / len(wall_samples), 1) if wall_samples else None
+    print(f"\n  ✓ avg_tps={result['avg_tps']}  prefill_tps={result['avg_prefill_tps']}"
+          f"  avg_wall={result['avg_wall_s']}s  ram={result['ram_gb']}GB  load={result['load_s']}s", flush=True)
     print("  [unload] freeing VRAM...", flush=True)
     unload(model_name)
     time.sleep(3)
@@ -429,13 +457,17 @@ def write_summary(results, out_md: Path, fast_mode: bool = False):
         "",
         "## Performance",
         "",
-        "| Model | Role | Disk | RAM | Load (s) | Avg tok/s |",
-        "|-------|------|------|-----|----------|-----------|",
+        "Prefill = prompt-processing tok/s · Decode = generation tok/s · Wall = mean end-to-end "
+        "seconds per test over the fixed suite (load excluded — the number you actually wait for).",
+        "",
+        "| Model | Role | Disk | RAM | Load (s) | Prefill t/s | Decode t/s | Avg wall (s) |",
+        "|-------|------|------|-----|----------|------------:|-----------:|-------------:|",
     ]
     for r in results:
         lines.append(
             f"| `{r['model']}` | {r.get('role','worker')} | {r['disk_gb']}GB"
-            f" | {r.get('ram_gb','?')}GB | {r.get('load_s','?')} | {r.get('avg_tps','?')} |"
+            f" | {r.get('ram_gb','?')}GB | {r.get('load_s','?')}"
+            f" | {r.get('avg_prefill_tps','?')} | {r.get('avg_tps','?')} | {r.get('avg_wall_s','?')} |"
         )
 
     lines += [

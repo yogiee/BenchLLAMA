@@ -138,6 +138,42 @@
   td.bar { position:relative; } td.bar span { position:absolute; left:0; top:50%; transform:translateY(-50%);
             height:62%; background:var(--accent-soft); border-radius:3px; z-index:0; }
   td.bar i { position:relative; font-style:normal; }
+  table.rank tr[data-model] { cursor:pointer; }
+  table.rank tr[data-model]:hover td { background:var(--accent-soft); }
+  table.rank tr[data-model] td.nm { color:var(--text); }
+  table.rank tr[data-model]:hover td.nm { color:var(--accent); }
+  /* ── drill-down modal (click a ranking row → full per-battery profile + evidence) ── */
+  .modal { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+           background:rgba(0,0,0,.55); padding:24px; }
+  .modal.hidden { display:none !important; }
+  .modal-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    max-width:880px; width:100%; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.45); }
+  .modal-head { display:flex; align-items:center; gap:10px; padding:13px 18px;
+    border-bottom:1px solid var(--border); background:var(--panel); }
+  .modal-head .mh-name { font-family:var(--mono,"Geist Mono",ui-monospace,monospace); font-weight:600; font-size:15px; }
+  .modal-head .spacer { flex:1; }
+  .modal-close { background:none; border:1px solid var(--border); color:var(--dim); cursor:pointer;
+    border-radius:6px; padding:2px 10px; font-size:14px; }
+  .modal-close:hover { color:var(--accent); border-color:var(--accent); }
+  .modal-body { padding:14px 18px; overflow-y:auto; }
+  .msec { margin:0 0 16px; }
+  .msec h4 { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--dim); margin:0 0 8px; }
+  .mgrid { display:flex; flex-wrap:wrap; gap:6px 8px; }
+  .mstat { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:4px 9px;
+    font-size:12px; font-family:var(--mono,"Geist Mono",ui-monospace,monospace); }
+  .mstat .k { color:var(--dim); margin-right:6px; } .mstat b { color:var(--accent); font-weight:600; }
+  .mtest { border:1px solid var(--border); border-radius:8px; margin:7px 0; overflow:hidden; }
+  .mtest-h { display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--panel); cursor:pointer; }
+  .mtest-h .tid { font-family:var(--mono,"Geist Mono",ui-monospace,monospace); font-weight:600; font-size:12.5px; }
+  .mtest-h .spacer { flex:1; }
+  .mtest-h .mark.ok { color:var(--green); } .mtest-h .mark.no { color:var(--red); } .mtest-h .mark { color:var(--dim); }
+  .mtest-body { padding:4px 10px 10px; display:none; }
+  .mtest.open .mtest-body { display:block; }
+  .mtest .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin:8px 0 3px; }
+  .mtest .txt { white-space:pre-wrap; word-break:break-word; font-size:12.5px;
+    font-family:var(--mono,"Geist Mono",ui-monospace,monospace); background:var(--bg);
+    border:1px solid var(--border); border-radius:6px; padding:7px 9px; max-height:320px; overflow:auto; }
   #view-files { display:flex; }
   #filesList { width:300px; overflow-y:auto; border-right:1px solid var(--border); padding:10px; }
   .fitem { padding:5px 8px; border-radius:5px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; font-size:12.5px; }
@@ -237,6 +273,7 @@
             <option value="aptitude">Aptitude (Single Battery)</option>
             <option value="vision">Vision</option>
             <option value="embedding">Embedding</option>
+            <option value="longctx">Long-Context (G)</option>
             <option value="update">Update Registry</option>
           </select>
         </label>
@@ -287,6 +324,22 @@
       <div id="fileView"><span class="fv-empty">select a result file…</span></div>
     </section>
   </main>
+
+  <!-- drill-down modal: click any rankings row → full per-battery profile + standard-suite evidence -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <span class="mh-name" id="modalName"></span>
+        <span id="modalBadges" class="cbadges" style="margin:0"></span>
+        <span class="spacer"></span>
+        <button class="modal-close" id="modalClose" title="close (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="modalProfile"></div>
+        <div class="msec"><h4>Standard-suite evidence — prompt &amp; response</h4><div id="modalEvidence"></div></div>
+      </div>
+    </div>
+  </div>
 
 <script>
 const ICON = {pending:"○", running:"●", done:"✓", error:"✗", skip:"↷"};
@@ -475,7 +528,7 @@ function table(title, names, by, cols){
   let h = `<h3>${esc(title)} <span class="meta">(${rows.length})</span></h3><table class="rank"><thead><tr><th>#</th><th>model</th>`;
   cols.forEach(c=> h+=`<th>${esc(c.h)}</th>`); h+="</tr></thead><tbody>";
   rows.forEach((r,i)=>{
-    h += `<tr><td class="rk">${i+1}</td><td class="nm">${esc(r.name)}</td>`;
+    h += `<tr data-model="${esc(r.name)}"><td class="rk">${i+1}</td><td class="nm">${esc(r.name)}</td>`;
     cols.forEach((c,ci)=>{
       const v=c.get(r), disp=c.fmt?c.fmt(v):(v==null?"—":v);
       h += (c.bar && v!=null)
@@ -499,6 +552,7 @@ async function loadRankings(){
   const r=await fetch("/api/rankings");
   if(!r.ok){ box.innerHTML="<p class='meta'>No rankings yet — run a benchmark, then export.py.</p>"; return; }
   const d=await r.json(), by={}; d.models.forEach(m=>by[m.name]=m);
+  RANK_BY = by;                                   // drill-down modal reads from here
   const rk=d.rankings||{};
   const gen=d.generated?new Date(d.generated).toLocaleString():"";
   const std=r=>r.standard||{};
@@ -515,10 +569,22 @@ async function loadRankings(){
     {h:"reason",get:r=>std(r).reasoning,fmt:v=>v==null?"—":v+"/4"},
     {h:"instr",get:r=>std(r).instr,fmt:v=>v==null?"—":v+"/2"},
     {h:"tool",get:r=>std(r).tool,fmt:v=>v?"✓":"✗"},
-    {h:"t/s",get:r=>r.tps,fmt:f0,bar:true},{h:"GB",get:r=>r.disk_gb,fmt:f2}]);
-  html+=table("Routers", rk.routers, by, [{h:"t/s",get:r=>r.tps,fmt:f0,bar:true},{h:"GB",get:r=>r.disk_gb,fmt:f2}]);
+    {h:"prefill",get:r=>r.prefill_tps,fmt:f0},
+    {h:"decode",get:r=>r.tps,fmt:f0,bar:true},
+    {h:"wall s",get:r=>r.wall_s,fmt:f2},
+    {h:"GB",get:r=>r.disk_gb,fmt:f2}]);
+  html+=table("Routers", rk.routers, by, [
+    {h:"prefill",get:r=>r.prefill_tps,fmt:f0},
+    {h:"decode",get:r=>r.tps,fmt:f0,bar:true},
+    {h:"wall s",get:r=>r.wall_s,fmt:f2},
+    {h:"GB",get:r=>r.disk_gb,fmt:f2}]);
   html+=table("Vision", rk.vision, by, [{h:"comp",get:r=>(r.vision||{}).composite,fmt:f3,bar:true},{h:"t/s",get:r=>r.tps,fmt:f0},{h:"GB",get:r=>r.disk_gb,fmt:f2}]);
   html+=table("Embedding — long-doc", rk.embedding_long, by, [{h:"long",get:r=>(r.embedding||{}).composite_long,fmt:f3,bar:true},{h:"short",get:r=>(r.embedding||{}).composite,fmt:f3},{h:"GB",get:r=>r.disk_gb,fmt:f2}]);
+  html+=table("Long-context (Battery G)", rk.long_context, by, [
+    {h:"clean depth",get:r=>(r.long_context||{}).clean_depth,fmt:f0,bar:true},
+    {h:"comp",get:r=>(r.long_context||{}).composite,fmt:f3},
+    {h:"collapse",get:r=>(r.long_context||{}).prefill_collapse,fmt:f2},
+    {h:"GB",get:r=>r.disk_gb,fmt:f2}]);
   box.innerHTML=html;
   box.querySelectorAll("table.rank").forEach(sortable);
 }
@@ -592,6 +658,98 @@ function mdToHtml(src){
   }
   return `<div class="md-body">${out.join("\n")}</div>`;
 }
+
+// ── drill-down modal (click a rankings row → per-battery profile + evidence) ──
+let RANK_BY = {};
+function mstats(pairs){
+  const cells = pairs.filter(p=>p[1]!=null && p[1]!=="" && p[1]!=="—")
+    .map(p=>`<span class="mstat"><span class="k">${esc(p[0])}</span><b>${esc(String(p[1]))}</b></span>`).join("");
+  return cells ? `<div class="mgrid">${cells}</div>` : `<p class="meta">not measured</p>`;
+}
+function buildProfile(m){
+  let h = `<div class="msec"><h4>Speed &amp; footprint</h4>${mstats([
+    ["prefill t/s", m.prefill_tps!=null?Math.round(m.prefill_tps):null],
+    ["decode t/s",  m.tps!=null?Math.round(m.tps):null],
+    ["wall s",      m.wall_s!=null?Number(m.wall_s).toFixed(2):null],
+    ["RAM GB", m.ram_gb], ["disk GB", m.disk_gb],
+    ...(m.cloud?[["cloud","☁ quality-only"]]:[]),
+  ])}</div>`;
+  const s=m.standard;
+  if(s) h += `<div class="msec"><h4>Standard suite</h4>${mstats([
+    ["reasoning", s.reasoning!=null?s.reasoning+"/4":null],
+    ["instr", s.instr!=null?s.instr+"/2":null],
+    ["tool", s.tool==null?null:(s.tool?"✓":"✗")],
+    ["jpeg", s.jpeg?Object.values(s.jpeg).filter(Boolean).length+"/7":null],
+  ])}</div>`;
+  const c=m.coding;
+  if(c) h += `<div class="msec"><h4>Coding (Battery E)</h4>${mstats([
+    ["composite", f3(c.composite)],["σ", f3(c.composite_stdev)],["Q/GB", f3(c.quality_per_gb)],
+    ["coder", c.coder_eligible?"✓":"·"],["runs", c.runs],
+    ...Object.entries(c.category_means||{}).map(([k,v])=>[k, f2(v)]),
+  ])}</div>`;
+  const cf=m.consistency;
+  if(cf) h += `<div class="msec"><h4>Consistency (Battery F)</h4>${mstats([
+    ["composite", f3(cf.composite)],["σ", f3(cf.composite_stdev)],
+    ...Object.entries(cf.dims||{}).map(([k,v])=>[k, f2(v)]),
+  ])}</div>`;
+  const pe=m.prompt_elasticity;
+  if(pe) h += `<div class="msec"><h4>Prompt elasticity (F-elastic)</h4>${mstats([
+    ["verdict", pe.verdict],["prompt σ", f3(pe.prompt_sigma)],
+    ["instr adher", f2(pe.instruction_adherence)],["len adher", f2(pe.length_adherence)],
+    ["stable", pe.verdict_stable==null?null:(pe.verdict_stable?"✓":"~")],
+  ])}</div>`;
+  const v=m.vision;
+  if(v) h += `<div class="msec"><h4>Vision (Battery V)</h4>${mstats([
+    ["composite", f3(v.composite)],
+    ...Object.entries(v.dimensions||{}).map(([k,val])=>[k, typeof val==="number"?f2(val):val]),
+  ])}</div>`;
+  const e=m.embedding;
+  if(e) h += `<div class="msec"><h4>Embedding (Battery EMB)</h4>${mstats([
+    ["short", f3(e.composite)],["long", f3(e.composite_long)],["Q/GB", f3(e.quality_per_gb)],
+  ])}</div>`;
+  const lc=m.long_context;
+  if(lc) h += `<div class="msec"><h4>Long-context (Battery G)</h4>${mstats([
+    ["clean depth", lc.clean_depth],["composite", f3(lc.composite)],
+    ["prefill collapse", f2(lc.prefill_collapse)],
+    ...Object.entries(lc.position_recall||{}).map(([k,v])=>["recall "+k, f2(v)]),
+  ])}</div>`;
+  return h;
+}
+async function openModal(name){
+  const m = RANK_BY[name]; if(!m) return;
+  const ext = (m.extended_roles||[]).map(r=>r.toUpperCase()).join(", ");
+  $("#modalName").textContent = name;
+  $("#modalBadges").innerHTML =
+    (m.cloud?`<span class="cbadge cloud">☁ cloud</span>`:"") +
+    (m.role?`<span class="cbadge">${esc(m.role.toUpperCase())}${ext?": "+esc(ext):""}</span>`:"");
+  $("#modalProfile").innerHTML = buildProfile(m);
+  $("#modalEvidence").innerHTML = `<p class="meta">loading standard-suite responses…</p>`;
+  $("#modal").classList.remove("hidden");
+  try {
+    const r = await fetch("/api/model/"+encodeURIComponent(name));
+    if(!r.ok){ $("#modalEvidence").innerHTML = `<p class="meta">No standard-suite responses on file — run the standard suite to populate.</p>`; return; }
+    const d = await r.json(), tests = (d.model||{}).tests||{}, order = Object.keys(tests);
+    if(!order.length){ $("#modalEvidence").innerHTML = `<p class="meta">No per-test records.</p>`; return; }
+    $("#modalEvidence").innerHTML = `<p class="meta">from ${esc(d.source||"")} · tap a test to expand</p>` + order.map(tid=>{
+      const t = tests[tid];
+      const mark = t.correct===true?`<span class="mark ok">✓</span>`
+                 : t.correct===false?`<span class="mark no">✗</span>`:`<span class="mark">·</span>`;
+      const meta = [t.prefill_tps!=null?`prefill ${Math.round(t.prefill_tps)}`:null,
+                    t.tps!=null?`decode ${Math.round(t.tps)}`:null,
+                    t.wall_s!=null?`${t.wall_s}s`:null].filter(Boolean).join(" · ");
+      const prompt = t.prompt!=null?`<div class="lbl">prompt</div><div class="txt">${esc(t.prompt)}</div>`:"";
+      const body = t.response!=null?`<div class="lbl">response</div><div class="txt">${esc(t.response)}</div>`
+                 : (t.error?`<div class="lbl">error</div><div class="txt">${esc(t.error)}</div>`:`<p class="meta">no response stored (re-run the standard suite to capture)</p>`);
+      return `<div class="mtest"><div class="mtest-h"><span class="tid">${esc(tid)}</span>${mark}<span class="spacer"></span><span class="meta">${esc(meta)}</span></div><div class="mtest-body">${prompt}${body}</div></div>`;
+    }).join("");
+  } catch(err){ $("#modalEvidence").innerHTML = `<p class="meta">⚠ ${esc(String(err))}</p>`; }
+}
+function closeModal(){ $("#modal").classList.add("hidden"); }
+$("#modalClose").onclick = closeModal;
+$("#modal").onclick = e => { if(e.target.id==="modal") closeModal(); };
+document.addEventListener("keydown", e => { if(e.key==="Escape") closeModal(); });
+$("#rankings").addEventListener("click", e => { const tr=e.target.closest("tr[data-model]"); if(tr) openModal(tr.dataset.model); });
+$("#modalEvidence").addEventListener("click", e => { const hd=e.target.closest(".mtest-h"); if(hd) hd.parentElement.classList.toggle("open"); });
 
 // ── websocket (auto-reconnect) ────────────────────────────────────────────────
 function connect(){
