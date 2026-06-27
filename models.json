@@ -28,32 +28,6 @@
     ]
   },
   {
-    "name": "qwen3-coder-next:cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "cloud": true,
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "qwen3-coder:480b-cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "cloud": true,
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
     "name": "gemma4:12b-mlx",
     "disk_gb": 6.8,
     "role": "worker",
