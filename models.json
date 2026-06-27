@@ -2,7 +2,7 @@
   {
     "name": "gpt-oss:120b-cloud",
     "disk_gb": 0.0,
-    "role": "router",
+    "role": "worker",
     "cloud": true,
     "capabilities": [
       "completion",
@@ -16,7 +16,7 @@
   {
     "name": "glm-4.7:cloud",
     "disk_gb": 0.0,
-    "role": "router",
+    "role": "worker",
     "cloud": true,
     "capabilities": [
       "completion",
@@ -30,7 +30,7 @@
   {
     "name": "qwen3-coder-next:cloud",
     "disk_gb": 0.0,
-    "role": "router",
+    "role": "worker",
     "cloud": true,
     "capabilities": [
       "completion",
@@ -43,7 +43,7 @@
   {
     "name": "qwen3-coder:480b-cloud",
     "disk_gb": 0.0,
-    "role": "router",
+    "role": "worker",
     "cloud": true,
     "capabilities": [
       "completion",
@@ -83,7 +83,7 @@
   {
     "name": "gemma4:31b-cloud",
     "disk_gb": 0.0,
-    "role": "router",
+    "role": "worker",
     "capabilities": [
       "completion",
       "thinking",
