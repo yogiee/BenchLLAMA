@@ -151,7 +151,9 @@ _CODING_PROBLEMS_PATH = REPO / "suites" / "coding" / "problems.json"
 # so adding E4/E6/E8 later needs no rebalance). E2/E5 carry the discriminating
 # signal, so they weigh heaviest; E3 is the multi-language tier (JS/SQL/PHP);
 # E9 is markup quality (HTML/CSS) — a core local_code generation workload.
-E_WEIGHTS = {"E1": 0.12, "E2": 0.22, "E3": 0.18, "E5": 0.18, "E7": 0.15, "E9": 0.15}
+E_WEIGHTS = {"E1": 0.12, "E2": 0.22, "E3": 0.18, "E5": 0.18, "E7": 0.15, "E9": 0.15,
+             "E-hard": 0.18}   # two-band: E-hard is the top-tier RANKING discriminator (breaks E-core
+                               # saturation). Coder eligibility still gates on E-core only (see average_e_runs).
 
 # `coder` overlay thresholds (calibrated from the 2026-06-14 full-fleet run; still
 # subject to OllamaMCP validation). HYSTERESIS: a model EARNS `coder` at composite
