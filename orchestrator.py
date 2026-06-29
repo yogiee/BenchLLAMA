@@ -84,6 +84,21 @@ def _cmd(*parts) -> list[str]:
 
 # ── Phase builder ─────────────────────────────────────────────────────────────
 
+# Human-readable progress-step labels for the lettered batteries — the progress tree mirrors the
+# suite-dropdown names (the modality batteries already read "Name (Battery X)"). The 3-run-avg note
+# (_AVG3) is appended for the multipass batteries (E/F/F-elastic).
+BATTERY_LABELS = {
+    "A": "Router (Battery A)",
+    "B": "Worker Chat (Battery B)",
+    "C": "Research (Battery C)",
+    "D": "Tool-Heavy (Battery D)",
+    "E": "Coding (Battery E)",
+    "F": "Consistency (Battery F)",
+    "F-ELASTIC": "Prompt-Elasticity (Battery F-elastic)",
+}
+_AVG3 = " · 3-run avg"
+
+
 def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
     """Returns [(label, argv, role_filter), ...]"""
     apt = REPO / "aptitude.py"
@@ -103,7 +118,7 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         if bat in AVG:
             drop = ("--battery", "E", "e", "F", "f", "F-elastic", "f-elastic", "F-ELASTIC")
             clean = [a for a in x if a not in drop]
-            return [(f"Battery {bat} (3-run avg)", _cmd(REPO/"average_e_runs.py", *AVG[bat], *clean), "cap:completion")]
+            return [(f"{BATTERY_LABELS.get(bat, 'Battery ' + bat)}{_AVG3}", _cmd(REPO/"average_e_runs.py", *AVG[bat], *clean), "cap:completion")]
         return [("Aptitude", _cmd(apt, *x), role_in_extra)]
     if cmd == "update":
         return [("Update Registry", _cmd(REPO/"update_registry.py", *x), None)]
@@ -115,23 +130,23 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x), "cap:completion")]
     if cmd == "batteries":
         return [
-            ("Battery A", _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
-            ("Battery B", _cmd(apt, "--battery", "B", "--role", "worker", *x),                    "worker"),
-            ("Battery C", _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x),  "worker"),
-            ("Battery D", _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x),  "worker"),
-            ("Battery E (3-run avg)", _cmd(REPO/"average_e_runs.py", *x),                         "cap:completion"),
-            ("Battery F (3-run avg)", _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),       "cap:completion"),
+            (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
+            (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x),                    "worker"),
+            (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x),  "worker"),
+            (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x),  "worker"),
+            (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x),                             "cap:completion"),
+            (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),           "cap:completion"),
         ]
     if cmd == "all":
         return [
             ("Standard Suite", _cmd(REPO/"runner.py", *x),                                              None),
             ("ctx Ladder",     _cmd(REPO/"ctx_ladder.py", *x),                                          None),
-            ("Battery A",      _cmd(apt, "--battery", "A", "--role", "router", *x),              "router"),
-            ("Battery B",      _cmd(apt, "--battery", "B", "--role", "worker", *x),              "worker"),
-            ("Battery C",      _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x), "worker"),
-            ("Battery D",      _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x), "worker"),
-            ("Battery E (3-run avg)", _cmd(REPO/"average_e_runs.py", *x),                        "cap:completion"),
-            ("Battery F (3-run avg)", _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),      "cap:completion"),
+            (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),              "router"),
+            (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x),              "worker"),
+            (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x), "worker"),
+            (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x), "worker"),
+            (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x),                        "cap:completion"),
+            (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),      "cap:completion"),
             ("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x),                            "cap:completion"),
             ("Vision (Battery V)",      _cmd(REPO/"vision.py", *x),                              "cap:vision"),
             ("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x),                           "cap:embedding"),
