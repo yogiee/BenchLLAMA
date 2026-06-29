@@ -1,16 +1,111 @@
 [
   {
-    "name": "ornith:9b-bf16",
-    "disk_gb": 17.9,
-    "role": "worker",
+    "name": "granite-embedding:30m",
+    "disk_gb": 0.1,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ],
+    "added_idx": 16
+  },
+  {
+    "name": "embeddinggemma:300m",
+    "disk_gb": 0.6,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ],
+    "added_idx": 15
+  },
+  {
+    "name": "minicpm-v4.6:1b",
+    "disk_gb": 1.6,
+    "role": "router",
     "capabilities": [
       "completion",
       "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [],
+    "added_idx": 17
+  },
+  {
+    "name": "llama3.2:3b",
+    "disk_gb": 2.0,
+    "role": "router",
+    "capabilities": [
+      "completion",
       "tools"
     ],
     "extended_roles": [
       "coder"
-    ]
+    ],
+    "added_idx": 9
+  },
+  {
+    "name": "granite4.1:3b",
+    "disk_gb": 2.1,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 10
+  },
+  {
+    "name": "qwen2.5vl:3b",
+    "disk_gb": 3.2,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 14
+  },
+  {
+    "name": "vincentg/llama3.2-fluxassistant:uncensored",
+    "disk_gb": 3.4,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [],
+    "added_idx": 0
+  },
+  {
+    "name": "qwen3.5:4b-mlx",
+    "disk_gb": 4.0,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 13
+  },
+  {
+    "name": "s80982708/ZINI-LOCAL:latest",
+    "disk_gb": 4.7,
+    "role": "worker",
+    "capabilities": [
+      "completion"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 18
   },
   {
     "name": "ornith:9b",
@@ -23,48 +118,8 @@
     ],
     "extended_roles": [
       "coder"
-    ]
-  },
-  {
-    "name": "gemma4:26b-mlx",
-    "disk_gb": 16.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
     ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "gpt-oss:120b-cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "cloud": true,
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "glm-4.7:cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "cloud": true,
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
+    "added_idx": 2
   },
   {
     "name": "gemma4:12b-mlx",
@@ -77,60 +132,8 @@
     ],
     "extended_roles": [
       "coder"
-    ]
-  },
-  {
-    "name": "gemma4:26b",
-    "disk_gb": 18.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
     ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "gemma4:31b-cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "cloud": true
-  },
-  {
-    "name": "llama3.2:3b",
-    "disk_gb": 2.0,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "granite4.1:3b",
-    "disk_gb": 2.1,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
+    "added_idx": 6
   },
   {
     "name": "gemma4:12b",
@@ -145,7 +148,8 @@
     ],
     "extended_roles": [
       "coder"
-    ]
+    ],
+    "added_idx": 11
   },
   {
     "name": "gemma4:latest",
@@ -160,11 +164,40 @@
     ],
     "extended_roles": [
       "coder"
-    ]
+    ],
+    "added_idx": 12
   },
   {
-    "name": "qwen3.5:4b-mlx",
-    "disk_gb": 4.0,
+    "name": "gemma4:26b-mlx",
+    "disk_gb": 16.7,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 3
+  },
+  {
+    "name": "ornith:9b-bf16",
+    "disk_gb": 17.9,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 1
+  },
+  {
+    "name": "gemma4:26b",
+    "disk_gb": 18.0,
     "role": "worker",
     "capabilities": [
       "completion",
@@ -174,57 +207,53 @@
     ],
     "extended_roles": [
       "coder"
-    ]
+    ],
+    "added_idx": 7
   },
   {
-    "name": "qwen2.5vl:3b",
-    "disk_gb": 3.2,
+    "name": "gpt-oss:120b-cloud",
+    "disk_gb": 0.0,
     "role": "worker",
+    "cloud": true,
     "capabilities": [
       "completion",
-      "vision"
+      "thinking",
+      "tools"
     ],
     "extended_roles": [
       "coder"
-    ]
+    ],
+    "added_idx": 4
   },
   {
-    "name": "embeddinggemma:300m",
-    "disk_gb": 0.6,
-    "role": "utility",
+    "name": "glm-4.7:cloud",
+    "disk_gb": 0.0,
+    "role": "worker",
+    "cloud": true,
     "capabilities": [
-      "embedding"
-    ]
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 5
   },
   {
-    "name": "granite-embedding:30m",
-    "disk_gb": 0.1,
-    "role": "utility",
-    "capabilities": [
-      "embedding"
-    ]
-  },
-  {
-    "name": "minicpm-v4.6:1b",
-    "disk_gb": 1.6,
-    "role": "router",
+    "name": "gemma4:31b-cloud",
+    "disk_gb": 0.0,
+    "role": "worker",
     "capabilities": [
       "completion",
       "thinking",
       "tools",
       "vision"
     ],
-    "extended_roles": []
-  },
-  {
-    "name": "s80982708/ZINI-LOCAL:latest",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
     "extended_roles": [
       "coder"
-    ]
+    ],
+    "cloud": true,
+    "added_idx": 8
   }
 ]
