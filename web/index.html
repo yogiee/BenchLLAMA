@@ -93,11 +93,15 @@
   .radio.disabled { opacity:.45; cursor:default; }
   .radio-sep { border-top:1px solid var(--border); margin:5px 0 3px; }
   .soon { font-size:10px; color:var(--dim); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
-  .mh-row { display:flex; justify-content:space-between; align-items:baseline; }
+  .mh-row { display:flex; justify-content:space-between; align-items:baseline; min-height:1.4em; margin-bottom:10px; }
   .mh-row h2 { margin:0; }
-  .mf-row { display:flex; align-items:center; gap:6px; margin:7px 0; }
+  .mf-row { display:flex; align-items:center; gap:6px; margin:0 0 7px; }
+  .mf-row select, .mf-row .mf-clear {
+    background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:5px; padding:5px 9px; font:inherit; font-size:12px; cursor:pointer; }
   .mf-row select { flex:1; min-width:0; }
-  .mf-row .mf-clear { flex:none; }
+  .mf-row .mf-clear { flex:none; color:var(--dim); }
+  .mf-row .mf-clear:hover { color:var(--text); border-color:var(--accent); }
   .ctags { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
   .ctag { font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); background:var(--bg);
           border:1px solid var(--border); border-radius:3px; padding:1px 5px; }
@@ -123,14 +127,7 @@
   }
   .checks { display:flex; gap:16px; }
   .checks label { flex-direction:row !important; align-items:center; gap:5px; color:var(--text); font-size:13px; }
-  /* ── model list header tools (role filter + clear); cards ARE the picker ── */
-  #modelsPanel h2 { display:flex; align-items:center; gap:8px; }
-  .mf-tools { margin-left:auto; display:flex; align-items:center; gap:6px; }
-  #roleFilter { background:var(--bg); color:var(--text); border:1px solid var(--border);
-    border-radius:5px; padding:1px 6px; font:inherit; font-size:11px; text-transform:none; letter-spacing:0; cursor:pointer; }
-  .mf-clear { background:none; border:1px solid var(--border); color:var(--dim);
-    border-radius:5px; padding:1px 8px; font:inherit; font-size:11px; cursor:pointer; }
-  .mf-clear:hover { color:var(--text); border-color:var(--accent); }
+  /* model-list header tools (sort + role filter + clear) are styled by .mf-row above */
   #modelsHint { padding:2px 0 4px; }
   .btn { background:var(--accent); color:#241606; border:none; border-radius:7px; padding:9px 14px;
          font:inherit; font-weight:600; cursor:pointer; }
@@ -275,8 +272,8 @@
   <main>
     <section id="view-monitor" class="view">
     <div class="left">
+      <div class="mh-row"><h2>NEW RUN</h2></div>
       <form id="selector">
-        <h2>New run</h2>
         <div id="cmdRadios" class="radios" role="radiogroup" aria-label="Suite">
           <label class="radio"><input type="radio" name="cmd" value="all" checked> ALL (full pipeline)</label>
           <label class="radio"><input type="radio" name="cmd" value="standard"> Standard Suite</label>
@@ -290,17 +287,15 @@
           <div class="radio-sep"></div>
           <label class="radio disabled" title="Image-gen battery — not built yet"><input type="radio" name="cmd" value="imagegen" disabled> Image Gen <span class="soon">soon</span></label>
         </div>
-        <label id="batWrap" class="hidden">Battery
-          <select id="battery">
-            <option value="B">B — worker chat</option>
-            <option value="A">A — router</option>
-            <option value="C">C — research</option>
-            <option value="D">D — tool-heavy</option>
-            <option value="E">E — coding (3-run avg)</option>
-            <option value="F">F — consistency (3-run avg)</option>
-            <option value="F-elastic">F-elastic — prompt-σ (opt-in)</option>
-          </select>
-        </label>
+        <div id="batWrap" class="hidden radios" role="radiogroup" aria-label="Battery">
+          <label class="radio"><input type="radio" name="battery" value="B" checked> B — worker chat</label>
+          <label class="radio"><input type="radio" name="battery" value="A"> A — router</label>
+          <label class="radio"><input type="radio" name="battery" value="C"> C — research</label>
+          <label class="radio"><input type="radio" name="battery" value="D"> D — tool-heavy</label>
+          <label class="radio"><input type="radio" name="battery" value="E"> E — coding (3-run avg)</label>
+          <label class="radio"><input type="radio" name="battery" value="F"> F — consistency (3-run avg)</label>
+          <label class="radio"><input type="radio" name="battery" value="F-elastic"> F-elastic — prompt-σ (opt-in)</label>
+        </div>
         <div class="checks">
           <label><input type="checkbox" id="fast"> fast</label>
           <label><input type="checkbox" id="force"> force</label>
@@ -528,7 +523,8 @@ $("#mfClear").onclick = () => { SELECTED.clear(); if(!RUN_ACTIVE) renderIdle(); 
 $("#selector").onsubmit = async e => {
   e.preventDefault();
   const body = {
-    cmd: document.querySelector('input[name=cmd]:checked')?.value || 'all', battery: $("#battery").value, sort: SORT_BY,
+    cmd: document.querySelector('input[name=cmd]:checked')?.value || 'all',
+    battery: document.querySelector('input[name=battery]:checked')?.value || 'B', sort: SORT_BY,
     fast: $("#fast").checked, force: $("#force").checked, models: [...SELECTED].join(" "),
   };
   $("#startMsg").textContent = "starting…";
