@@ -95,6 +95,8 @@
   .soon { font-size:10px; color:var(--dim); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
   .mh-row { display:flex; justify-content:space-between; align-items:baseline; min-height:1.4em; margin-bottom:10px; }
   .mh-row h2 { margin:0; }
+  .mh-row .count { margin-top:0; }   /* the global .count margin-top would drag the header baseline down */
+  #batWrap { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px; margin:2px 0 4px 8px; }
   .mf-row { display:flex; align-items:center; gap:6px; margin:0 0 7px; }
   .mf-row select, .mf-row .mf-clear {
     background:var(--bg); color:var(--text); border:1px solid var(--border);
@@ -280,6 +282,15 @@
           <label class="radio"><input type="radio" name="cmd" value="ladder"> Ladder (CTX)</label>
           <label class="radio"><input type="radio" name="cmd" value="batteries"> Aptitude (All Batteries)</label>
           <label class="radio"><input type="radio" name="cmd" value="aptitude"> Aptitude (Single Battery)</label>
+          <div id="batWrap" class="hidden radios" role="radiogroup" aria-label="Battery">
+            <label class="radio"><input type="radio" name="battery" value="B" checked> B — worker chat</label>
+            <label class="radio"><input type="radio" name="battery" value="A"> A — router</label>
+            <label class="radio"><input type="radio" name="battery" value="C"> C — research</label>
+            <label class="radio"><input type="radio" name="battery" value="D"> D — tool-heavy</label>
+            <label class="radio"><input type="radio" name="battery" value="E"> E — coding (3-run avg)</label>
+            <label class="radio"><input type="radio" name="battery" value="F"> F — consistency (3-run avg)</label>
+            <label class="radio"><input type="radio" name="battery" value="F-elastic"> F-elastic — prompt-σ (opt-in)</label>
+          </div>
           <label class="radio"><input type="radio" name="cmd" value="vision"> Vision</label>
           <label class="radio"><input type="radio" name="cmd" value="embedding"> Embedding</label>
           <label class="radio"><input type="radio" name="cmd" value="longctx"> Long-Context (G)</label>
@@ -287,15 +298,7 @@
           <div class="radio-sep"></div>
           <label class="radio disabled" title="Image-gen battery — not built yet"><input type="radio" name="cmd" value="imagegen" disabled> Image Gen <span class="soon">soon</span></label>
         </div>
-        <div id="batWrap" class="hidden radios" role="radiogroup" aria-label="Battery">
-          <label class="radio"><input type="radio" name="battery" value="B" checked> B — worker chat</label>
-          <label class="radio"><input type="radio" name="battery" value="A"> A — router</label>
-          <label class="radio"><input type="radio" name="battery" value="C"> C — research</label>
-          <label class="radio"><input type="radio" name="battery" value="D"> D — tool-heavy</label>
-          <label class="radio"><input type="radio" name="battery" value="E"> E — coding (3-run avg)</label>
-          <label class="radio"><input type="radio" name="battery" value="F"> F — consistency (3-run avg)</label>
-          <label class="radio"><input type="radio" name="battery" value="F-elastic"> F-elastic — prompt-σ (opt-in)</label>
-        </div>
+        <div class="radio-sep"></div>
         <div class="checks">
           <label><input type="checkbox" id="fast"> fast</label>
           <label><input type="checkbox" id="force"> force</label>
@@ -495,7 +498,7 @@ function setView({idle, finished}){
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
-$("#cmdRadios").onchange = e => show("#batWrap", e.target.value === "aptitude");
+$("#cmdRadios").onchange = e => { if(e.target.name === "cmd") show("#batWrap", e.target.value === "aptitude"); };
 
 // cards double as the picker (only when not running) ──────────────────────────
 $("#models").onclick = e => {
