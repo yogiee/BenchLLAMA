@@ -328,6 +328,10 @@ if __name__ == "__main__":
             r = {"model": model_name, "disk_gb": disk_gb, "errors": [str(e)], "tests": {}}
         all_results = [x for x in all_results if x["model"] != model_name] + [r]
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
+        try:
+            import results_db; results_db.record_all("vision", all_results)
+        except Exception:
+            pass
         unload(model_name)
         time.sleep(3)
 

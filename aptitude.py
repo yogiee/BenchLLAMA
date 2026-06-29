@@ -2323,6 +2323,12 @@ if __name__ == "__main__":
             r = {"model": model_name, "disk_gb": disk_gb, "error": str(e), "tests": {}}
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
+        try:
+            import results_db
+            if battery_arg in ("A", "B", "C", "D"):   # E/F/F-elastic canonical handled by average_e_runs
+                results_db.record_all(battery_arg, all_results)
+        except Exception:
+            pass
         print(f"  ✓ {model_name} done — JSON updated", flush=True)
         unload(model_name)
         time.sleep(3)

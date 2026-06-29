@@ -693,6 +693,10 @@ if __name__ == "__main__":
         _maybe_promote(model_name, _role_gate(r, model_name in cloud_names), registry_path)
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
+        try:
+            import results_db; results_db.record_all("standard", all_results)
+        except Exception:
+            pass
 
     _ws("", "done")
     write_summary(all_results, OUT_MD, fast_mode)

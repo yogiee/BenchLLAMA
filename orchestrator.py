@@ -12,6 +12,7 @@ Run directly for the plain-text console (the headless / quick-glance / SSH path)
 
 import asyncio
 import json
+import os
 import re
 import sys
 import time
@@ -194,10 +195,19 @@ class Orchestrator:
                 pass
 
     async def run(self) -> None:
+        # one run_id for the WHOLE pipeline — stamped at start, NOT the calendar date, so a run
+        # that crosses midnight stays one run (the storage-migration root fix). Threaded to every
+        # phase subprocess via BENCH_RUN_ID; results_db keys per-model UPSERTs on it.
+        self.run_id = time.strftime("%Y-%m-%dT%H-%M-%S")
         run_log = REPO / "results" / f"run_{time.strftime('%Y-%m-%d_%H-%M')}.log"
         run_log.parent.mkdir(exist_ok=True)
         self._run_log_fh = run_log.open("w")
         self._emit(f"Run log → {run_log}")
+        try:
+            import results_db
+            results_db.start_run(self.run_id, flags={"orchestrated": True})
+        except Exception:
+            pass
         self.state.models = load_all_models()
         self._on_event()
 
@@ -272,7 +282,8 @@ class Orchestrator:
         try:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT, cwd=str(REPO))
+                stderr=asyncio.subprocess.STDOUT, cwd=str(REPO),
+                env={**os.environ, "BENCH_RUN_ID": getattr(self, "run_id", "")})
             self._proc = proc
             async for raw in proc.stdout:
                 line = raw.decode(errors="replace").rstrip()

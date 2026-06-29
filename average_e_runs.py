@@ -277,6 +277,11 @@ def main():
     d = date.today().isoformat()
     canon = RESULTS / f"{PREFIX}_{d}.json"
     canon.write_text(json.dumps(rows, indent=2))
+    try:
+        import results_db
+        results_db.record_all("F-elastic" if BAT == "F-ELASTIC" else BAT, rows)
+    except Exception:
+        pass
     write_md(rows, RESULTS / f"{PREFIX}_{d}.md", k)
     if BAT == "E":
         _G["apply_coder_overlay"](rows, REPO / "models.json")

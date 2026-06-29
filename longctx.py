@@ -359,6 +359,10 @@ if __name__ == "__main__":
         r = run_longctx(model_name, role, disk_gb, items)
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
+        try:
+            import results_db; results_db.record_all("G", all_results)
+        except Exception:
+            pass
 
     _ws("", "done")
     write_summary(all_results, OUT_MD, fast_mode)

@@ -51,7 +51,26 @@ def _latest(prefix):
     return max(files, key=os.path.getmtime) if files else None
 
 
+# export prefix → SQLite battery key (Phase 2: read the clobber-proof store, not latest-file-by-mtime)
+_PREFIX_BATTERY = {
+    "benchmark": "standard", "aptitude_e": "E", "aptitude_f": "F",
+    "aptitude_f_elastic": "F-elastic", "vision": "vision", "embedding": "embedding", "longctx": "G",
+}
+
+
 def _load(prefix):
+    """Latest per-model result for a battery. Prefers the SQLite store (results_db.latest = each
+    model's most-recent result across all runs, so a partial/midnight re-run never drops models);
+    falls back to the dated JSON file if the DB is empty/unavailable (transition safety)."""
+    bat = _PREFIX_BATTERY.get(prefix)
+    if bat:
+        try:
+            import results_db
+            data = results_db.latest(bat)
+            if data:
+                return data, f"db:{bat}"
+        except Exception:
+            pass
     f = _latest(prefix)
     if not f:
         return {}, None

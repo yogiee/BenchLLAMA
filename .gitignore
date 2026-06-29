@@ -11,3 +11,4 @@ rankings/
 CLAUDE.md
 *.bak
 WORKSPACE/
+results/*.db
