@@ -124,3 +124,9 @@ infrequent — acceptable per design.
    land standalone first (gives the load/VRAM/s-per-image reference table immediately).
 2. **Adherence + text layer** — generation harness + VLM checklist grading (reuses `vision.py` VLM plumbing)
    + OCR text-match/legibility + the report.
+3. **Wiring (lands with step 1 — NOT added yet; a dropdown option without `imagegen.py` is a dead button):**
+   - `bench.sh` → `imagegen` command.
+   - `orchestrator.py` `build_phases` → `if cmd == "imagegen": return [("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image")]`,
+     and add `COMMANDS`/`"image"` routing + a `BATTERY_LABELS`-style entry if needed.
+   - `web/index.html` → suite dropdown `<option value="imagegen">Image Gen</option>`.
+   - `update_registry.py` → admit `image`-cap models to a perf-only lane (currently lists-but-skips).
