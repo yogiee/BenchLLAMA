@@ -1,5 +1,44 @@
 [
   {
+    "name": "ornith:9b-bf16",
+    "disk_gb": 17.9,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "ornith:9b",
+    "disk_gb": 5.6,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "gemma4:26b-mlx",
+    "disk_gb": 16.7,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
     "name": "gpt-oss:120b-cloud",
     "disk_gb": 0.0,
     "role": "worker",
