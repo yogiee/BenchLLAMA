@@ -57,6 +57,7 @@ class BenchState:
         self.aborted:         bool             = False
         self.log:             list[str]        = []
         self.log_total:       int              = 0   # monotonic count (trim-safe streaming)
+        self.pass_label:      str              = ""  # "pass 2/3" during multipass batteries (E/F/F-elastic)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -167,7 +168,7 @@ class Orchestrator:
                         "caps": m.caps, "extended_roles": m.extended_roles} for m in s.models],
             "last_tps": s.last_tps, "elapsed": int(time.time() - s.start_time),
             "finished": s.finished, "pause_remaining": s.pause_remaining,
-            "aborted": s.aborted,
+            "aborted": s.aborted, "pass_label": s.pass_label,
         }
 
     def _emit(self, line: str) -> None:
@@ -244,6 +245,7 @@ class Orchestrator:
             self._run_log_fh = None
 
     def _set_active_for_phase(self, filt: Optional[str]) -> None:
+        self.state.pass_label = ""   # clear multipass counter when a new phase starts
         for ms in self.state.models:
             if filt is None:
                 ms.active = True
@@ -287,13 +289,19 @@ class Orchestrator:
 
     # ── log parsing → model state ──────────────────────────────────────────────
     def _parse_line(self, line: str) -> None:
+        m = re.search(r"averaging pass (\d+)/(\d+)", line)
+        if m:
+            self.state.pass_label = f"pass {m.group(1)}/{m.group(2)}"
+            return
         m = re.search(r"MODEL:\s+(\S+)", line)
         if m:
             name = m.group(1)
             for ms in self.state.models:
                 if ms.status == "running":
                     ms.status = "done"
-                if ms.name == name and ms.active and ms.status == "pending":
+                # re-light running on every pass: a multipass battery (E/F/F-elastic) re-tests
+                # each model, so it returns here already "done"/"error" from the prior pass.
+                if ms.name == name and ms.active and ms.status in ("pending", "done", "error"):
                     ms.status = "running"
             self.state.last_tps = None
             return

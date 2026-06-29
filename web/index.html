@@ -374,7 +374,7 @@ function byFilter(list){ return ROLE_FILTER ? list.filter(m=>(m.role||"")===ROLE
 function render(snap){
   LAST_SNAP = snap;
   $("#timer").textContent = fmtElapsed(snap.elapsed||0);
-  $("#phaseLabel").textContent = snap.phase_label || "";
+  $("#phaseLabel").textContent = (snap.phase_label || "") + (snap.pass_label ? "  ·  " + snap.pass_label : "");
   const badge = $("#badge");
   badge.className = snap.aborted ? "badge stop" : (snap.finished ? "badge done" : "badge run");
   badge.textContent = snap.aborted ? "■ STOPPED"
