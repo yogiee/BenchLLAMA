@@ -219,7 +219,11 @@
   .md-body ul, .md-body ol { margin:8px 0; padding-left:22px; }
   .md-body li { margin:3px 0; }
 
-  /* ── mobile / narrow screens: monitor-only, 75/25 sidebar/log ─────────────── */
+  .montabs { display:none; border-bottom:1px solid var(--border); background:var(--surface); }
+  .montabs button { flex:1; padding:10px 6px; background:none; border:none; border-bottom:2px solid transparent;
+    color:var(--dim); font:inherit; font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; }
+  .montabs button.on { color:var(--accent); border-bottom-color:var(--accent); }
+  /* ── mobile / narrow screens: RUN | MODELS | LOG sub-tabs (one column at a time) ── */
   @media (max-width: 700px) {
     header { gap:10px; padding:8px 12px; }
     .brand { font-size:15px; }
@@ -233,17 +237,16 @@
     .statusrow { gap:8px; }
     #stopBtn .bt { display:none; }              /* icon-only stop (only shown with --allow-control) */
 
-    /* sidebar takes most of the screen, log below — 75 / 25 */
+    /* sub-tabs visible; show one column at a time (the active tab's) */
+    .montabs { display:flex; }
     #view-monitor { flex-direction:column; }
-    .left { width:auto; flex:3 1 0; min-height:0; padding:12px 14px;
-      border-right:none; border-bottom:1px solid var(--border); }
-    .right { flex:1 1 0; min-height:0; }
+    #view-monitor > .left, #view-monitor > .mid, #view-monitor > .right {
+      display:none; width:auto; flex:1 1 0; min-height:0; border:none; }
+    .left, .mid { padding:12px 14px; }
+    #view-monitor.mt-left  > .left  { display:flex; flex-direction:column; }
+    #view-monitor.mt-mid   > .mid   { display:flex; flex-direction:column; }
+    #view-monitor.mt-right > .right { display:flex; flex-direction:column; }
     #log { padding:10px 14px; font-size:12px; }
-
-    /* no run controls on mobile — monitor only; the models list is always visible */
-    #selector, #roNote, #modelsHint { display:none !important; }
-
-    /* compress model cards to 2 lines: [icon name … tps] / [role] */
     .card { padding:6px 9px; }
     .cbadge { margin-top:3px; }
     .ctags { display:none; }                    /* hide capability tags on mobile */
@@ -272,7 +275,12 @@
     <button data-tab="files" aria-pressed="false">Files</button>
   </nav>
   <main>
-    <section id="view-monitor" class="view">
+    <section id="view-monitor" class="view mt-left">
+    <div id="monTabs" class="montabs">
+      <button type="button" data-mt="left" class="on">RUN</button>
+      <button type="button" data-mt="mid">MODELS</button>
+      <button type="button" data-mt="right">LOG</button>
+    </div>
     <div class="left">
       <div class="mh-row"><h2>NEW RUN</h2></div>
       <form id="selector">
@@ -448,7 +456,17 @@ function selCount(){
   $("#modelcount").textContent = SELECTED.size
     ? `${SELECTED.size} selected`
     : (CANDIDATES ? `${byFilter(CANDIDATES).length} eligible` : "");
+  const mt = document.querySelector('#monTabs [data-mt=mid]');   // mobile MODELS tab shows the selection count
+  if(mt) mt.textContent = SELECTED.size ? `MODELS · ${SELECTED.size}` : "MODELS";
 }
+// mobile sub-tabs: toggle which column (.left/.mid/.right) is visible
+$("#monTabs").onclick = e => {
+  const b = e.target.closest("[data-mt]"); if(!b) return;
+  const v = $("#view-monitor");
+  v.classList.remove("mt-left","mt-mid","mt-right");
+  v.classList.add("mt-" + b.dataset.mt);
+  [...$("#monTabs").children].forEach(x => x.classList.toggle("on", x === b));
+};
 
 function renderStatus(models, lastTps){
   const list = byFilter(models||[]);
