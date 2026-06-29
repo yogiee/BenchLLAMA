@@ -55,7 +55,7 @@ def _build_extra(payload: dict) -> list:
     return extra
 
 
-def start_run(app, cmd: str, extra: list):
+def start_run(app, cmd: str, extra: list, sort: str = "size"):
     """Create + launch an Orchestrator run. Returns (ok, msg). One run at a time."""
     orch = app.get("orch")
     task = app.get("orch_task")
@@ -65,6 +65,7 @@ def start_run(app, cmd: str, extra: list):
     if not phases:
         return False, f"unknown command: {cmd}"
     app["orch"] = O.Orchestrator(phases)
+    app["orch"].sort = sort if sort in ("size", "name", "fresh") else "size"   # → BENCH_SORT for subprocs
     app["orch_task"] = asyncio.create_task(app["orch"].run())
     return True, "started"
 
@@ -78,11 +79,11 @@ async def _index(request):
 async def _models(request):
     """Registered models (for the selector multi-select). name + role + caps + extended."""
     try:
-        reg = json.loads((REPO / "models.json").read_text())
+        reg = O.sort_registry(json.loads((REPO / "models.json").read_text()))
     except Exception:
         return web.json_response([])
     return web.json_response([
-        {"name": m["name"], "role": m.get("role"),
+        {"name": m["name"], "role": m.get("role"), "disk_gb": m.get("disk_gb"),
          "caps": m.get("capabilities", []), "extended_roles": m.get("extended_roles", []),
          "cloud": bool(m.get("cloud", False))}
         for m in reg
@@ -137,7 +138,7 @@ async def _start(request):
         return web.json_response({"ok": False, "msg": "bad json"}, status=400)
     if payload.get("cmd") not in O.COMMANDS:
         return web.json_response({"ok": False, "msg": "bad command"}, status=400)
-    ok, msg = start_run(request.app, payload["cmd"], _build_extra(payload))
+    ok, msg = start_run(request.app, payload["cmd"], _build_extra(payload), payload.get("sort", "size"))
     return web.json_response({"ok": ok, "msg": msg}, status=200 if ok else 409)
 
 

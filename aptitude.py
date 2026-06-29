@@ -27,7 +27,7 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
-from bench_utils import cooldown, preflight, latest_result
+from bench_utils import cooldown, preflight, latest_result, sort_registry
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -1899,7 +1899,7 @@ def apply_coder_overlay(results, registry_path):
     wobble); DROP below the band. The model's primary role is never touched — the
     overlay only stacks/removes `coder` on the lane."""
     try:
-        models = json.load(registry_path.open())
+        models = sort_registry(json.load(registry_path.open()))   # run order: env BENCH_SORT (default size)
     except Exception as e:
         print(f"  coder overlay: cannot read models.json ({e}) — skipped", flush=True)
         return

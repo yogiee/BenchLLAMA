@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
 
+from bench_utils import sort_registry
+
 REPO        = Path(__file__).parent
 MODELS_FILE = REPO / "models.json"
 PAUSE_SECS  = 10        # between pipeline phases
@@ -45,6 +47,7 @@ class ModelState:
     caps:   list            = field(default_factory=list)
     extended_roles: list    = field(default_factory=list)   # earned (e.g. coder)
     cloud:  bool            = False                          # quality-only cloud model
+    disk_gb: Optional[float] = None                          # local disk footprint (None/0 for cloud)
 
 class BenchState:
     def __init__(self):
@@ -64,11 +67,13 @@ class BenchState:
 
 def load_all_models() -> list[ModelState]:
     try:
+        raw = sort_registry(json.loads(MODELS_FILE.read_text()))   # display order = env BENCH_SORT (size)
         return [ModelState(name=m["name"], role=m.get("role") or None,
                            caps=m.get("capabilities", []),
                            extended_roles=m.get("extended_roles", []),
-                           cloud=bool(m.get("cloud", False)))
-                for m in json.loads(MODELS_FILE.read_text())]
+                           cloud=bool(m.get("cloud", False)),
+                           disk_gb=m.get("disk_gb"))
+                for m in raw]
     except Exception:
         return []
 
@@ -168,6 +173,7 @@ class Orchestrator:
         self.state.phases = [PhaseState(ph[0], role_filter=ph[2]) for ph in phases_spec]
         self._proc: Optional[asyncio.subprocess.Process] = None
         self._stopped = False
+        self.sort = "size"                 # run/display order key (size|name|fresh); set by webserver
         self._run_log_fh = None
         self._on_log = on_log or (lambda s: None)
         self._on_event = on_event or (lambda: None)
@@ -181,7 +187,8 @@ class Orchestrator:
             "current_phase": s.current_phase, "phase_label": cur,
             "models": [{"name": m.name, "role": m.role, "tps": m.tps,
                         "status": m.status, "active": m.active, "cloud": m.cloud,
-                        "caps": m.caps, "extended_roles": m.extended_roles} for m in s.models],
+                        "caps": m.caps, "extended_roles": m.extended_roles,
+                        "disk_gb": m.disk_gb} for m in s.models],
             "last_tps": s.last_tps, "elapsed": int(time.time() - s.start_time),
             "finished": s.finished, "pause_remaining": s.pause_remaining,
             "aborted": s.aborted, "pass_label": s.pass_label,
@@ -298,7 +305,8 @@ class Orchestrator:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT, cwd=str(REPO),
-                env={**os.environ, "BENCH_RUN_ID": getattr(self, "run_id", "")})
+                env={**os.environ, "BENCH_RUN_ID": getattr(self, "run_id", ""),
+                     "BENCH_SORT": getattr(self, "sort", "size")})
             self._proc = proc
             async for raw in proc.stdout:
                 line = raw.decode(errors="replace").rstrip()

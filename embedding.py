@@ -46,7 +46,7 @@ import numpy as np
 from pathlib import Path
 from datetime import date
 from collections import defaultdict
-from bench_utils import latest_result
+from bench_utils import latest_result, sort_registry
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -83,7 +83,7 @@ def load_models_by_cap(cap):
     if not path.exists():
         sys.exit(f"models.json not found at {path} — run update_registry.py first")
     return [(m["name"], m.get("disk_gb", 0.0))
-            for m in json.load(path.open())
+            for m in sort_registry(json.load(path.open()))   # run order: env BENCH_SORT (default size)
             if cap in m.get("capabilities", [])]
 
 # ── Datasets ─────────────────────────────────────────────────────────────────────

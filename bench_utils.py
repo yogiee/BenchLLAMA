@@ -3,10 +3,35 @@ BenchLLAMA — shared utilities
 Imported by runner.py, ctx_ladder.py, and aptitude.py.
 """
 
+import os
 import re
 import subprocess
 import time
 import requests
+
+
+# ── Model sort order (shared run + dashboard sort) ────────────────────────────
+def sort_key(default: str = "size") -> str:
+    """Sort key for the run/display order, from env BENCH_SORT (the orchestrator sets it from the
+    dashboard; or export BENCH_SORT=name for a CLI run). One of: size | name | fresh.
+    Defaults to size (smallest disk first)."""
+    k = (os.environ.get("BENCH_SORT") or default).strip().lower()
+    return k if k in ("size", "name", "fresh") else default
+
+
+def sort_registry(models: list, key: str | None = None) -> list:
+    """Return a NEW list of model dicts sorted by `key` (or env BENCH_SORT):
+      size  → disk_gb ascending, cloud/null disk last  (default)
+      name  → name A-Z (case-insensitive)
+      fresh → install order, newest first (added_idx asc, stamped when models.json was size-sorted).
+    Stable + non-mutating."""
+    key = key or sort_key()
+    if key == "name":
+        return sorted(models, key=lambda m: (m.get("name") or "").lower())
+    if key == "fresh":
+        return sorted(models, key=lambda m: (m.get("added_idx", -1), (m.get("name") or "").lower()))
+    return sorted(models, key=lambda m: (m.get("disk_gb") if m.get("disk_gb") else float("inf"),
+                                         (m.get("name") or "").lower()))
 
 # ── Thermal monitoring (Apple Silicon / macOS Sequoia+) ───────────────────────
 #

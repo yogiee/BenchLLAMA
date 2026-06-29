@@ -31,7 +31,7 @@ import sys
 import time
 import requests
 from pathlib import Path
-from bench_utils import cooldown, preflight, latest_result
+from bench_utils import cooldown, preflight, latest_result, sort_registry
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -655,7 +655,7 @@ if __name__ == "__main__":
     registry_path = REPO / "models.json"
     if not registry_path.exists():
         sys.exit(f"models.json not found at {registry_path} — create it before running (see CLAUDE.md)")
-    registry = json.load(registry_path.open())
+    registry = sort_registry(json.load(registry_path.open()))   # run order: env BENCH_SORT (default size)
 
     if model_args:
         reg_map = {m["name"]: m for m in registry}
