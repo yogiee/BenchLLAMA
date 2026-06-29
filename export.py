@@ -89,8 +89,10 @@ def _standard_summary(rec):
     reasoning = sum(ok(x) for x in ("bat_ball", "two_cities", "cylinder", "farm_heads"))
     instr = sum(ok(x) for x in ("format_3", "no_eiffel"))
     jpeg = t.get("jpeg_formats", {}).get("signals")
+    expense = (t.get("expense_split") or {}).get("check_detail", {}).get("score")
     return {"reasoning": reasoning, "instr": instr, "tool": ok("calculate"),
-            **({"jpeg": jpeg} if jpeg is not None else {})}
+            **({"jpeg": jpeg} if jpeg is not None else {}),
+            **({"expense_split": expense} if expense is not None else {})}
 
 
 def build():

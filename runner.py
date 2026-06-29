@@ -26,6 +26,7 @@ Usage:
 """
 
 import json
+import re
 import sys
 import time
 import requests
@@ -116,6 +117,29 @@ def _no_eiffel_check(response: str) -> bool:
     return "eiffel" not in response.lower() and len(response.strip()) > 100
 
 
+# ── expense_split — multi-step settlement with traps (signal-graded, judge-free) ──
+# A real-life "who owes whom" word problem with distractor data + three reasoning traps:
+#  (1) split only the rounded fuel USED (1700), not the 3000 Jack paid — the 1300 overage
+#      is credited back to Jack BY CHRIS (leftover fuel sits in Chris' car);
+#  (2) liquor splits 2-way (Jack+Chris) — Sam doesn't drink (1800 each, not 1200 3-way);
+#  (3) Sam's 2000 prior-outing debt rolls in; the distance/mileage math is a distractor.
+# Ground truth: Sam -> Jack 5116.67, Chris -> Jack 1966.67 (Jack nets +7083.33).
+def _expense_split_check(response: str) -> dict:
+    n = re.sub(r"(\d),(\d)", r"\1\2", response)          # collapse "5,116" -> "5116"
+    has = lambda *xs: any(x in n for x in xs)
+    signals = {
+        "fuel_used_1700":   "1700" in n,                  # shared fuel = rounded USED, not the 3000 paid
+        "leftover_1300":    "1300" in n,                  # overage credited back to Jack (from Chris)
+        "liquor_2way_1800": "1800" in n,                  # liquor split 2-way (Sam excluded); 3-way would be 1200
+        "share_correct":    has("4916", "3116"),          # mixed per-person shares (Jack/Chris 4916.67, Sam 3116.67)
+        "sam_owes_5116":    has("5116", "5117"),          # final Sam -> Jack
+        "chris_owes_1966":  has("1966", "1967"),          # final Chris -> Jack
+        "jack_net_7083":    has("7083", "7084"),          # Jack net received
+    }
+    score = sum(signals.values())
+    return {"signals": signals, "score": score, "max": 7, "pass": score >= 4}
+
+
 # ── Test suite ────────────────────────────────────────────────────────────────
 
 QUALITY_TESTS = [
@@ -184,6 +208,25 @@ QUALITY_TESTS = [
      "prompt": (
          "A farmer has chickens and cows. He counts 20 heads and 56 legs total. "
          "How many chickens and how many cows are there? Think step by step."
+     )},
+
+    # Expense split — multi-step real-life settlement with 3 traps (signal-graded, pass ≥4/7).
+    # Ground truth: Sam→Jack 5116.67, Chris→Jack 1966.67 (Jack +7083.33).
+    {"id": "expense_split", "category": "reasoning", "domain": "multi-step finance",
+     "expected": "Sam→Jack 5116.67, Chris→Jack 1966.67 (Jack +7083.33)", "max_tokens": 1800,
+     "auto_check": lambda r: _expense_split_check(r),
+     "prompt": (
+         "Jack, Chris and Sam went out for a weekend trip. Jack filled fuel in Chris' car, worth "
+         "rs3000. On the way to their destination, Jack bought liquor worth rs3600. When they got "
+         "on the highway, Chris paid rs125 in toll. At their destination, Chris paid rs4000 for "
+         "accommodation. Jack paid rs2000 for dinner. Next day while returning Chris paid rs125 for "
+         "toll. Jack paid rs1400 for afternoon meal. Sam, who doesn't drink, hasn't spent anything "
+         "for the entire trip, and he owes Jack rs2000 from a previous outing.\n\n"
+         "The total distance travelled was 300kms round trip. The car gave the mileage of 17kmpl. "
+         "The fuel costs rs98 per litre. Usually the group rounds up to the nearest value of fuel "
+         "used (which in this case is close to 1700rs for this trip) and splits that.\n\n"
+         "At the end of the trip, what's the split between the three and who gets how much in "
+         "return? Think step by step."
      )},
 
     # ── Research Depth ────────────────────────────────────────────────────────
