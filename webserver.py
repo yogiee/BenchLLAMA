@@ -83,7 +83,7 @@ async def _models(request):
     except Exception:
         return web.json_response([])
     return web.json_response([
-        {"name": m["name"], "role": m.get("role"), "disk_gb": m.get("disk_gb"),
+        {"name": m["name"], "role": m.get("role"), "disk_gb": m.get("disk_gb"), "added_idx": m.get("added_idx"),
          "caps": m.get("capabilities", []), "extended_roles": m.get("extended_roles", []),
          "cloud": bool(m.get("cloud", False))}
         for m in reg

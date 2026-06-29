@@ -51,7 +51,8 @@
   }
   .themetog button[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); }
   main { flex:1; display:flex; min-height:0; }
-  .left { width:340px; padding:16px; overflow-y:auto; border-right:1px solid var(--border); background:var(--surface); }
+  .left { flex:0 0 20%; min-width:215px; padding:16px; overflow-y:auto; border-right:1px solid var(--border); background:var(--surface); }
+  .mid  { flex:0 0 20%; min-width:215px; padding:16px; overflow-y:auto; border-right:1px solid var(--border); background:var(--surface); }
   .right { flex:1; min-width:0; display:flex; flex-direction:column; }
   h2 { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); margin:18px 0 8px; }
   h2:first-child { margin-top:0; }
@@ -85,6 +86,18 @@
   .cbadge { display:inline-block; font-size:10px; font-weight:600; letter-spacing:.04em; color:var(--accent);
             background:var(--accent-soft); border-radius:4px; padding:1px 7px; }
   .cbadge.cloud { color:var(--cloud); background:transparent; border:1px solid var(--cloud); }
+  .cbadge.size  { color:var(--accent); background:transparent; border:1px solid var(--accent); }
+  /* suite radios + models-column header (Dashboard v2) */
+  .radios { display:flex; flex-direction:column; gap:5px; }
+  .radio { flex-direction:row !important; align-items:center; gap:7px; font-size:13px; color:var(--text); cursor:pointer; }
+  .radio.disabled { opacity:.45; cursor:default; }
+  .radio-sep { border-top:1px solid var(--border); margin:5px 0 3px; }
+  .soon { font-size:10px; color:var(--dim); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
+  .mh-row { display:flex; justify-content:space-between; align-items:baseline; }
+  .mh-row h2 { margin:0; }
+  .mf-row { display:flex; align-items:center; gap:6px; margin:7px 0; }
+  .mf-row select { flex:1; min-width:0; }
+  .mf-row .mf-clear { flex:none; }
   .ctags { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
   .ctag { font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); background:var(--bg);
           border:1px solid var(--border); border-radius:3px; padding:1px 5px; }
@@ -264,19 +277,19 @@
     <div class="left">
       <form id="selector">
         <h2>New run</h2>
-        <label>Suite
-          <select id="cmd">
-            <option value="all">ALL (full pipeline)</option>
-            <option value="standard">Standard Suite</option>
-            <option value="ladder">Ladder (CTX)</option>
-            <option value="batteries">Aptitude (All Batteries)</option>
-            <option value="aptitude">Aptitude (Single Battery)</option>
-            <option value="vision">Vision</option>
-            <option value="embedding">Embedding</option>
-            <option value="longctx">Long-Context (G)</option>
-            <option value="update">Update Registry</option>
-          </select>
-        </label>
+        <div id="cmdRadios" class="radios" role="radiogroup" aria-label="Suite">
+          <label class="radio"><input type="radio" name="cmd" value="all" checked> ALL (full pipeline)</label>
+          <label class="radio"><input type="radio" name="cmd" value="standard"> Standard Suite</label>
+          <label class="radio"><input type="radio" name="cmd" value="ladder"> Ladder (CTX)</label>
+          <label class="radio"><input type="radio" name="cmd" value="batteries"> Aptitude (All Batteries)</label>
+          <label class="radio"><input type="radio" name="cmd" value="aptitude"> Aptitude (Single Battery)</label>
+          <label class="radio"><input type="radio" name="cmd" value="vision"> Vision</label>
+          <label class="radio"><input type="radio" name="cmd" value="embedding"> Embedding</label>
+          <label class="radio"><input type="radio" name="cmd" value="longctx"> Long-Context (G)</label>
+          <label class="radio"><input type="radio" name="cmd" value="update"> Update Registry</label>
+          <div class="radio-sep"></div>
+          <label class="radio disabled" title="Image-gen battery — not built yet"><input type="radio" name="cmd" value="imagegen" disabled> Image Gen <span class="soon">soon</span></label>
+        </div>
         <label id="batWrap" class="hidden">Battery
           <select id="battery">
             <option value="B">B — worker chat</option>
@@ -297,18 +310,24 @@
       </form>
       <div id="roNote" class="hidden">Read-only (LAN). Start a run from the host, or relaunch with <code>--allow-control</code>.</div>
       <div id="pipeline"></div>
+    </div>
+    <div class="mid">
       <div id="modelsPanel">
-        <h2>Models <span id="modelcount" class="count"></span>
-          <span class="mf-tools">
-            <select id="roleFilter" title="filter by role">
-              <option value="">all roles</option>
-              <option value="worker">worker</option>
-              <option value="router">router</option>
-              <option value="utility">utility</option>
-            </select>
-            <button type="button" id="mfClear" class="mf-clear">clear</button>
-          </span>
-        </h2>
+        <div class="mh-row"><h2>MODELS</h2><span id="modelcount" class="count"></span></div>
+        <div class="mf-row">
+          <select id="sortBy" title="sort order (also sets run order)">
+            <option value="size">Size ↑</option>
+            <option value="name">Name A-Z</option>
+            <option value="fresh">Freshness</option>
+          </select>
+          <select id="roleFilter" title="filter by role">
+            <option value="">all roles</option>
+            <option value="worker">worker</option>
+            <option value="router">router</option>
+            <option value="utility">utility</option>
+          </select>
+          <button type="button" id="mfClear" class="mf-clear">clear</button>
+        </div>
         <div id="modelsHint" class="meta">tap cards to select · none = all eligible</div>
         <div id="models"></div>
       </div>
@@ -365,11 +384,19 @@ function fmtElapsed(s){ const h=String((s/3600|0)).padStart(2,"0"),
 let CANDIDATES = null;          // /api/models (selection source)
 let SELECTED   = new Set();     // chosen model names (empty = all eligible)
 let ROLE_FILTER = "";           // sidebar role dropdown
+let SORT_BY = "size";           // sort key: size | name | fresh (also sent as the run order)
 let RUN_ACTIVE = false;         // a run is in progress (not finished)
 let MODE = null;                // 'idle' | 'run' — guards idle re-renders against snapshot thrash
 let LAST_SNAP = null;
 
-function byFilter(list){ return ROLE_FILTER ? list.filter(m=>(m.role||"")===ROLE_FILTER) : list; }
+function byFilter(list){
+  const f = (ROLE_FILTER ? list.filter(m=>(m.role||"")===ROLE_FILTER) : list).slice();
+  return f.sort((a,b)=>{
+    if(SORT_BY==="name")  return (a.name||"").localeCompare(b.name||"");
+    if(SORT_BY==="fresh") return (a.added_idx??1e9)-(b.added_idx??1e9);                                   // newest first
+    return ((a.disk_gb||Infinity)-(b.disk_gb||Infinity)) || (a.name||"").localeCompare(b.name||"");       // size; cloud/null last
+  });
+}
 
 function render(snap){
   LAST_SNAP = snap;
@@ -399,7 +426,8 @@ function modelCard(m, lastTps, selectable){
   const ext = (m.extended_roles||[]).map(r=>r.toUpperCase()).join(", ");
   const roleBadge  = m.role ? `<span class="cbadge">${esc(m.role.toUpperCase())}${ext?": "+esc(ext):""}</span>` : "";
   const cloudBadge = m.cloud ? `<span class="cbadge cloud">☁ cloud</span>` : "";
-  const badges = (cloudBadge||roleBadge) ? `<div class="cbadges">${cloudBadge}${roleBadge}</div>` : "";
+  const sizeBadge  = (!m.cloud && m.disk_gb) ? `<span class="cbadge size">${m.disk_gb} GB</span>` : "";
+  const badges = (cloudBadge||sizeBadge||roleBadge) ? `<div class="cbadges">${cloudBadge}${sizeBadge}${roleBadge}</div>` : "";
   const tags = (m.caps||[]).map(c=>`<span class="ctag">${esc(c)}</span>`).join("");
   const sel = selectable && SELECTED.has(m.name);
   const dot = selectable
@@ -472,7 +500,7 @@ function setView({idle, finished}){
 }
 
 // ── controls ──────────────────────────────────────────────────────────────────
-$("#cmd").onchange = e => show("#batWrap", e.target.value === "aptitude");
+$("#cmdRadios").onchange = e => show("#batWrap", e.target.value === "aptitude");
 
 // cards double as the picker (only when not running) ──────────────────────────
 $("#models").onclick = e => {
@@ -490,12 +518,17 @@ $("#roleFilter").onchange = e => {
   if(RUN_ACTIVE && LAST_SNAP) renderStatus(LAST_SNAP.models, LAST_SNAP.last_tps);
   else renderIdle();
 };
+$("#sortBy").onchange = e => {
+  SORT_BY = e.target.value;
+  if(RUN_ACTIVE && LAST_SNAP) renderStatus(LAST_SNAP.models, LAST_SNAP.last_tps);
+  else renderIdle();
+};
 $("#mfClear").onclick = () => { SELECTED.clear(); if(!RUN_ACTIVE) renderIdle(); };
 
 $("#selector").onsubmit = async e => {
   e.preventDefault();
   const body = {
-    cmd: $("#cmd").value, battery: $("#battery").value,
+    cmd: document.querySelector('input[name=cmd]:checked')?.value || 'all', battery: $("#battery").value, sort: SORT_BY,
     fast: $("#fast").checked, force: $("#force").checked, models: [...SELECTED].join(" "),
   };
   $("#startMsg").textContent = "starting…";
