@@ -225,11 +225,14 @@ class Orchestrator:
         run_log.parent.mkdir(exist_ok=True)
         self._run_log_fh = run_log.open("w")
         self._emit(f"Run log → {run_log}")
+        self._db = None
         try:
             import results_db
             results_db.start_run(self.run_id, flags={"orchestrated": True})
+            self._db = results_db
         except Exception:
             pass
+        t_run_start = time.time()
         self.state.models = load_all_models()
         self._on_event()
 
@@ -251,26 +254,40 @@ class Orchestrator:
             self.state.phases[i].status = "running"
             self.state.last_tps = None
             self._set_active_for_phase(role_filter)
+            n_models = sum(1 for ms in self.state.models if ms.active)
+            phase_started = time.strftime("%Y-%m-%dT%H:%M:%S")
+            t_phase = time.time()
             self._emit(f"\n{'━' * 58}\n  ▶  {label}\n{'━' * 58}")
             self._on_event()
 
             ok = await self._run_subprocess(argv)
+            phase_elapsed = time.time() - t_phase
             if self._stopped:
                 # aborted mid-phase: mark this phase + its running model as stopped, do not advance
                 self.state.phases[i].status = "error"
                 for ms in self.state.models:
                     if ms.active and ms.status == "running":
                         ms.status = "error"
+                self._record_phase(i, label, phase_started, phase_elapsed, "aborted", n_models)
                 self._on_event()
                 break
             self.state.phases[i].status = "done" if ok else "error"
             for ms in self.state.models:
                 if ms.active and ms.status == "running":
                     ms.status = "done" if ok else "error"
+            self._record_phase(i, label, phase_started, phase_elapsed,
+                               "done" if ok else "error", n_models)
             self._sync_roles()
             self._on_event()
 
         self.state.finished = True
+        if self._db:
+            try:
+                status = "aborted" if self._stopped else "done"
+                self._db.finish_run(self.run_id, status, elapsed_s=time.time() - t_run_start)
+                self._emit("\n" + self._db.format_timings(self.run_id))
+            except Exception:
+                pass
         self._on_event()
         if self._run_log_fh:
             self._run_log_fh.close()
@@ -287,6 +304,18 @@ class Orchestrator:
                 ms.active = (ms.role == filt)
             if ms.active:
                 ms.status = "pending"
+
+    def _record_phase(self, idx: int, label: str, started_at: str,
+                      elapsed_s: float, status: str, n_models: int) -> None:
+        """Persist one phase's wall-clock to the DB (never raises into the run loop)."""
+        if not getattr(self, "_db", None):
+            return
+        try:
+            self._db.record_phase(self.run_id, idx, label, started_at,
+                                  finished_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                  elapsed_s=round(elapsed_s, 1), status=status, n_models=n_models)
+        except Exception:
+            pass
 
     def _sync_roles(self) -> None:
         """Re-read models.json — runner promotes to router; Battery E adds the coder
@@ -396,9 +425,16 @@ def run_console(phases_spec: list[tuple]) -> None:
 
 if __name__ == "__main__":
     raw = sys.argv[1:]
+    if "--timings" in raw:   # read-back: last run's per-phase wall-clock (planning aid), or a given run_id
+        import results_db
+        i = raw.index("--timings")
+        rid = raw[i + 1] if i + 1 < len(raw) and not raw[i + 1].startswith("-") else None
+        print(results_db.format_timings(rid))
+        sys.exit(0)
     cmd = next((a for a in raw if a in COMMANDS), None)
     if not cmd or "--help" in raw or "-h" in raw:
         print(f"Usage: python3 orchestrator.py <{' | '.join(sorted(COMMANDS))}> [flags]")
+        print("       python3 orchestrator.py --timings [run_id]   # per-phase wall-clock of a past run")
         sys.exit(0 if not cmd else 1)
     phases = build_phases(cmd, [a for a in raw if a != cmd])
     if not phases:

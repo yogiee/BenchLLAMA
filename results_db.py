@@ -34,10 +34,13 @@ BATTERIES = ("standard", "ladder", "A", "B", "C", "D", "E", "F", "F-elastic", "G
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
-    run_id     TEXT PRIMARY KEY,   -- run-start stamp, e.g. "2026-06-28T19:42" (NOT the calendar date)
-    started_at TEXT NOT NULL,      -- ISO8601
-    host       TEXT,
-    flags      TEXT                -- JSON: {"fast":bool,"force":bool,...}
+    run_id      TEXT PRIMARY KEY,  -- run-start stamp, e.g. "2026-06-28T19:42" (NOT the calendar date)
+    started_at  TEXT NOT NULL,     -- ISO8601
+    host        TEXT,
+    flags       TEXT,              -- JSON: {"fast":bool,"force":bool,...}
+    finished_at TEXT,              -- ISO8601, stamped when the run completes/aborts (NULL while live)
+    status      TEXT,              -- done | aborted | error | NULL(running)
+    elapsed_s   REAL               -- total wall-clock seconds (orchestrated runs)
 );
 CREATE TABLE IF NOT EXISTS results (
     run_id     TEXT NOT NULL,
@@ -49,9 +52,34 @@ CREATE TABLE IF NOT EXISTS results (
     created_at TEXT NOT NULL,      -- when this row was written
     PRIMARY KEY (run_id, model, battery)
 );
+-- Per-phase wall-clock for an orchestrated pipeline (Standard, ctx Ladder, A-G, Vision, Embedding).
+-- cooldowns live INSIDE a phase so they're counted in elapsed_s; the 10s inter-phase pause is not.
+CREATE TABLE IF NOT EXISTS phase_timings (
+    run_id      TEXT NOT NULL,
+    idx         INTEGER NOT NULL,  -- phase position in the pipeline (0-based)
+    label       TEXT NOT NULL,     -- e.g. "Research (Battery C)"
+    started_at  TEXT NOT NULL,
+    finished_at TEXT,
+    elapsed_s   REAL,
+    status      TEXT,              -- done | error | aborted
+    n_models    INTEGER,           -- active models this phase touched
+    PRIMARY KEY (run_id, idx)
+);
 CREATE INDEX IF NOT EXISTS idx_results_model_battery ON results(model, battery);
 CREATE INDEX IF NOT EXISTS idx_results_battery       ON results(battery);
 """
+
+# Columns added to `runs` after the original schema shipped — applied to pre-existing DBs by _migrate.
+_RUNS_ADDED = (("finished_at", "TEXT"), ("status", "TEXT"), ("elapsed_s", "REAL"))
+
+
+def _migrate(c) -> None:
+    """Add columns introduced after the first schema to an already-created `runs` table.
+    CREATE TABLE IF NOT EXISTS never alters an existing table, so new columns need ALTER."""
+    have = {r["name"] for r in c.execute("PRAGMA table_info(runs)").fetchall()}
+    for col, decl in _RUNS_ADDED:
+        if col not in have:
+            c.execute(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
 
 
 def _now() -> str:
@@ -66,6 +94,7 @@ def _conn(path: Path = DB_PATH):
     c.row_factory = sqlite3.Row
     try:
         c.executescript(SCHEMA)
+        _migrate(c)
         yield c
         c.commit()
     finally:
@@ -129,6 +158,83 @@ def runs(path: Path = DB_PATH) -> list:
         rows = c.execute("SELECT run_id, started_at, host, flags FROM runs ORDER BY started_at ASC").fetchall()
     return [{"run_id": x["run_id"], "started_at": x["started_at"], "host": x["host"],
              "flags": json.loads(x["flags"] or "{}")} for x in rows]
+
+
+# ── run/phase timing (orchestrator-driven) ──────────────────────────────────────
+# These NEVER raise into the caller: a DB hiccup must not break a live benchmark.
+
+def finish_run(run_id: str, status: str = "done", elapsed_s: float | None = None,
+               path: Path = DB_PATH) -> None:
+    """Stamp a run complete — run-level wall-clock. Idempotent; safe to call once at pipeline end."""
+    try:
+        start_run(run_id, path=path)
+        with _conn(path) as c:
+            c.execute("UPDATE runs SET finished_at=?, status=?, elapsed_s=? WHERE run_id=?",
+                      (_now(), status, elapsed_s, run_id))
+    except Exception:
+        pass
+
+
+def record_phase(run_id: str, idx: int, label: str, started_at: str,
+                 finished_at: str | None = None, elapsed_s: float | None = None,
+                 status: str = "done", n_models: int | None = None, path: Path = DB_PATH) -> None:
+    """UPSERT one pipeline phase's timing. Keyed (run_id, idx) so a re-run of the same phase overwrites."""
+    try:
+        start_run(run_id, path=path)
+        with _conn(path) as c:
+            c.execute(
+                "INSERT INTO phase_timings(run_id,idx,label,started_at,finished_at,elapsed_s,status,n_models) "
+                "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(run_id,idx) DO UPDATE SET "
+                "  label=excluded.label, started_at=excluded.started_at, finished_at=excluded.finished_at, "
+                "  elapsed_s=excluded.elapsed_s, status=excluded.status, n_models=excluded.n_models",
+                (run_id, idx, label, started_at, finished_at, elapsed_s, status, n_models))
+    except Exception:
+        pass
+
+
+def run_timings(run_id: str | None = None, path: Path = DB_PATH) -> dict:
+    """Timing for one run (default: latest by start). {run:{...}, phases:[{...}, ...]} or {} if none."""
+    with _conn(path) as c:
+        if run_id is None:
+            row = c.execute("SELECT * FROM runs ORDER BY started_at DESC LIMIT 1").fetchone()
+        else:
+            row = c.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
+        if not row:
+            return {}
+        ph = c.execute("SELECT * FROM phase_timings WHERE run_id=? ORDER BY idx ASC",
+                       (row["run_id"],)).fetchall()
+    return {"run": {k: row[k] for k in row.keys()},
+            "phases": [{k: p[k] for k in p.keys()} for p in ph]}
+
+
+def _fmt_dur(s) -> str:
+    if s is None:
+        return "  —  "
+    s = int(round(s))
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    if h:
+        return f"{h}h{m:02d}m"
+    if m:
+        return f"{m}m{s:02d}s"
+    return f"{s}s"
+
+
+def format_timings(run_id: str | None = None, path: Path = DB_PATH) -> str:
+    """Human-readable per-phase timing block for a run (default latest) — for the run-log + CLI."""
+    t = run_timings(run_id, path)
+    if not t:
+        return "(no run timing recorded yet)"
+    r, ph = t["run"], t["phases"]
+    total = r.get("elapsed_s")
+    if total is None and ph:                       # live/partial: sum what we have
+        total = sum(p["elapsed_s"] or 0 for p in ph)
+    lines = [f"run {r['run_id']}  status={r.get('status') or 'running'}  total={_fmt_dur(total)}"]
+    for p in ph:
+        nm = f"({p['n_models']} models)" if p.get("n_models") else ""
+        flag = "" if (p.get("status") in (None, "done")) else f"  [{p['status']}]"
+        lines.append(f"  {p['label']:<30} {_fmt_dur(p['elapsed_s']):>8}  {nm}{flag}")
+    return "\n".join(lines)
 
 
 # ── dual-write helpers (used by the result-writing scripts in Phase 1) ──────────
