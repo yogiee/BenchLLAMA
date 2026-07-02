@@ -72,12 +72,14 @@
   {
     "name": "vincentg/llama3.2-fluxassistant:uncensored",
     "disk_gb": 3.4,
-    "role": "worker",
+    "role": "router",
     "capabilities": [
       "completion",
       "tools"
     ],
-    "extended_roles": [],
+    "extended_roles": [
+      "coder"
+    ],
     "added_idx": 0
   },
   {
@@ -211,19 +213,20 @@
     "added_idx": 7
   },
   {
-    "name": "gpt-oss:120b-cloud",
+    "name": "gemma4:31b-cloud",
     "disk_gb": 0.0,
     "role": "worker",
-    "cloud": true,
     "capabilities": [
       "completion",
       "thinking",
-      "tools"
+      "tools",
+      "vision"
     ],
     "extended_roles": [
       "coder"
     ],
-    "added_idx": 4
+    "cloud": true,
+    "added_idx": 8
   },
   {
     "name": "glm-4.7:cloud",
@@ -241,19 +244,18 @@
     "added_idx": 5
   },
   {
-    "name": "gemma4:31b-cloud",
+    "name": "gpt-oss:120b-cloud",
     "disk_gb": 0.0,
     "role": "worker",
+    "cloud": true,
     "capabilities": [
       "completion",
       "thinking",
-      "tools",
-      "vision"
+      "tools"
     ],
     "extended_roles": [
       "coder"
     ],
-    "cloud": true,
-    "added_idx": 8
+    "added_idx": 4
   }
 ]
