@@ -119,8 +119,10 @@ def _average_e(run_files):
         cm = {c: round(sum(v) / len(v), 4) for c, v in cs.items()}
         present = {c: w for c, w in WEIGHTS.items() if c in cm}
         comp = round(sum(cm[c] * w for c, w in present.items()) / (sum(present.values()) or 1), 4)
-        # two-band: `comp` (incl E-hard) is the RANKING composite; coder ELIGIBILITY gates on the
-        # E-core composite only, so a competent coder that flubs the hard discriminator keeps the role.
+        # two-band: `comp` (incl E-hard) is BOTH the ranking composite AND the coder gate — as of
+        # 2026-07-02 the E-hard band grew from 1 → 4 averaged tasks (variance smoothed), so failing
+        # the hard tier now legitimately blocks the `coder` role instead of being excused. `comp_core`
+        # (E-core only) is still emitted as a diagnostic (shows the E-hard delta), not the gate.
         core = {c: w for c, w in present.items() if c != "E-hard"}
         comp_core = round(sum(cm[c] * w for c, w in core.items()) / (sum(core.values()) or 1), 4)
         gen, dbg = cm.get("E1", 0.0), cm.get("E2", 0.0)
@@ -134,7 +136,7 @@ def _average_e(run_files):
         out.append({"model": name, "battery": "E", "runs": len(recs), "tests": tests, "summary": {
             "category_means": cm, "composite": comp, "composite_core": comp_core,
             "generate_basic": gen, "debug_fix": dbg,
-            "coder_eligible": (comp_core >= CMIN and dbg > 0 and gen >= GMIN),
+            "coder_eligible": (comp >= CMIN and dbg > 0 and gen >= GMIN),
             "threshold": {"composite_min": CMIN, "composite_band": BAND, "generate_min": GMIN, "debug_fix_gt": 0},
             "n_runs": len(recs),
             "composite_stdev": round(statistics.pstdev(comp_runs), 3) if len(comp_runs) > 1 else 0.0,

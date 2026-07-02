@@ -153,13 +153,18 @@ _CODING_PROBLEMS_PATH = REPO / "suites" / "coding" / "problems.json"
 # E9 is markup quality (HTML/CSS) — a core local_code generation workload.
 E_WEIGHTS = {"E1": 0.12, "E2": 0.22, "E3": 0.18, "E5": 0.18, "E7": 0.15, "E9": 0.15,
              "E-hard": 0.18}   # two-band: E-hard is the top-tier RANKING discriminator (breaks E-core
-                               # saturation). Coder eligibility still gates on E-core only (see average_e_runs).
+                               # saturation). As of 2026-07-02 it holds 4 averaged tasks (settle /
+                               # apportion / free_slots / calc) and its weight now feeds BOTH the ranking
+                               # composite AND the coder gate (see average_e_runs — was E-core-only when
+                               # the band was a single noisy task).
 
-# `coder` overlay thresholds (calibrated from the 2026-06-14 full-fleet run; still
-# subject to OllamaMCP validation). HYSTERESIS: a model EARNS `coder` at composite
-# ≥ MIN (+ the gates below); once tagged it's RETAINED down to BAND, and only DROPPED
-# below BAND. The band absorbs MLX run-to-run wobble near the line so the tag doesn't
-# flap between runs.
+# `coder` overlay thresholds. HYSTERESIS: a model EARNS `coder` at composite ≥ MIN
+# (+ the gates below); once tagged it's RETAINED down to BAND, and only DROPPED below
+# BAND. The band absorbs run-to-run wobble near the line so the tag doesn't flap.
+# NOTE (2026-07-02): the gate now reads the FULL composite (incl the 4-task E-hard band),
+# not E-core — so ~5 weak "coders" that aced E-core but scored ~0 on the hard tier lose
+# the tag. MIN=0.70 was calibrated on E-core (2026-06-14); RE-VALIDATE it against full-
+# composite numbers after the next full run (16/17 cleared the old E-core gate).
 E_CODER_COMPOSITE_MIN  = 0.70  # earn the tag
 E_CODER_COMPOSITE_BAND = 0.65  # retain a tagged model down to here; drop below it
 E_CODER_GENERATE_MIN   = 0.50  # E1 mean — must be able to write, not just pattern-match
@@ -1939,7 +1944,8 @@ def write_battery_e_summary(results, out_md: Path, fast_mode=False):
         "Models: " + ", ".join("`" + r["model"] + "`" for r in results),
         f"`num_ctx={NUM_CTX}` | `think=False` | execution-graded (structural gate → sandboxed run)", "",
         "Composite = weighted mean — E1 gen `.12` · E2 debug `.22` · E3 multi-lang `.18` · "
-        "E5 tests `.18` · E7 constraints `.15` · E9 markup `.15`.",
+        "E5 tests `.18` · E7 constraints `.15` · E9 markup `.15` · E-hard `.18` (4-task "
+        "discriminator band; also gates `coder`).",
         f"`coder` overlay (hysteresis): earn ✓ at composite ≥ {E_CODER_COMPOSITE_MIN} "
         f"(+ generate ≥ {E_CODER_GENERATE_MIN}, debug > 0); retained ~ down to "
         f"{E_CODER_COMPOSITE_BAND}; dropped below.",

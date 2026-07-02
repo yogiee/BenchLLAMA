@@ -487,5 +487,61 @@
    "assert abs(sum(settle([{'payer':'A','amount':77,'participants':['A','B','C']},{'payer':'B','amount':40,'participants':['A','B']}], [['C','A',10]]).values())) < 0.02",
    "assert all(abs(settle([{'payer':'Jack','amount':1700,'participants':['Jack','Chris','Sam']},{'payer':'Jack','amount':3600,'participants':['Jack','Chris']},{'payer':'Chris','amount':125,'participants':['Jack','Chris','Sam']},{'payer':'Chris','amount':4000,'participants':['Jack','Chris','Sam']},{'payer':'Jack','amount':2000,'participants':['Jack','Chris','Sam']},{'payer':'Chris','amount':125,'participants':['Jack','Chris','Sam']},{'payer':'Jack','amount':1400,'participants':['Jack','Chris','Sam']}], [['Sam','Jack',2000],['Chris','Jack',1300]])[k]-v) < 0.05 for k,v in [('Jack',7083.33),('Chris',-1966.67),('Sam',-5116.67)])"
   ]
+ },
+ {
+  "id": "ehard_apportion",
+  "category": "E-hard",
+  "entry": "apportion",
+  "prompt": "Write a Python function `apportion(votes, seats)` that allocates a fixed number of integer `seats` to parties in proportion to their votes, using the **largest-remainder (Hamilton) method**.\n\n`votes` is a dict `{party: int_votes}`. First give each party the FLOOR of its exact quota `seats * votes[party] / total_votes`. Then hand out the leftover seats ONE AT A TIME to the parties with the largest fractional remainders. Break ties deterministically: larger remainder first; if remainders tie, more votes first; if still tied, party name ascending (alphabetical).\n\nReturn a dict `{party: seats_awarded}` including every party (0 is allowed). The awarded seats MUST sum to exactly `seats`. If `total_votes` is 0 or `seats <= 0`, return every party mapped to 0.",
+  "gate": {
+   "require_symbol": "apportion",
+   "allow": [
+    "fractions"
+   ]
+  },
+  "reference": "from fractions import Fraction\ndef apportion(votes, seats):\n    total = sum(votes.values())\n    if total == 0 or seats <= 0:\n        return {p: 0 for p in votes}\n    quota = {p: Fraction(seats * v, total) for p, v in votes.items()}\n    base = {p: quota[p].numerator // quota[p].denominator for p in votes}\n    rem = {p: quota[p] - base[p] for p in votes}\n    order = sorted(votes, key=lambda p: (-rem[p], -votes[p], p))\n    for i in range(seats - sum(base.values())):\n        base[order[i]] += 1\n    return base\n",
+  "checks": [
+   "assert apportion({'A': 100, 'B': 50, 'C': 30}, 10) == {'A': 5, 'B': 3, 'C': 2}",
+   "assert apportion({'X': 1, 'Y': 1}, 4) == {'X': 2, 'Y': 2}",
+   "assert apportion({'A': 10, 'B': 0}, 5) == {'A': 5, 'B': 0}",
+   "assert apportion({'A': 1, 'B': 1, 'C': 1}, 4) == {'A': 2, 'B': 1, 'C': 1}",
+   "assert sum(apportion({'A': 47, 'B': 53, 'C': 100, 'D': 3}, 17).values()) == 17"
+  ]
+ },
+ {
+  "id": "ehard_free_slots",
+  "category": "E-hard",
+  "entry": "free_slots",
+  "prompt": "Write a Python function `free_slots(busy, day_start, day_end, min_len)` that returns the free gaps in a schedule.\n\n`busy` is a list of `[start, end]` half-open intervals (integers, minutes) that may overlap, touch, be unsorted, or fall partly/fully outside the working window `[day_start, day_end]`. Clip busy intervals to the window, merge any that overlap OR touch, then return the FREE gaps inside the window that are NOT covered by busy.\n\nReturn a list of `[start, end]` pairs (lists), sorted by start, INCLUDING only gaps whose length (`end - start`) is `>= min_len`. Return `[]` if there is no qualifying free time.",
+  "gate": {
+   "require_symbol": "free_slots"
+  },
+  "reference": "def free_slots(busy, day_start, day_end, min_len):\n    ivs = sorted((max(s, day_start), min(e, day_end)) for s, e in busy if min(e, day_end) > max(s, day_start))\n    merged = []\n    for s, e in ivs:\n        if merged and s <= merged[-1][1]:\n            merged[-1][1] = max(merged[-1][1], e)\n        else:\n            merged.append([s, e])\n    free = []\n    cur = day_start\n    for s, e in merged:\n        if s - cur >= min_len:\n            free.append([cur, s])\n        cur = max(cur, e)\n    if day_end - cur >= min_len:\n        free.append([cur, day_end])\n    return free\n",
+  "checks": [
+   "assert free_slots([[60, 120], [180, 210]], 0, 240, 1) == [[0, 60], [120, 180], [210, 240]]",
+   "assert free_slots([[60, 120], [100, 150]], 0, 200, 1) == [[0, 60], [150, 200]]",
+   "assert free_slots([[30, 60], [70, 100]], 0, 100, 15) == [[0, 30]]",
+   "assert free_slots([[-30, 30], [220, 300]], 0, 240, 1) == [[30, 220]]",
+   "assert free_slots([[0, 100]], 0, 100, 1) == []",
+   "assert free_slots([], 0, 100, 1) == [[0, 100]]"
+  ]
+ },
+ {
+  "id": "ehard_calc",
+  "category": "E-hard",
+  "entry": "calc",
+  "prompt": "Write a Python function `calc(expr)` that evaluates an arithmetic expression string and returns the numeric result. Support `+`, `-`, `*`, `/`, parentheses, unary minus (e.g. `-3`, `2 - -4`), integer and decimal literals, and arbitrary whitespace. Honor standard operator precedence and left-to-right associativity; `/` is real (float) division. You must PARSE the expression yourself \u2014 do not use `eval`, `exec`, or similar.",
+  "gate": {
+   "require_symbol": "calc"
+  },
+  "reference": "import re\ndef calc(expr):\n    toks = re.findall(r'\\d+\\.\\d+|\\d+|[()+\\-*/]', expr.replace(' ', ''))\n    pos = 0\n    def peek():\n        return toks[pos] if pos < len(toks) else None\n    def adv():\n        nonlocal pos\n        t = toks[pos]; pos += 1; return t\n    def atom():\n        t = peek()\n        if t == '(':\n            adv(); v = expr_(); adv(); return v\n        if t == '-':\n            adv(); return -atom()\n        if t == '+':\n            adv(); return atom()\n        adv(); return float(t) if '.' in t else int(t)\n    def term():\n        v = atom()\n        while peek() in ('*', '/'):\n            op = adv(); r = atom(); v = v * r if op == '*' else v / r\n        return v\n    def expr_():\n        v = term()\n        while peek() in ('+', '-'):\n            op = adv(); r = term(); v = v + r if op == '+' else v - r\n        return v\n    return expr_()\n",
+  "checks": [
+   "assert calc('2+3*4') == 14",
+   "assert calc('(2+3)*4') == 20",
+   "assert calc('2 - -3') == 5",
+   "assert abs(calc('10 / 4') - 2.5) < 1e-9",
+   "assert calc('-(3 + 4) * 2') == -14",
+   "assert abs(calc('2 * (3 + 4) - 5 / 5') - 13.0) < 1e-9"
+  ]
  }
 ]
