@@ -184,20 +184,6 @@
     "added_idx": 3
   },
   {
-    "name": "ornith:9b-bf16",
-    "disk_gb": 17.9,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 1
-  },
-  {
     "name": "gemma4:26b",
     "disk_gb": 18.0,
     "role": "worker",
