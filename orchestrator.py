@@ -234,6 +234,17 @@ class Orchestrator:
             pass
         t_run_start = time.time()
         self.state.models = load_all_models()
+        # Run-provenance fingerprint (runtime / harness commit / model digests / dataset
+        # hashes / OS+hw) captured once at run start → runs.env, surfaced by export.py.
+        if self._db is not None:
+            try:
+                from bench_utils import env_fingerprint
+                env = env_fingerprint(models=[m.name for m in self.state.models])
+                self._db.set_env(self.run_id, env)
+                self._emit(f"  env: ollama {env.get('ollama_version')} · "
+                           f"benchllama {env.get('benchllama_commit')}")
+            except Exception:
+                pass
         self._on_event()
 
         for i, (label, argv, role_filter) in enumerate(self._phases_spec):

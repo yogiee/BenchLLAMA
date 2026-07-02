@@ -253,12 +253,23 @@ def build():
         "long_context": ranked(has_lctx, lctx_key),
     }
 
+    # Run-provenance fingerprint of the most recent run (ollama_version / benchllama_commit /
+    # model_digests / dataset hashes / os+hardware) — lets a consumer attribute a score delta
+    # to runtime, harness, weights, or test-set. Empty {} until a run records one.
+    environment = {}
+    try:
+        import results_db
+        environment = results_db.latest_env()
+    except Exception:
+        pass
+
     return {
         "schema": SCHEMA,
         "generated": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "source": "BenchLLAMA",
         "host_profile": HOST_PROFILE,
         "protocol": PROTOCOL,
+        "environment": environment,
         "result_files": sources,
         "models": models,
         "rankings": rankings,

@@ -70,7 +70,8 @@ CREATE INDEX IF NOT EXISTS idx_results_battery       ON results(battery);
 """
 
 # Columns added to `runs` after the original schema shipped — applied to pre-existing DBs by _migrate.
-_RUNS_ADDED = (("finished_at", "TEXT"), ("status", "TEXT"), ("elapsed_s", "REAL"))
+_RUNS_ADDED = (("finished_at", "TEXT"), ("status", "TEXT"), ("elapsed_s", "REAL"),
+               ("env", "TEXT"))  # JSON run-provenance fingerprint (bench_utils.env_fingerprint)
 
 
 def _migrate(c) -> None:
@@ -173,6 +174,29 @@ def finish_run(run_id: str, status: str = "done", elapsed_s: float | None = None
                       (_now(), status, elapsed_s, run_id))
     except Exception:
         pass
+
+
+def set_env(run_id: str, env: dict, path: Path = DB_PATH) -> None:
+    """Store the run-provenance fingerprint (bench_utils.env_fingerprint) on the run row.
+    Idempotent; never raises into the caller (a DB hiccup must not break a live benchmark)."""
+    try:
+        start_run(run_id, path=path)
+        with _conn(path) as c:
+            c.execute("UPDATE runs SET env=? WHERE run_id=?", (json.dumps(env), run_id))
+    except Exception:
+        pass
+
+
+def latest_env(path: Path = DB_PATH) -> dict:
+    """Provenance fingerprint of the most recent run that recorded one ({} if none).
+    Surfaced by export.py as the `environment` block."""
+    try:
+        with _conn(path) as c:
+            row = c.execute("SELECT env FROM runs WHERE env IS NOT NULL "
+                            "ORDER BY started_at DESC LIMIT 1").fetchone()
+        return json.loads(row["env"]) if row and row["env"] else {}
+    except Exception:
+        return {}
 
 
 def record_phase(run_id: str, idx: int, label: str, started_at: str,

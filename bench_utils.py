@@ -3,11 +3,114 @@ BenchLLAMA — shared utilities
 Imported by runner.py, ctx_ladder.py, and aptitude.py.
 """
 
+import hashlib
 import os
+import platform
 import re
 import subprocess
 import time
+from pathlib import Path
+
 import requests
+
+_REPO = Path(__file__).resolve().parent
+
+
+# ── Run provenance / environment fingerprint ──────────────────────────────────
+# Captured ONCE at run start so a score delta can be attributed to the right cause:
+# runtime (ollama_version) · harness (benchllama_commit) · model weights
+# (model_digests) · test set (datasets) · OS/Metal (os/hardware). Best-effort, per
+# field — NEVER raises into the caller (a probe failure must not break a benchmark).
+
+# Scoring-relevant inputs whose content silently changes results — hashed so a
+# test-set/prompt edit is visible in provenance. Missing files are skipped.
+_DATASET_FILES = {
+    "coding_problems":   "suites/coding/problems.json",
+    "elasticity_ladder": "suites/elasticity/ladder.json",
+    "longctx":           "suites/longctx/dataset.json",
+    "vision_gt":         "suites/vision/ground_truth.json",
+    "prompt_worker":     "prompts/worker_default.md",
+    "prompt_router":     "prompts/router_default.md",
+}
+
+
+def _sh(*argv) -> str | None:
+    try:
+        out = subprocess.run(argv, capture_output=True, text=True, timeout=5)
+        return out.stdout.strip() or None
+    except Exception:
+        return None
+
+
+def _benchllama_commit() -> str | None:
+    sha = _sh("git", "-C", str(_REPO), "rev-parse", "--short", "HEAD")
+    if not sha:
+        return None
+    dirty = _sh("git", "-C", str(_REPO), "status", "--porcelain")
+    return sha + ("-dirty" if dirty else "")
+
+
+def _dataset_hashes() -> dict:
+    out = {}
+    for key, rel in _DATASET_FILES.items():
+        p = _REPO / rel
+        try:
+            out[key] = hashlib.sha256(p.read_bytes()).hexdigest()[:12]
+        except Exception:
+            pass  # absent (optional dataset) — omit rather than error
+    return out
+
+
+def _os_hardware() -> tuple[dict, dict]:
+    osd = {"name": platform.system(), "kernel": platform.release()}
+    try:
+        mac = platform.mac_ver()[0]
+        if mac:
+            osd["version"] = mac
+    except Exception:
+        pass
+    hw = {"cores": os.cpu_count()}
+    chip = _sh("sysctl", "-n", "machdep.cpu.brand_string") or _sh("sysctl", "-n", "hw.model")
+    if chip:
+        hw["chip"] = chip
+    mem = _sh("sysctl", "-n", "hw.memsize")
+    if mem and mem.isdigit():
+        hw["ram_gb"] = round(int(mem) / (1024 ** 3))
+    return osd, hw
+
+
+def _model_digests(host: str, only: set | None = None) -> dict:
+    try:
+        tags = requests.get(f"{host}/api/tags", timeout=10).json().get("models", [])
+    except Exception:
+        return {}
+    out = {}
+    for m in tags:
+        name = m.get("name") or m.get("model")
+        dig = m.get("digest")
+        if name and dig and (only is None or name in only):
+            out[name] = dig[:16]
+    return out
+
+
+def env_fingerprint(host: str = "http://localhost:11434", models=None) -> dict:
+    """Run-provenance snapshot: ollama runtime, harness commit, model weight digests,
+    dataset/prompt hashes, and structured OS/hardware. Best-effort — a failed probe
+    yields a missing key, never an exception. `models` (names) filters the digest map."""
+    try:
+        ver = requests.get(f"{host}/api/version", timeout=10).json().get("version")
+    except Exception:
+        ver = None
+    osd, hw = _os_hardware()
+    return {
+        "ollama_version":    ver,
+        "benchllama_commit": _benchllama_commit(),
+        "datasets":          _dataset_hashes(),
+        "model_digests":     _model_digests(host, set(models) if models else None),
+        "os":                osd,
+        "hardware":          hw,
+        "captured_at":       time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
 
 
 # ── Model sort order (shared run + dashboard sort) ────────────────────────────
