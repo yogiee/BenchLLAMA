@@ -12,6 +12,8 @@ so LAN exposure is a deliberate trust decision (see P5 for read-only/token gatin
 
 import asyncio
 import json
+import os
+import signal
 import socket
 import sys
 import webbrowser
@@ -281,10 +283,45 @@ def main():
     control = "all clients" if allow_control else "this machine only · LAN read-only"
     _banner(open_url, lan, port, mode, control)
     try:
-        webbrowser.open(open_url)
+        asyncio.run(_serve(app, host, port, open_url))
+    except KeyboardInterrupt:
+        pass   # belt-and-suspenders: a SIGINT racing before handlers are installed
+
+
+async def _serve(app, host, port, open_url):
+    """Run the app with our OWN signal handling so a single Ctrl-C exits cleanly.
+
+    aiohttp's web.run_app installs handlers that often swallow the first SIGINT (you had to
+    press Ctrl-C twice). Here the first Ctrl-C/SIGTERM sets the stop event → graceful cleanup
+    (which stops any active orchestrator run); a second forces an immediate exit."""
+    runner = web.AppRunner(app)
+    await runner.setup()                    # fires on_startup (auto-run if launched with a command)
+    site = web.TCPSite(runner, host, port)
+    await site.start()
+    try:
+        webbrowser.open(open_url)           # open only after the server is actually accepting
     except Exception:
         pass
-    web.run_app(app, host=host, port=port, print=None)
+
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    presses = {"n": 0}
+    def _sig():
+        presses["n"] += 1
+        if presses["n"] >= 2:
+            os._exit(130)                   # second Ctrl-C → hard exit, no waiting
+        print(paint("\n  shutting down…", "dim"), flush=True)
+        stop.set()
+    for s in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(s, _sig)
+        except (NotImplementedError, RuntimeError):
+            pass                            # non-Unix / no running loop → fall back to KeyboardInterrupt
+
+    try:
+        await stop.wait()
+    finally:
+        await runner.cleanup()              # fires on_cleanup → stops the orchestrator run
 
 
 if __name__ == "__main__":
