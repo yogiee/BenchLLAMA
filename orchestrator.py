@@ -27,7 +27,7 @@ MODELS_FILE = REPO / "models.json"
 PAUSE_SECS  = 10        # between pipeline phases
 MAX_LOG     = 4000      # capped in-memory log buffer (for late-joining web clients)
 
-COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx"}
+COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen"}
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
@@ -133,6 +133,8 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x), "cap:embedding")]
     if cmd == "longctx":
         return [("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x), "cap:completion")]
+    if cmd == "imagegen":
+        return [("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image")]
     if cmd == "batteries":
         return [
             (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
@@ -143,7 +145,15 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
             (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),           "cap:completion"),
         ]
     if cmd == "all":
-        return [
+        # --with-elastic / --with-imagegen append normally-opt-in batteries as final in-pipeline
+        # phases, so one unattended run can cover EVERYTHING under a single run_id / run-log:
+        #   F-elastic — rePrompt/TerminalScripts selection basis (slow, prompt-σ).
+        #   imagegen  — Battery I, reference-only image-gen characterization (very slow, GPU-heavy).
+        # Both are stripped from x so they aren't forwarded to the other phase subprocesses.
+        with_elastic  = "--with-elastic" in x
+        with_imagegen = "--with-imagegen" in x
+        x = [a for a in x if a not in ("--with-elastic", "--with-imagegen")]
+        phases = [
             ("Standard Suite", _cmd(REPO/"runner.py", *x),                                              None),
             ("ctx Ladder",     _cmd(REPO/"ctx_ladder.py", *x),                                          None),
             (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),              "router"),
@@ -156,6 +166,12 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
             ("Vision (Battery V)",      _cmd(REPO/"vision.py", *x),                              "cap:vision"),
             ("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x),                           "cap:embedding"),
         ]
+        if with_elastic:
+            phases.append((BATTERY_LABELS["F-ELASTIC"] + _AVG3,
+                           _cmd(REPO/"average_e_runs.py", "--battery", "F-elastic", *x), "cap:completion"))
+        if with_imagegen:
+            phases.append(("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image"))
+        return phases
     return []
 
 # ── Orchestrator ────────────────────────────────────────────────────────────────
@@ -425,8 +441,28 @@ class Orchestrator:
 
 # ── Console mode (the headless / quick-glance path) ─────────────────────────────
 
+def _style_frame(line: str) -> str:
+    """Colorize ONLY the orchestrator's own frame lines (phase banners, env, timings,
+    run-log path, stop) at the console print boundary — subprocess body lines pass
+    through untouched, and nothing here reaches the run-log file or the web log (both
+    are fed the plain, pre-style text via _emit)."""
+    from bench_utils import paint, COLOR
+    if not COLOR:
+        return line
+    s = line.strip()
+    if s and set(s) <= {"━"}:                       # banner rules
+        return paint(line, "cyan")
+    if " ▶ " in line:                               # phase title
+        return paint(line, "bold", "cyan")
+    if "■" in line:                                 # stop / abort
+        return paint(line, "bold", "yellow")
+    if s.startswith(("env:", "Run log →")) or (s.startswith("run ") and "status=" in s):
+        return paint(line, "dim")                   # provenance + timings block
+    return line
+
+
 def run_console(phases_spec: list[tuple]) -> None:
-    orch = Orchestrator(phases_spec, on_log=lambda l: print(l, flush=True))
+    orch = Orchestrator(phases_spec, on_log=lambda l: print(_style_frame(l), flush=True))
     try:
         asyncio.run(orch.run())
     except KeyboardInterrupt:

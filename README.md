@@ -7,7 +7,7 @@
 
 ---
 
-BenchLLAMA runs structured, repeatable benchmarks against any model served by [Ollama](https://ollama.com). It measures personality, reasoning, research depth, instruction following, tool use, coding, consistency, vision, and embedding — then produces ranked results you can act on, served live in a browser dashboard.
+BenchLLAMA runs structured, repeatable benchmarks against any model served by [Ollama](https://ollama.com). It measures personality, reasoning, research depth, instruction following, tool use, coding, consistency, long-context retrieval, vision, embedding, and image generation — then produces ranked results you can act on, served live in a browser dashboard.
 
 ## What's inside
 
@@ -15,9 +15,11 @@ BenchLLAMA runs structured, repeatable benchmarks against any model served by [O
 |--------|---------|
 | `runner.py` | Standard suite — 13 tests across 5 dimensions |
 | `ctx_ladder.py` | Context window characterisation — finds optimal `num_ctx` per model |
-| `aptitude.py` | Role-specific batteries (A–F) — deep evaluation for router and worker models |
+| `aptitude.py` | Role-specific batteries (A–F, F-elastic) — deep evaluation for router and worker models |
+| `longctx.py` | Battery G — long-context retrieval & degradation (planted needles + prefill/decode speed-collapse) |
 | `vision.py` | Battery V — capability-routed vision/OCR evaluation |
 | `embedding.py` | Battery EMB — capability-routed embedding evaluation |
+| `imagegen.py` | Battery I — capability-routed image-gen perf + prompt-adherence (reference-only, opt-in) |
 | `orchestrator.py` | Headless orchestration core + plain-text console runner |
 | `webserver.py` | Web UI server (aiohttp) — drives the orchestrator, serves the live dashboard over WebSocket |
 | `web/index.html` | The browser dashboard — phase tree, model cards, streamed log, Rankings + Files viewers |
@@ -35,8 +37,13 @@ pip install requests aiohttp beautifulsoup4 html5lib tinycss2
 # Plain terminal instead of the browser (headless / SSH / quick glance)
 ./bench.sh all --console
 
-# Full pipeline: standard → ctx ladder → A–D → E → F → Vision → Embedding
+# Full pipeline: standard → ctx ladder → A–D → E → F → G → Vision → Embedding
 ./bench.sh all
+
+# Everything, incl. the opt-in batteries, in one unattended pass (single run-log):
+#   --with-elastic  → append Battery F-elastic (prompt-σ)
+#   --with-imagegen → append Battery I (image-gen characterisation)
+./bench.sh all --with-elastic --with-imagegen
 
 # Individual suites
 ./bench.sh standard
@@ -44,11 +51,25 @@ pip install requests aiohttp beautifulsoup4 html5lib tinycss2
 ./bench.sh aptitude --battery B
 ./bench.sh aptitude --battery D --capable-only
 ./bench.sh aptitude --battery E       # coding — 3-run averaged by default
+./bench.sh longctx                    # Battery G — long-context needles + speed-collapse
 ./bench.sh vision                     # every vision-capable model
 ./bench.sh embedding                  # every embedding model
+./bench.sh imagegen                   # Battery I — image-gen (opt-in, reference-only, slow)
 
 # Fast mode (skip cooldown — informal results)
 ./bench.sh standard --fast
+```
+
+### Unattended full run
+
+For a whole-fleet run you leave going (e.g. overnight), wrap it in `caffeinate` so macOS
+doesn't sleep and kill it, and chain `export.py` to publish rankings when it finishes:
+
+```bash
+caffeinate -dimsu bash -c '
+  ./bench.sh all --with-elastic --with-imagegen --console --force &&
+  python3 export.py
+' 2>&1 | tee results/overnight_$(date +%F).log
 ```
 
 ### Live dashboard
@@ -74,7 +95,7 @@ Bind to the LAN with `--host 0.0.0.0` (read-only unless you add `--allow-control
 
 ## Aptitude batteries
 
-Batteries A–F run after the standard suite on models that qualify; Vision and Embedding are **capability-routed** (selected by a model's `capabilities` array in `models.json`, not gated by the standard suite).
+Batteries A–F run after the standard suite on models that qualify. Battery G is completion-routed (like E). Vision, Embedding, and Image-gen are **capability-routed** — selected by a model's `capabilities` array in `models.json` (`vision` / `embedding` / `image`), not gated by the standard suite. F-elastic and Image-gen are opt-in (never in `all`; append with `--with-elastic` / `--with-imagegen`).
 
 | Battery | Role / routing | What it measures |
 |---------|----------------|-----------------|
@@ -84,10 +105,13 @@ Batteries A–F run after the standard suite on models that qualify; Vision and 
 | D | Worker — Tool-heavy | Tool chains, error recovery, partial failure handling, personality + tool integration |
 | E | Completion (worker + router) | Coding, execution-graded — generate, debug, multi-language (JS/SQL/PHP), test-writing, constraints, HTML/CSS quality. 3-run averaged; clears threshold → earns the `coder` extended role |
 | F | Worker — Chat | Conversational consistency across multi-turn runs (within-run-relative; reports σ) |
+| F-elastic | Completion (opt-in) | Prompt-elasticity — how the F-composite moves across a system-prompt complexity ladder; judge-free adherence meter. Never in `all`; append with `--with-elastic` |
+| G | Completion (worker + router) | Long-context retrieval & degradation — fills the window (1k–16k+) with distractors + planted needles + a 3-hop chain; exact-match accuracy AND prefill/decode speed-collapse; headline `clean_depth` |
 | V | `vision` capability | Vision/OCR vs PIL ground truth — ocr, count, chart, spatial, describe |
 | EMB | `embedding` capability | Embedding quality — STS, triplet, retrieval (length-stratified), clustering; quality-per-GB |
+| I | `image` capability (opt-in) | Image-gen characterisation — **perf + prompt-adherence, not quality**. Blind-VLM ✓-core checklist, OCR text-fidelity, per-image reliability (retries + unload/reload recovery). Reference-only, never ranked; append with `--with-imagegen` |
 
-Use `--capable-only` with Batteries C, D, and E to automatically skip models that failed the tool-use test in the most recent standard run.
+Use `--capable-only` with Batteries C, D, E, and G to automatically skip models that failed the tool-use test in the most recent standard run.
 
 ## Requirements
 
@@ -115,8 +139,11 @@ Results land in `results/` (gitignored). Each run produces a JSON + Markdown rep
 | `ctx_ladder.py` | `ctx_ladder_YYYY-MM-DD.json` + `.md` |
 | `aptitude.py --battery B` | `aptitude_b_YYYY-MM-DD.json` + `.md` |
 | `aptitude.py --battery E` | `aptitude_e_YYYY-MM-DD.json` + `.md` |
+| `aptitude.py --battery F-elastic` | `aptitude_f_elastic_YYYY-MM-DD.json` + `.md` |
+| `longctx.py` | `longctx_YYYY-MM-DD.json` + `.md` |
 | `vision.py` | `vision_YYYY-MM-DD.json` + `.md` |
 | `embedding.py` | `embedding_YYYY-MM-DD.json` + `.md` |
+| `imagegen.py` | `imagegen_YYYY-MM-DD.json` + `.md` (+ PNGs under `results/imagegen_images/`) |
 
 The canonical ranking table lives at `rankings/master.md`; `export.py` produces the machine-readable, already-pruned `rankings/rankings.json` (and publishes it for consumers).
 

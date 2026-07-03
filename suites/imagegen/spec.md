@@ -1,7 +1,9 @@
 # Battery I — Image-Gen Characterization (`imagegen.py`) — SPEC
 
-**Status:** designed 2026-06-29, not yet built. Build *after* the storage/E-hard work has had a
-real shakedown; never competes with a benchmark run for the GPU.
+**Status:** designed 2026-06-29; **BUILT 2026-07-04** (`imagegen.py`). Contract re-probed live before
+build (`/api/generate` → base64 PNG + `load_duration`/`total_duration`; `/api/ps` → `size_vram`; VLM
+checklist parseable). Opt-in — `./bench.sh imagegen`, or `./bench.sh all --with-imagegen` to append it
+to a full run; never in default `all`. Image models admitted to the registry via the new `image` lane.
 
 ## Purpose & scope
 Characterise local **image-generation** models on **performance** + **prompt-adherence** — explicitly

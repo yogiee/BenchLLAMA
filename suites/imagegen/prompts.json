@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "battery": "I",
+    "note": "Image-gen characterization — PERFORMANCE + prompt-ADHERENCE, never quality. core=confident checklist (drives adherence%); fine=advisory (human-spot-check only). See suites/imagegen/spec.md.",
+    "grader": "qwen2.5vl:3b",
+    "ocr": ["minicpm-v4.6:1b", "qwen2.5vl:3b"],
+    "images_per_prompt": 3
+  },
+  "prompts": [
+    {
+      "id": "P1",
+      "name": "Photoreal — Animal",
+      "kind": "photoreal",
+      "expect_lead": "z-image",
+      "prompt": "At golden hour, capture a close-up of a red fox in untouched snow, focusing on the sharp texture of its fur and visible breath mist. Emphasize the enigmatic, mysterious nature with subtle, serene elements like frosty air and gently falling snowflakes onto the fox's back. Use a 'fluffed' and 'ruffled' expression. Shot on a Sigma 85mm Art lens at f1.4: shallow depth of field while keeping the fox completely in focus.",
+      "core": [
+        "a red fox",
+        "untouched / undisturbed snow",
+        "warm golden-hour lighting",
+        "close-up framing of the fox",
+        "shallow depth of field (background soft-blurred, fox sharp)"
+      ],
+      "fine": [
+        "visible breath mist from the fox",
+        "falling snowflakes in the air",
+        "snow resting on the fox's back",
+        "crisp individual-fur texture"
+      ],
+      "text_target": null,
+      "text_mode": null
+    },
+    {
+      "id": "P2",
+      "name": "Photoreal — Human",
+      "kind": "photoreal",
+      "expect_lead": "z-image",
+      "prompt": "Candid, documentary-style portrait of an elderly fisherman at a harbor dock in early morning. Weathered face, deep-set eyes, deep wrinkles; a long, unruly grey beard with white flecks; a worn yellow raincoat with stains and small tears. A still, quiet morning; rough dock textures, worn ropes, mistiness. Soft muted golden light with a rim-light from behind-left catching the edges of his face and hair. Shot on a 50mm Nikon at f/2.4 — the fisherman tack-sharp while the harbor melts into bokeh but stays identifiable.",
+      "core": [
+        "an elderly man",
+        "a weathered / heavily-wrinkled face",
+        "a long unruly grey beard",
+        "a worn yellow raincoat",
+        "a harbor / dock setting",
+        "soft muted morning light",
+        "a candid portrait composition",
+        "a blurred (bokeh) but readable harbor background"
+      ],
+      "fine": [
+        "white flecks in the beard",
+        "stains or tears on the coat",
+        "rim-light from behind-left on face/hair edges",
+        "worn ropes / rough dock texture",
+        "misty air"
+      ],
+      "text_target": null,
+      "text_mode": null
+    },
+    {
+      "id": "P3",
+      "name": "Design — Jazz Poster + Text",
+      "kind": "design",
+      "expect_lead": "flux",
+      "prompt": "A minimalist jazz poster: a gold saxophone silhouette on deep navy, with a clean sans-serif heading (Helvetica / Arial) proportional to the instrument. The saxophone has smooth curved lines, subtle shading and a metal texture. The navy background has a slight gradient and texture for depth. A woman with a confident, playful expression, curly hair, and heels with a subtle sheen. Subtle lighting depth; a faint grid texture; slight motion and energy around the woman. The heading text reads exactly: BLUE NOTE, FRIDAY 9PM",
+      "core": [
+        "a poster / graphic-design style (not a photo)",
+        "a gold saxophone silhouette",
+        "a deep-navy background",
+        "a sans-serif heading present",
+        "a woman present",
+        "the woman has curly hair",
+        "the woman is wearing heels"
+      ],
+      "fine": [
+        "metal shading / curve detail on the sax",
+        "a background gradient or faint grid",
+        "the heading is proportional to the sax",
+        "a confident / playful expression",
+        "motion-blur or energy around the woman"
+      ],
+      "text_target": "BLUE NOTE, FRIDAY 9PM",
+      "text_mode": "fidelity"
+    },
+    {
+      "id": "P4",
+      "name": "Design — Highway Billboard Render",
+      "kind": "design",
+      "expect_lead": "flux",
+      "prompt": "A photorealistic highway billboard in daytime. On the billboard advertisement: a background of cyan sky and a park; a woman in a deep-cut yellow summer dress (subtle fabric texture, jewelry and accessories), a confident relaxed expression, a direct gaze at the camera and a soft smile; a soft-drink bottle clearly visible and appealing. In the real scene around the billboard: cars on the highway emphasising motion and speed (blur / streaks). Subtle haze and mist in the sky and park; highly detailed and realistic. The billboard ad text reads exactly: FRESH COLA. FRESH SUMMER.",
+      "core": [
+        "a photorealistic billboard",
+        "a daytime scene",
+        "a cyan sky on the billboard ad",
+        "a park backdrop on the billboard ad",
+        "a woman in a yellow dress on the ad",
+        "a soft-drink bottle clearly visible on the ad",
+        "bold advertisement text on the billboard",
+        "a highway / road context around the billboard",
+        "cars present in the scene"
+      ],
+      "fine": [
+        "deep-cut dress with jewelry",
+        "direct-gaze / smiling expression",
+        "car motion-blur or speed streaks",
+        "atmospheric haze / mist",
+        "realistic billboard scale and perspective"
+      ],
+      "text_target": "FRESH COLA. FRESH SUMMER.",
+      "text_mode": "fidelity"
+    },
+    {
+      "id": "P5",
+      "name": "Neutral — Futuristic Metro",
+      "kind": "neutral",
+      "expect_lead": null,
+      "prompt": "A highly detailed, near-futuristic cityscape at dusk. Kilometer-high skyscrapers in angular, curved and organic forms. Neon and holographic billboards in vibrant colors and patterns, prominent, with random brand text. People in revealing cyberpunk clothing (fabric, buckles, zippers, cyberpunk colors). Dramatic lighting effects; wet, reflective pavement with rain and mist.",
+      "core": [
+        "a near-futuristic cityscape",
+        "dusk / evening lighting",
+        "very tall skyscrapers",
+        "neon or holographic billboards (vibrant, prominent)",
+        "people present",
+        "wet reflective pavement / reflections"
+      ],
+      "fine": [
+        "angular / curved / organic building forms",
+        "revealing cyberpunk outfits (fabric / buckle / zipper detail)",
+        "rain / mist effects"
+      ],
+      "text_target": null,
+      "text_mode": "legibility"
+    }
+  ]
+}

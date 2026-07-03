@@ -16,6 +16,50 @@ import requests
 _REPO = Path(__file__).resolve().parent
 
 
+# ── Terminal styling (TTY/env-gated; safe to import anywhere) ──────────────────
+# ANSI is emitted ONLY for an interactive terminal. When stdout is a pipe (the
+# orchestrator captures every subprocess over a PIPE → the run-log file + the web
+# dashboard), COLOR is False, so those surfaces stay plain — no escape-code litter.
+# Overridable: BENCH_COLOR=1 forces on, BENCH_COLOR=0 / NO_COLOR forces off.
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+_CODES = {
+    "reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
+    "red": "\033[31m", "green": "\033[32m", "yellow": "\033[33m",
+    "blue": "\033[34m", "cyan": "\033[36m",
+    "orange": "\033[38;5;208m", "grey": "\033[38;5;245m",
+}
+
+
+def _color_enabled() -> bool:
+    force = os.environ.get("BENCH_COLOR")
+    if force is not None:
+        return force not in ("0", "", "false", "no")
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    try:
+        import sys
+        return sys.stdout.isatty()
+    except Exception:
+        return False
+
+
+COLOR = _color_enabled()
+
+
+def paint(text: str, *styles: str) -> str:
+    """Wrap text in ANSI styles when COLOR is on; a plain no-op otherwise."""
+    if not COLOR or not styles:
+        return text
+    pre = "".join(_CODES.get(s, "") for s in styles)
+    return f"{pre}{text}{_CODES['reset']}"
+
+
+def strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
 # ── Run provenance / environment fingerprint ──────────────────────────────────
 # Captured ONCE at run start so a score delta can be attributed to the right cause:
 # runtime (ollama_version) · harness (benchllama_commit) · model weights

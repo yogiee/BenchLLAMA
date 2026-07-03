@@ -55,7 +55,8 @@ EXCLUDED_ARCHITECTURES = {"glmocr"}
 
 # Default role per lane. completion → worker (router promotion happens via the gate);
 # every specialist lane → the single 'utility' role (capability picks its battery).
-LANE_DEFAULT_ROLE = {"completion": "worker", "vision": "utility", "embedding": "utility"}
+LANE_DEFAULT_ROLE = {"completion": "worker", "vision": "utility",
+                     "embedding": "utility", "image": "utility"}
 
 
 def _arg(name, default=None):
@@ -73,7 +74,7 @@ keep_missing = "--keep-missing" in sys.argv
 def classify(caps, arch):
     """Assign an installed model to a benchmark lane from its capabilities.
 
-    Returns the lane name ('completion' | 'vision' | 'embedding') or None to skip.
+    Returns the lane name ('completion' | 'vision' | 'embedding' | 'image') or None to skip.
     Order matters: a completion model on an excluded architecture is an OCR/vision
     specialist, not a chat model, so it lands in the vision lane.
     """
@@ -86,7 +87,9 @@ def classify(caps, arch):
         return "embedding"
     if "vision" in caps:
         return "vision"
-    return None  # pure image-gen (flux/z-image) or unknown — nothing to grade
+    if "image" in caps:
+        return "image"   # image-gen (flux/z-image) → utility lane, run by Battery I (imagegen.py)
+    return None          # unknown — nothing to grade
 
 
 def fetch_installed(host):
@@ -140,7 +143,7 @@ if __name__ == "__main__":
         else:
             laned[name] = (lane, info)
 
-    by_lane = {"completion": 0, "vision": 0, "embedding": 0}
+    by_lane = {"completion": 0, "vision": 0, "embedding": 0, "image": 0}
     for _, (lane, _) in laned.items():
         by_lane[lane] += 1
 
@@ -148,10 +151,11 @@ if __name__ == "__main__":
           f"{by_lane['completion']} completion, "
           f"{by_lane['vision']} vision, "
           f"{by_lane['embedding']} embedding, "
+          f"{by_lane['image']} image, "
           f"{len(skipped)} skipped\n")
 
     if skipped:
-        print("Skipped (no text/vision/embedding capability — image-gen or unknown):")
+        print("Skipped (no gradeable capability — unknown/other):")
         for name, info in skipped.items():
             caps = ", ".join(sorted(info["capabilities"])) or "—"
             print(f"  {name:<32}  {info['disk_gb']:>5} GB  [{caps}]")

@@ -20,6 +20,7 @@ from pathlib import Path
 from aiohttp import web
 
 import orchestrator as O
+from bench_utils import paint
 
 REPO = Path(__file__).parent
 WEB = REPO / "web"
@@ -27,6 +28,23 @@ RESULTS = REPO / "results"
 RANKINGS_JSON = REPO / "rankings" / "rankings.json"
 MASTER_MD = REPO / "rankings" / "master.md"
 DEFAULT_PORT = 8077
+
+
+def _banner(open_url, lan, port, mode, control):
+    """Compact, color-when-interactive launch card (TTY-gated via bench_utils.paint)."""
+    rule = paint("─" * 46, "dim")
+    row  = lambda k, v: print("  " + paint(f"{k:<8}", "dim") + v)
+    print()
+    print("  " + paint("BenchLLAMA", "bold", "orange") + paint("  ·  web dashboard", "dim"))
+    print("  " + rule)
+    row("Local",   paint(open_url, "cyan", "bold"))
+    if lan:
+        row("LAN", paint(f"http://{lan}:{port}", "cyan") + paint("   (phone / iPad · read-only)", "dim"))
+    row("Mode",    mode)
+    row("Control", paint(control, "dim"))
+    print("  " + rule)
+    print("  " + paint("Ctrl-C to stop", "dim"))
+    print()
 
 
 def _lan_ip():
@@ -56,17 +74,23 @@ def _build_extra(payload: dict) -> list:
 
 
 def start_run(app, cmd: str, extra: list, sort: str = "size"):
-    """Create + launch an Orchestrator run. Returns (ok, msg). One run at a time."""
-    orch = app.get("orch")
-    task = app.get("orch_task")
+    """Create + launch an Orchestrator run. Returns (ok, msg). One run at a time.
+
+    Per-run state lives in the mutable `app["rt"]` holder (created pre-startup) — we
+    mutate its CONTENTS, never the app mapping itself, so aiohttp doesn't warn about
+    'changing state of a started application' once the server is live."""
+    rt = app["rt"]
+    orch = rt.get("orch")
+    task = rt.get("task")
     if orch and task and not task.done() and not orch.state.finished:
         return False, "a run is already active"
     phases = O.build_phases(cmd, extra)
     if not phases:
         return False, f"unknown command: {cmd}"
-    app["orch"] = O.Orchestrator(phases)
-    app["orch"].sort = sort if sort in ("size", "name", "fresh") else "size"   # → BENCH_SORT for subprocs
-    app["orch_task"] = asyncio.create_task(app["orch"].run())
+    orch = O.Orchestrator(phases)
+    orch.sort = sort if sort in ("size", "name", "fresh") else "size"   # → BENCH_SORT for subprocs
+    rt["orch"] = orch
+    rt["task"] = asyncio.create_task(orch.run())
     return True, "started"
 
 
@@ -105,7 +129,7 @@ async def _ws(request):
     ro = _readonly(request)
     try:
         while not ws.closed:
-            orch = request.app.get("orch")
+            orch = request.app["rt"].get("orch")
             if orch is None:
                 await ws.send_json({"idle": True, "read_only": ro})
                 cursor = 0
@@ -146,7 +170,7 @@ async def _stop(request):
     blocked = _guard(request)
     if blocked:
         return blocked
-    orch = request.app.get("orch")
+    orch = request.app["rt"].get("orch")
     if orch:
         orch.stop()
     return web.json_response({"ok": True})
@@ -215,10 +239,10 @@ async def _on_startup(app):
 
 
 async def _on_cleanup(app):
-    orch = app.get("orch")
+    orch = app["rt"].get("orch")
     if orch:
         orch.stop()
-    task = app.get("orch_task")
+    task = app["rt"].get("task")
     if task:
         task.cancel()
 
@@ -232,8 +256,7 @@ def main():
     allow_control = "--allow-control" in raw
 
     app = web.Application()
-    app["orch"] = None
-    app["orch_task"] = None
+    app["rt"] = {"orch": None, "task": None}   # mutable run holder (set pre-startup; contents mutated live)
     app["allow_control"] = allow_control
     if cmd:
         boot_extra = [a for a in raw if a not in (cmd, "--host", host, "--port", str(port), "--allow-control")]
@@ -254,11 +277,9 @@ def main():
     # 0.0.0.0 includes localhost, so open the local URL on the host machine
     open_url = f"http://localhost:{port}" if host in ("0.0.0.0", "127.0.0.1", "localhost") else f"http://{host}:{port}"
     lan = _lan_ip() if host == "0.0.0.0" else None
-    mode = "monitoring " + cmd if cmd else "select a run in the browser"
-    note = "  [control: all clients]" if allow_control else "  [control: this machine only · LAN read-only]"
-    print(f"BenchLLAMA web → {open_url}   ({mode}; Ctrl-C to stop){note}")
-    if lan:
-        print(f"                 LAN → http://{lan}:{port}   (phone / iPad, same Wi-Fi — read-only)")
+    mode = f"monitoring {cmd}" if cmd else "select a run in the browser"
+    control = "all clients" if allow_control else "this machine only · LAN read-only"
+    _banner(open_url, lan, port, mode, control)
     try:
         webbrowser.open(open_url)
     except Exception:
