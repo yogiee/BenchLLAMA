@@ -12,8 +12,15 @@ Per-battery differences:
   • F (consistency): grades BEHAVIOR (voice is warm/cold sensitive) → passes keep cool-down;
     no overlay. Averaged at per-dimension (F1–F5).
 
-  python3 average_e_runs.py --runs 3                  # Battery E (default)
+Resume (2026-07-06): by default this SKIPS models already scored for the battery in the SQLite DB
+(carried forward — export reads results_db.latest), and runs only the missing ones. So `all` after
+adding models no longer silently re-benchmarks (and re-charges cloud usage on) the whole fleet.
+  --force       → re-benchmark the whole completion fleet (full refresh)
+  --models X Y  → run exactly those, ignore resume
+
+  python3 average_e_runs.py --runs 3                  # Battery E — only models missing from the DB
   python3 average_e_runs.py --battery F --runs 3      # Battery F
+  python3 average_e_runs.py --battery F --runs 3 --force   # re-run the whole fleet
   python3 average_e_runs.py --battery F --average-only
 
 Outputs:  aptitude_<e|f>_<date>_run{k}.json (provenance) + aptitude_<e|f>_<date>.json/.md (canonical
@@ -46,6 +53,43 @@ def _models_arg():
         i = sys.argv.index("--models")
         return [a for a in sys.argv[i + 1:] if not a.startswith("--")]
     return []
+
+
+def _completion_models():
+    """The universe E/F/F-elastic run over — every registered model with the `completion` cap
+    (worker + router; utility/vision/embedding-only + image models are excluded)."""
+    try:
+        reg = json.loads((REPO / "models.json").read_text())
+        return [m["name"] for m in reg if "completion" in (m.get("capabilities") or [])]
+    except Exception:
+        return []
+
+
+def _resume_targets(explicit_models, force, bat):
+    """Which models to actually run this invocation. Mirrors runner.py/ctx_ladder resume-skip, but
+    keyed on the SQLite DB (never expires) — NOT a time-windowed file — so a fleet scored days ago is
+    still carried forward, and only genuinely-missing models re-run.
+
+      --models X Y  → run exactly those (explicit)
+      --force       → run the whole completion universe (full refresh)
+      (default)     → universe MINUS models already scored for this battery in the DB
+                      → [] means every model is already done (nothing to run)
+
+    Passes always run internal --force (a fresh pass each), so scoping is done via --models here.
+    The DB carries the skipped models forward automatically (export reads results_db.latest)."""
+    if explicit_models:
+        return explicit_models, f"explicit --models ({len(explicit_models)})"
+    universe = _completion_models()
+    if force:
+        return universe, f"--force → full refresh ({len(universe)} models)"
+    try:
+        import results_db
+        done = set(results_db.latest("F-elastic" if bat == "F-ELASTIC" else bat).keys())
+    except Exception:
+        done = set()
+    todo = [m for m in universe if m not in done]
+    return todo, (f"resume: {len(universe) - len(todo)} already in DB (skipped), {len(todo)} to run"
+                  if todo else "resume: all completion models already scored in the DB")
 
 
 # Reuse weights / thresholds / overlay from aptitude.py (no duplication).
@@ -277,7 +321,13 @@ def main():
         if not files:
             sys.exit(f"no {PREFIX}_<today>_run*.json files to average — run without --average-only first")
     else:
-        files = run_passes(int(_arg("--runs", "3")), _models_arg())
+        targets, why = _resume_targets(_models_arg(), "--force" in sys.argv, BAT)
+        print(f"Battery {BAT} — {why}", flush=True)
+        if not targets:
+            print(f"  ✓ nothing to run — every completion model already has a Battery-{BAT} score "
+                  f"(pass --force to re-benchmark the whole fleet, or --models to target specific ones).", flush=True)
+            return                                    # skip: DB already carries every model forward
+        files = run_passes(int(_arg("--runs", "3")), targets)
 
     print(f"\nAveraging {len(files)} run(s): {[Path(f).name for f in files]}", flush=True)
     rows, k = average(files)
