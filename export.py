@@ -187,7 +187,9 @@ def build():
             }
         v = vision.get(name)
         if v:
-            m["vision"] = {"composite": v.get("composite"),
+            m["vision"] = {"composite": v.get("composite"),           # 0.75·core + 0.25·hard (two-band)
+                           "composite_core": v.get("composite_core"), # the `sees?` gate baseline (V-core)
+                           "composite_hard": v.get("composite_hard"), # V-hard ranking discriminator (None on pre-hard runs)
                            "dimensions": v.get("dimensions", {})}
         e = emb.get(name)
         if e:

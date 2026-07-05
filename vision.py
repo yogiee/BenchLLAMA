@@ -163,13 +163,46 @@ def score_describe(resp, task):
     return {"signals": signals, "score": score, "max": mx,
             "correct": score >= int(round(mx * 0.6))}
 
+# ── V-hard scorers (continuous 0..1 — proximity, so a better VLM ranks above the ceiling) ──
+
+def score_count_dense(resp, task):
+    """H1 — conjunction counting. Proximity: exact = 1.0, off-by-one on 12 ≈ 0.92."""
+    nums = [int(n) for n in _numbers(resp)]
+    pred = nums[0] if nums else None
+    true = task["answer"]
+    prox = max(0.0, 1 - abs(pred - true) / true) if (pred is not None and true) else 0.0
+    return {"answer": true, "pred": pred, "prox": round(prox, 3), "correct": pred == true}
+
+def score_chart_hard(resp, task):
+    """H3 — read a bar off the gridlines. Proximity within the axis range; digit-free labels."""
+    nums = _numbers(resp)
+    true = task["answer"]; rng = task.get("range") or max(true, 1)
+    pred = nums[0] if nums else None
+    prox = max(0.0, 1 - abs(pred - true) / rng) if pred is not None else 0.0
+    return {"answer": true, "pred": pred, "prox": round(prox, 3),
+            "correct": pred is not None and abs(pred - true) <= task.get("tolerance", 0)}
+
+def score_table_sum(resp, task):
+    """H3 — read a column + sum it. The sum of positive cells is the LARGEST number in a correct
+    response ("45 + 60 + 32 + 50 = 187"), so take max(); proximity credits near-misses."""
+    nums = _numbers(resp)
+    true = task["answer"]; rng = task.get("range") or max(true * 0.3, 1)
+    pred = max(nums) if nums else None
+    prox = max(0.0, 1 - abs(pred - true) / rng) if pred is not None else 0.0
+    return {"answer": true, "pred": pred, "prox": round(prox, 3),
+            "correct": pred is not None and abs(pred - true) <= task.get("tolerance", 0)}
+
+# ocr_hard/chart_hard scorers stay registered (harmless) but no active task uses them.
 SCORERS = {"ocr": score_ocr, "count": score_count, "chart": score_chart,
-           "spatial": score_spatial, "describe": score_describe}
+           "spatial": score_spatial, "describe": score_describe,
+           "count_dense": score_count_dense, "count_region": score_count_dense,
+           "table_sum": score_table_sum, "ocr_hard": score_ocr, "chart_hard": score_chart_hard}
 
 def _task_unit(tid, res):
     """Map a task result to [0,1] for the composite."""
-    if tid == "ocr":      return res["ratio"]
-    if tid == "describe": return res["score"] / res["max"] if res["max"] else 0.0
+    if tid in ("ocr", "ocr_hard"):                                  return res["ratio"]
+    if tid in ("count_dense", "count_region", "chart_hard", "table_sum"): return res["prox"]
+    if tid == "describe":                                           return res["score"] / res["max"] if res["max"] else 0.0
     c = res.get("correct")
     return 1.0 if c else (0.0 if c is False else 0.5)
 
@@ -179,9 +212,10 @@ def run_model(model_name, disk_gb, tasks):
     print(f"\n{'='*60}\nMODEL: {model_name}  ({disk_gb} GB disk)  [vision]\n{'='*60}", flush=True)
     result = {"model": model_name, "disk_gb": disk_gb, "tests": {}, "errors": []}
     tps_samples, load = [], None
-    dim_units = defaultdict(list)   # group task units by type → one dimension each
+    core_units, hard_units = defaultdict(list), defaultdict(list)   # group by type → one dimension each, split by band
     for task in tasks:
         tid = task["id"]; ttype = task["type"]
+        units = hard_units if task.get("band") == "hard" else core_units
         print(f"  [{tid}]", end=" ", flush=True)
         try:
             data, wall = chat_image(model_name, task["prompt"], _b64(task["image"]),
@@ -193,26 +227,35 @@ def run_model(model_name, disk_gb, tasks):
             result["tests"][tid] = res
             if res["tps"]: tps_samples.append(res["tps"])
             if load is None: load = load_s(data)
-            dim_units[ttype].append(_task_unit(ttype, res))
+            units[ttype].append(_task_unit(ttype, res))
             mark = res.get("correct")
             mk = "✓" if mark else ("✗" if mark is False else "·")
-            extra = f"ratio={res['ratio']}" if ttype == "ocr" else \
-                    (f"{res['score']}/{res['max']}" if ttype == "describe" else "")
+            if ttype in ("ocr", "ocr_hard"):           extra = f"ratio={res['ratio']}"
+            elif ttype in ("count_dense", "count_region", "chart_hard", "table_sum"):
+                                                       extra = f"pred={res['pred']}/{res['answer']} prox={res['prox']}"
+            elif ttype == "describe":                  extra = f"{res['score']}/{res['max']}"
+            else:                                      extra = ""
             print(f"{mk} {extra}  tps={res['tps']} wall={wall:.1f}s", flush=True)
             print(f"    → {resp[:90].replace(chr(10),' ')}", flush=True)
         except Exception as e:
             print(f"FAILED: {e}", flush=True)
             result["tests"][tid] = {"error": str(e), "correct": False}
-            dim_units[ttype].append(0.0)
+            units[ttype].append(0.0)
 
     result["load_s"]  = load
     result["avg_tps"] = round(sum(tps_samples) / len(tps_samples), 1) if tps_samples else None
-    # Dimension-weighted: each task TYPE is one dimension (spatial = mean of its
-    # rounds), so adding spatial rounds raises reliability without inflating weight.
-    dims = {d: round(float(np.mean(u)), 4) for d, u in dim_units.items()}
-    result["dimensions"] = dims
-    result["composite"]  = round(float(np.mean(list(dims.values()))), 4) if dims else 0.0
-    print(f"\n  composite={result['composite']}  dims={dims}  avg_tps={result['avg_tps']}  load={result['load_s']}s", flush=True)
+    # Two-band, like Battery E: each task TYPE is one dimension. V-core = the `sees?` gate baseline;
+    # V-hard = the ranking discriminator (weight 0.25). composite = 0.75·core + 0.25·hard.
+    core_dims = {d: round(float(np.mean(u)), 4) for d, u in core_units.items()}
+    hard_dims = {d: round(float(np.mean(u)), 4) for d, u in hard_units.items()}
+    comp_core = round(float(np.mean(list(core_dims.values()))), 4) if core_dims else 0.0
+    comp_hard = round(float(np.mean(list(hard_dims.values()))), 4) if hard_dims else None
+    result["dimensions"]     = {**core_dims, **hard_dims}
+    result["composite_core"] = comp_core
+    result["composite_hard"] = comp_hard
+    result["composite"]      = round(0.75 * comp_core + 0.25 * comp_hard, 4) if comp_hard is not None else comp_core
+    hs = f"  hard={comp_hard} {hard_dims}" if comp_hard is not None else ""
+    print(f"\n  composite={result['composite']}  core={comp_core} {core_dims}{hs}  avg_tps={result['avg_tps']}  load={result['load_s']}s", flush=True)
     return result
 
 # ── Status + unload ──────────────────────────────────────────────────────────────

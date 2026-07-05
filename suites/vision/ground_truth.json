@@ -103,6 +103,93 @@
         ]
       },
       "max_tokens": 400
+    },
+    {
+      "id": "count_dense_1",
+      "type": "count_dense",
+      "band": "hard",
+      "image": "count_dense_1.png",
+      "prompt": "How many BLUE SQUARES are in this image? Reply with just the number.",
+      "answer": 6,
+      "max_tokens": 40
+    },
+    {
+      "id": "count_dense_2",
+      "type": "count_dense",
+      "band": "hard",
+      "image": "count_dense_2.png",
+      "prompt": "How many GREEN CIRCLES are in this image? Reply with just the number.",
+      "answer": 5,
+      "max_tokens": 40
+    },
+    {
+      "id": "count_dense_3",
+      "type": "count_dense",
+      "band": "hard",
+      "image": "count_dense_3.png",
+      "prompt": "How many YELLOW SQUARES are in this image? Reply with just the number.",
+      "answer": 5,
+      "max_tokens": 40
+    },
+    {
+      "id": "count_region_1",
+      "type": "count_region",
+      "band": "hard",
+      "image": "count_region_1.png",
+      "prompt": "How many RED shapes are INSIDE the black rectangle? Reply with just the number.",
+      "answer": 4,
+      "max_tokens": 40
+    },
+    {
+      "id": "count_region_2",
+      "type": "count_region",
+      "band": "hard",
+      "image": "count_region_2.png",
+      "prompt": "How many YELLOW shapes are INSIDE the black rectangle? Reply with just the number.",
+      "answer": 5,
+      "max_tokens": 40
+    },
+    {
+      "id": "count_region_3",
+      "type": "count_region",
+      "band": "hard",
+      "image": "count_region_3.png",
+      "prompt": "How many RED shapes are INSIDE the black rectangle? Reply with just the number.",
+      "answer": 5,
+      "max_tokens": 40
+    },
+    {
+      "id": "table_sum_1",
+      "type": "table_sum",
+      "band": "hard",
+      "image": "table_sum_1.png",
+      "prompt": "This table has columns Month, Revenue, Cost. What is the SUM of all four values in the Cost column? Reply with just the total number.",
+      "answer": 235,
+      "tolerance": 0,
+      "range": 60,
+      "max_tokens": 60
+    },
+    {
+      "id": "table_sum_2",
+      "type": "table_sum",
+      "band": "hard",
+      "image": "table_sum_2.png",
+      "prompt": "This table has columns Month, Revenue, Cost. What is the SUM of all four values in the Revenue column? Reply with just the total number.",
+      "answer": 207,
+      "tolerance": 0,
+      "range": 60,
+      "max_tokens": 60
+    },
+    {
+      "id": "table_sum_3",
+      "type": "table_sum",
+      "band": "hard",
+      "image": "table_sum_3.png",
+      "prompt": "This table has columns Month, Revenue, Cost. What is the SUM of all four values in the Revenue column? Reply with just the total number.",
+      "answer": 268,
+      "tolerance": 0,
+      "range": 60,
+      "max_tokens": 60
     }
   ]
 }
