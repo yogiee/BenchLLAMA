@@ -22,8 +22,9 @@ BenchLLAMA runs structured, repeatable benchmarks against any model served by [O
 | `imagegen.py` | Battery I — capability-routed image-gen perf + prompt-adherence (reference-only, opt-in) |
 | `orchestrator.py` | Headless orchestration core + plain-text console runner |
 | `webserver.py` | Web UI server (aiohttp) — drives the orchestrator, serves the live dashboard over WebSocket |
-| `web/index.html` | The browser dashboard — phase tree, model cards, streamed log, Rankings + Files viewers |
-| `bench_utils.py` | Shared utilities — smart thermal cooldown, pre-flight checks |
+| `web/index.html` | The browser dashboard — phase tree, model cards, streamed log, Rankings + Files + Image Review |
+| `resume.py` | Content-addressed resume policy (shared by every battery) + `--resume-report` dry planner |
+| `bench_utils.py` | Shared utilities — smart thermal cooldown, pre-flight checks, run-provenance fingerprint |
 
 ## Quick start
 
@@ -156,3 +157,26 @@ python3 update_registry.py --dry-run
 ```
 
 New models are added as `role: "worker"` automatically. After running the standard suite, `runner.py` applies the role gate and promotes qualifying models to `router` — no manual editing required. Models no longer installed are pruned by default (pass `--keep-missing` to retain them, e.g. when syncing against a remote Ollama host).
+
+## Resume — content-addressed, not time-windowed
+
+Add a few models, re-run `./bench.sh all`, and **only the new models run** — across *every* battery (coding, consistency, long-context, everything), not just the standard suite, and no matter how long ago the fleet last ran.
+
+Resume is **content-addressed**: a `(model, battery)` result is re-run only if a determinant of that result changed since it was last scored — otherwise the stored score is carried forward. Triggers:
+
+| Trigger | Behaviour |
+|---------|-----------|
+| **Model weights changed** (`/api/tags` digest) | re-run — always on |
+| **Test changed** (a battery's dataset hash or its `BATTERY_REVISION`) | re-run — always on |
+| **Ollama runtime bumped** (`major.minor`; patch ignored) | **off by default** — opt in with `--check-runtime` when a release note flags a real perf change |
+
+Cloud models (no local weight digest) are skipped unless the test changed or you pass `--force` — this protects your Ollama usage. The diff is computed from the per-run provenance fingerprint already stored in the results DB (`env_fingerprint`: runtime version, per-model weight digests, dataset hashes).
+
+```bash
+./bench.sh --resume-report                        # dry run: which models would re-run, and WHY
+./bench.sh aptitude --battery E --resume-report    # for one battery
+./bench.sh all --check-runtime                     # also re-run models scored under an older Ollama minor
+./bench.sh all --force                             # re-run everything, ignore resume
+```
+
+Full design: `docs/resume-spec.md`.

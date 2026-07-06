@@ -1,143 +1,5 @@
 [
   {
-    "name": "granite3.2-vision:2b",
-    "disk_gb": 2.4,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "moondream:1.8b",
-    "disk_gb": 1.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "vision"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "blaifa/InternVL3:latest",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "insert",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "minicpm-v4.5:8b",
-    "disk_gb": 6.1,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "gfunsai/minicpm3-4b:q4_k_m",
-    "disk_gb": 2.5,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "shibing624/minicpm3_4b:latest",
-    "disk_gb": 2.5,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "yefx/minicpm3_4b:latest",
-    "disk_gb": 2.5,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "dolphin3:latest",
-    "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "phi4-mini:latest",
-    "disk_gb": 2.5,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "granite3-dense:8b",
-    "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "evil7/minicpm3:4b",
-    "disk_gb": 2.5,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "s80982708/ZINI-LOCAL:latest",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 18
-  },
-  {
-    "name": "minicpm-v4.6:1b",
-    "disk_gb": 1.6,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [],
-    "added_idx": 17
-  },
-  {
     "name": "granite-embedding:30m",
     "disk_gb": 0.1,
     "role": "utility",
@@ -156,6 +18,91 @@
     "added_idx": 15
   },
   {
+    "name": "minicpm-v4.6:1b",
+    "disk_gb": 1.6,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [],
+    "added_idx": 17
+  },
+  {
+    "name": "moondream:1.8b",
+    "disk_gb": 1.7,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "vision"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "llama3.2:3b",
+    "disk_gb": 2.0,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 9
+  },
+  {
+    "name": "granite4.1:3b",
+    "disk_gb": 2.1,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 10
+  },
+  {
+    "name": "granite3.2-vision:2b",
+    "disk_gb": 2.4,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "phi4-mini:latest",
+    "disk_gb": 2.5,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "ministral-3:3b",
+    "disk_gb": 3.0,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
     "name": "qwen2.5vl:3b",
     "disk_gb": 3.2,
     "role": "worker",
@@ -165,6 +112,19 @@
     ],
     "extended_roles": [],
     "added_idx": 14
+  },
+  {
+    "name": "vincentg/llama3.2-fluxassistant:uncensored",
+    "disk_gb": 3.4,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 0
   },
   {
     "name": "qwen3.5:4b-mlx",
@@ -182,19 +142,223 @@
     "added_idx": 13
   },
   {
-    "name": "x/flux2-klein:9b",
-    "disk_gb": 12.0,
-    "role": "utility",
+    "name": "blaifa/InternVL3:latest",
+    "disk_gb": 4.7,
+    "role": "worker",
     "capabilities": [
-      "image"
+      "completion",
+      "insert",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
-    "name": "x/z-image-turbo:latest",
-    "disk_gb": 12.8,
-    "role": "utility",
+    "name": "deepseek-r1:7b",
+    "disk_gb": 4.7,
+    "role": "worker",
     "capabilities": [
-      "image"
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "hermes3:8b",
+    "disk_gb": 4.7,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "qwen2.5:7b",
+    "disk_gb": 4.7,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "s80982708/ZINI-LOCAL:latest",
+    "disk_gb": 4.7,
+    "role": "worker",
+    "capabilities": [
+      "completion"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 18
+  },
+  {
+    "name": "dolphin3:latest",
+    "disk_gb": 4.9,
+    "role": "worker",
+    "capabilities": [
+      "completion"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "granite3-dense:8b",
+    "disk_gb": 4.9,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "llama3.1:8b",
+    "disk_gb": 4.9,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "lukashabtoch/plutotext-r3-emotional:latest",
+    "disk_gb": 4.9,
+    "role": "worker",
+    "capabilities": [
+      "completion"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "command-r7b:7b",
+    "disk_gb": 5.1,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "granite4.1:8b",
+    "disk_gb": 5.3,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "ornith:9b",
+    "disk_gb": 5.6,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 2
+  },
+  {
+    "name": "minicpm-v4.5:8b",
+    "disk_gb": 6.1,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "gemma4:e2b-mlx",
+    "disk_gb": 6.5,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "mistral-nemo:12b",
+    "disk_gb": 7.1,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "gemma4:12b",
+    "disk_gb": 7.6,
+    "role": "worker",
+    "capabilities": [
+      "audio",
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 11
+  },
+  {
+    "name": "gemma4:12b-mlx",
+    "disk_gb": 7.7,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 6
+  },
+  {
+    "name": "gemma4:e4b-mlx",
+    "disk_gb": 8.8,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
     ]
   },
   {
@@ -214,62 +378,34 @@
     "added_idx": 12
   },
   {
-    "name": "gemma4:12b",
-    "disk_gb": 7.6,
-    "role": "worker",
+    "name": "x/flux2-klein:9b",
+    "disk_gb": 12.0,
+    "role": "utility",
     "capabilities": [
-      "audio",
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 11
+      "image"
+    ]
   },
   {
-    "name": "granite4.1:3b",
-    "disk_gb": 2.1,
-    "role": "router",
+    "name": "x/z-image-turbo:latest",
+    "disk_gb": 12.8,
+    "role": "utility",
+    "capabilities": [
+      "image"
+    ]
+  },
+  {
+    "name": "gemma4:26b-mlx",
+    "disk_gb": 17.6,
+    "role": "worker",
     "capabilities": [
       "completion",
+      "thinking",
       "tools"
     ],
     "extended_roles": [
       "coder"
     ],
-    "added_idx": 10
-  },
-  {
-    "name": "llama3.2:3b",
-    "disk_gb": 2.0,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 9
-  },
-  {
-    "name": "gemma4:31b-cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "cloud": true,
-    "added_idx": 8
+    "added_idx": 3
   },
   {
     "name": "gemma4:26b",
@@ -287,18 +423,20 @@
     "added_idx": 7
   },
   {
-    "name": "gemma4:12b-mlx",
-    "disk_gb": 7.7,
+    "name": "gemma4:31b-cloud",
+    "disk_gb": 0.0,
     "role": "worker",
     "capabilities": [
       "completion",
       "thinking",
-      "tools"
+      "tools",
+      "vision"
     ],
     "extended_roles": [
       "coder"
     ],
-    "added_idx": 6
+    "cloud": true,
+    "added_idx": 8
   },
   {
     "name": "glm-4.7:cloud",
@@ -329,177 +467,5 @@
       "coder"
     ],
     "added_idx": 4
-  },
-  {
-    "name": "gemma4:26b-mlx",
-    "disk_gb": 17.6,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 3
-  },
-  {
-    "name": "ornith:9b",
-    "disk_gb": 5.6,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 2
-  },
-  {
-    "name": "vincentg/llama3.2-fluxassistant:uncensored",
-    "disk_gb": 3.4,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 0
-  },
-  {
-    "name": "qwen2.5:7b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "granite4.1:8b",
-    "disk_gb": 5.3,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "ministral-3:3b",
-    "disk_gb": 3.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "deepseek-r1:7b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "hermes3:8b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "mistral-nemo:12b",
-    "disk_gb": 7.1,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "command-r7b:7b",
-    "disk_gb": 5.1,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "llama3.1:8b",
-    "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "lukashabtoch/plutotext-r3-emotional:latest",
-    "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "gemma4:e2b-mlx",
-    "disk_gb": 6.5,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "gemma4:e4b-mlx",
-    "disk_gb": 8.8,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
   }
 ]

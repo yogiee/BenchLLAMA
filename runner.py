@@ -657,15 +657,16 @@ if __name__ == "__main__":
         sys.exit(f"models.json not found at {registry_path} — create it before running (see CLAUDE.md)")
     registry = sort_registry(json.load(registry_path.open()))   # run order: env BENCH_SORT (default size)
 
+    reg_map = {m["name"]: m for m in registry}
+    # Eligible universe = the full completion fleet (independent of --models, so carry-forward + the
+    # role gate / --capable-only downstream see every model). --models handled by resume as targets.
+    MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry
+              if m.get("role") in COMPLETION_ROLES]
     if model_args:
-        reg_map = {m["name"]: m for m in registry}
-        MODELS = [
-            (m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker"))
-            for m in model_args
-        ]
-    else:
-        MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry
-                  if m.get("role") in COMPLETION_ROLES]
+        have = {n for n, *_ in MODELS}
+        for m in model_args:
+            if m not in have:
+                MODELS.append((m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker")))
 
     preflight(MODELS, ollama_host)
     cd   = 0 if fast_mode else COOLDOWN
@@ -675,52 +676,19 @@ if __name__ == "__main__":
     print(f"ollama={ollama_host} | num_ctx={NUM_CTX} | think=False | {len(MODELS)} models | cooldown={cd}s", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
-    # ── Resume / merge logic ──────────────────────────────────────────────────
-    # Resume SOURCE = today's file if it exists, else the most recent benchmark
-    # within 72h (cross-day resume — filenames embed the date, so without this the
-    # window dies at midnight). Results always WRITE to today's OUT_JSON, carrying
-    # the prior baseline forward and merging only the new models in.
-    #   Full run, no --force: skip already-completed models, run the rest.
-    #   Targeted run (model args): replace those models' entries, keep the others.
-    #   --force, no model args: fresh overwrite, ignore any source.
-    #   --force with model args: re-run those models, replace their entries.
-    all_results = []
-    completed   = set()
-
-    source = None
-    if not (force and not model_args):
-        source = OUT_JSON if OUT_JSON.exists() else latest_result(RESULTS_DIR, "benchmark", fast_mode, 72)
-
-    if source is not None:
-        try:
-            existing = json.load(source.open())
-            if model_args:
-                target_names = {m for m, *_ in MODELS}
-                all_results  = [r for r in existing if r["model"] not in target_names]
-            else:
-                # Drop errored entries so a retry replaces (not duplicates) them.
-                all_results = [r for r in existing if "error" not in r]
-                completed   = {r["model"] for r in all_results}
-                if completed:
-                    via = "" if source == OUT_JSON else f" (carried from {source.name})"
-                    print(f"  Resuming — {len(completed)} model(s) already done{via}: {sorted(completed)}", flush=True)
-        except Exception:
-            all_results, completed = [], set()
-
-    # ── New-model notice (full run only) ──────────────────────────────────────
-    # Models in models.json but not in today's results file aren't in `completed`,
-    # so the resume loop below runs them now and merges them in — no separate
-    # command needed. (Use --force to also re-baseline the already-done models.)
-    if not model_args and not force and completed:
-        registry_names = {m["name"] for m in registry if m.get("role") in COMPLETION_ROLES}
-        done_names     = {r["model"] for r in all_results}
-        new_models     = registry_names - done_names
-        if new_models:
-            print(f"  + {len(new_models)} new model(s) not in today's results — "
-                  f"benchmarking now, existing models skipped: {sorted(new_models)}", flush=True)
-            print(f"    (pass --force to re-baseline everything instead.)", flush=True)
-
+    # ── Content-addressed resume (docs/resume-spec.md) ────────────────────────
+    # Skip models whose weights + runtime + test-identity are unchanged since scored; carry their prior
+    # result forward from the DB (lossless) so OUT_JSON stays complete (the role gate + --capable-only
+    # downstream read the full file). No time window. --models = explicit targets; --force = full refresh.
+    import resume
     cloud_names = {m["name"] for m in registry if m.get("cloud")}
+    eligible = [n for n, *_ in MODELS]
+    run_names, all_results, why = resume.plan_single_pass(
+        "standard", eligible, host=ollama_host, cloud=cloud_names, force=force,
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+    all_results = list(all_results)
+    completed = set(eligible) - set(run_names)
+    print("  " + resume.format_report("standard", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
 
     first_run = True
     for model_name, disk_gb, role in MODELS:

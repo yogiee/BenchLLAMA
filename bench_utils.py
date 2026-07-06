@@ -77,6 +77,38 @@ _DATASET_FILES = {
     "prompt_router":     "prompts/router_default.md",
 }
 
+# ── Content-addressed resume: test-identity per battery (see docs/resume-spec.md) ──
+# BATTERY_REVISION — bump the int ONLY when you materially change a battery's scoring/composition
+# in CODE (a change dataset hashes can't see, e.g. a new weight, a two-band split, a scorer rewrite).
+# A bump re-runs that battery for every model next run. Do NOT bump for cosmetic edits.
+BATTERY_REVISION = {
+    "standard": 1, "ladder": 1,
+    "A": 1, "B": 1, "C": 1, "D": 1,
+    "E": 2,           # two-band E-hard (2026-07-02)
+    "F": 1,
+    "F-elastic": 1,
+    "G": 1,
+    "vision": 2,      # two-band V-hard (2026-07-05)
+    "embedding": 2,   # length-stratified re-tune (2026-06-13)
+    "image": 1,
+}
+
+# Which dataset/prompt hashes (keys of _DATASET_FILES) actually feed each battery's result.
+# A change to one of these = a test-data change → re-run. Batteries not listed / with [] rely on
+# BATTERY_REVISION alone (their test data isn't a hashed file — e.g. F rollout, EMB seed sets).
+BATTERY_DATASETS = {
+    "standard": ["prompt_worker", "prompt_router"],
+    "ladder":   ["prompt_worker", "prompt_router"],
+    "A": ["prompt_router"], "B": ["prompt_worker"], "C": ["prompt_worker"], "D": ["prompt_worker"],
+    "E": ["coding_problems"],
+    "F": [],
+    "F-elastic": ["elasticity_ladder"],
+    "G": ["longctx"],
+    "vision": ["vision_gt"],
+    "embedding": [],
+    "image": [],
+}
+
 
 def _sh(*argv) -> str | None:
     try:
@@ -150,6 +182,7 @@ def env_fingerprint(host: str = "http://localhost:11434", models=None) -> dict:
         "ollama_version":    ver,
         "benchllama_commit": _benchllama_commit(),
         "datasets":          _dataset_hashes(),
+        "battery_revisions": dict(BATTERY_REVISION),   # content-addressed resume: test-code identity
         "model_digests":     _model_digests(host, set(models) if models else None),
         "os":                osd,
         "hardware":          hw,

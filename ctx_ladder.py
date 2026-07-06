@@ -368,17 +368,13 @@ if __name__ == "__main__":
 
     registry = sort_registry(json.load(reg_path.open()))   # run order: env BENCH_SORT (default size)
 
+    reg_map = {m["name"]: m for m in registry}
+    MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry if m.get("role") in CTX_LADDER]
     if model_args:
-        reg_map = {m["name"]: m for m in registry}
-        MODELS = [
-            (m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker"))
-            for m in model_args
-        ]
-    else:
-        MODELS = [
-            (m["name"], m["disk_gb"], m["role"])
-            for m in registry if m.get("role") in CTX_LADDER
-        ]
+        have = {n for n, *_ in MODELS}
+        for m in model_args:
+            if m not in have:
+                MODELS.append((m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker")))
 
     if role_filter:
         MODELS = [(n, d, r) for n, d, r in MODELS if r == role_filter]
@@ -396,31 +392,17 @@ if __name__ == "__main__":
     OUT_MD   = RESULTS_DIR / f"ctx_ladder_{TODAY}{suffix}.md"
     print(f"Output: {OUT_JSON}\n", flush=True)
 
-    # ── Resume / merge logic ──────────────────────────────────────────────────
-    # Same semantics as runner.py: resume SOURCE = today's file if present, else
-    # the most recent ctx_ladder within 72h (cross-day). Always writes today's file.
-    all_results = []
-    completed   = set()
-
-    source = None
-    if not (force and not model_args):
-        source = OUT_JSON if OUT_JSON.exists() else latest_result(RESULTS_DIR, "ctx_ladder", fast_mode, 72)
-
-    if source is not None:
-        try:
-            existing = json.load(source.open())
-            if model_args:
-                target_names = {m for m, *_ in MODELS}
-                all_results  = [r for r in existing if r["model"] not in target_names]
-            else:
-                # Drop errored entries so a retry replaces (not duplicates) them.
-                all_results = [r for r in existing if "error" not in r]
-                completed   = {r["model"] for r in all_results}
-                if completed:
-                    via = "" if source == OUT_JSON else f" (carried from {source.name})"
-                    print(f"  Resuming — {len(completed)} model(s) already done{via}: {sorted(completed)}", flush=True)
-        except Exception:
-            all_results, completed = [], set()
+    # ── Content-addressed resume (docs/resume-spec.md): skip unchanged models, carry prior result
+    #    forward from the DB (lossless). No time window. ──
+    import resume
+    eligible = [n for n, *_ in MODELS]
+    cloud = {m["name"] for m in registry if m.get("cloud")}
+    run_names, all_results, why = resume.plan_single_pass(
+        "ladder", eligible, host=ollama_host, cloud=cloud, force=force,
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+    all_results = list(all_results)
+    completed = set(eligible) - set(run_names)
+    print("  " + resume.format_report("ladder", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
 
     # ── New-model notice (full run only) ──────────────────────────────────────
     # Not in the resume source → the loop below runs them now and merges them in.

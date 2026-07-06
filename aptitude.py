@@ -2281,7 +2281,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     default_models, runner, pfx = BATTERY_MAP[battery_arg]
-    MODELS  = [(m, 0.0) for m in model_args] if model_args else default_models
+    # Eligible universe = the full battery roster (independent of --models, so carry-forward stays
+    # complete); forced models outside it are appended. --models → resume explicit targets below.
+    MODELS = list(default_models)
+    if model_args:
+        have = {n for n, *_ in MODELS}
+        MODELS += [(m, 0.0) for m in model_args if m not in have]
     out_pfx = f"{pfx}_{TODAY}{suffix}"
 
     preflight(MODELS, ollama_host)
@@ -2293,23 +2298,20 @@ if __name__ == "__main__":
     print(f"Models: {[m[0] for m in MODELS]}", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
-    # ── Resume logic ──────────────────────────────────────────────────────────
-    # Resume SOURCE = today's battery file if present, else the most recent file
-    # for THIS battery within 24h (cross-day — filenames embed the date). Skip
-    # models already completed; --force disables resume. Always writes today's file.
-    all_results = []
-    completed   = set()
-    source = OUT_JSON if OUT_JSON.exists() else (None if force else latest_result(RESULTS_DIR, pfx, fast_mode, 24))
-    if source is not None and not force:
-        try:
-            loaded      = json.load(source.open())
-            all_results = [r for r in loaded if "error" not in r]   # retry replaces, no dupes
-            completed   = {r["model"] for r in all_results}
-            if completed:
-                via = "" if source == OUT_JSON else f" (carried from {source.name})"
-                print(f"  Resuming — {len(completed)} model(s) already done{via}: {sorted(completed)}", flush=True)
-        except Exception:
-            all_results, completed = [], set()
+    # ── Content-addressed resume (docs/resume-spec.md): skip unchanged models, carry prior result
+    #    forward from the DB (lossless). No time window. `--force` (used by the averager per pass) →
+    #    no carry-forward. Battery key = battery_arg (A/B/C/D/E; F-elastic normalised). ──
+    import resume
+    _rk = "F-elastic" if battery_arg == "F-ELASTIC" else battery_arg
+    eligible = [n for n, *_ in MODELS]
+    _reg = json.loads((REPO / "models.json").read_text())
+    cloud = {m["name"] for m in _reg if m.get("cloud")}
+    run_names, all_results, why = resume.plan_single_pass(
+        _rk, eligible, host=ollama_host, cloud=cloud, force=force,
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+    all_results = list(all_results)
+    completed = set(eligible) - set(run_names)
+    print("  " + resume.format_report(_rk, run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
 
     apt_done  = []
     first_run = True

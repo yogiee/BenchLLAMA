@@ -580,11 +580,13 @@ if __name__ == "__main__":
     OUT_JSON = RESULTS_DIR / f"embedding_{TODAY}.json"
     OUT_MD   = RESULTS_DIR / f"embedding_{TODAY}.md"
 
+    reg = {m["name"]: m for m in json.load((REPO / "models.json").open())}
+    MODELS = load_models_by_cap("embedding")   # full eligible universe (carry-forward stays complete)
     if model_args:
-        reg = {m["name"]: m for m in json.load((REPO / "models.json").open())}
-        MODELS = [(m, reg.get(m, {}).get("disk_gb", 0.0)) for m in model_args]
-    else:
-        MODELS = load_models_by_cap("embedding")
+        have = {n for n, *_ in MODELS}
+        for m in model_args:
+            if m not in have:
+                MODELS.append((m, reg.get(m, {}).get("disk_gb", 0.0)))
 
     if not MODELS:
         sys.exit("No embedding-capable models found. Run update_registry.py, "
@@ -594,20 +596,17 @@ if __name__ == "__main__":
     print(f"ollama={ollama_host} | models: {[m[0] for m in MODELS]}", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
-    # Resume SOURCE = today's file if present, else most recent embedding within
-    # 24h (cross-day). Writes today's file, carrying prior results forward.
-    all_results, completed = [], set()
-    source = OUT_JSON if OUT_JSON.exists() else (None if force else latest_result(RESULTS_DIR, "embedding", False, 24))
-    if source is not None and not force:
-        try:
-            loaded      = json.load(source.open())
-            all_results = [r for r in loaded if not r.get("errors")]   # retry replaces, no dupes
-            completed   = {r["model"] for r in all_results}
-            if completed:
-                via = "" if source == OUT_JSON else f" (carried from {source.name})"
-                print(f"  Resuming — done{via}: {sorted(completed)}", flush=True)
-        except Exception:
-            all_results, completed = [], set()
+    # ── Content-addressed resume (docs/resume-spec.md): skip unchanged models, carry prior result
+    #    forward from the DB (lossless). No time window. ──
+    import resume
+    eligible = [n for n, *_ in MODELS]
+    cloud = {n for n, m in reg.items() if m.get("cloud")}
+    run_names, all_results, why = resume.plan_single_pass(
+        "embedding", eligible, host=ollama_host, cloud=cloud, force=force,
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+    all_results = list(all_results)
+    completed = set(eligible) - set(run_names)
+    print("  " + resume.format_report("embedding", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
 
     for model_name, disk_gb in MODELS:
         if model_name in completed:

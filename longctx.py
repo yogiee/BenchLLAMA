@@ -295,13 +295,15 @@ if __name__ == "__main__":
         sys.exit("models.json not found — run update_registry.py first")
     registry = sort_registry(json.load(reg_path.open()))   # run order: env BENCH_SORT (default size)
 
-    if model_args:
-        reg_map = {m["name"]: m for m in registry}
-        MODELS = [(m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker"))
-                  for m in model_args]
-    else:
-        MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry
-                  if m.get("role") in COMPLETION_ROLES]
+    reg_map = {m["name"]: m for m in registry}
+    # Eligible universe = the full completion fleet (independent of --models, so carry-forward stays
+    # complete). --models is handled by resume as explicit targets below.
+    MODELS = [(m["name"], m["disk_gb"], m["role"]) for m in registry
+              if m.get("role") in COMPLETION_ROLES]
+    if model_args:  # ensure forced models are present even if outside the default universe
+        for m in model_args:
+            if m not in {n for n, *_ in MODELS}:
+                MODELS.append((m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker")))
 
     if role_filter:
         MODELS = [(n, d, r) for n, d, r in MODELS if r == role_filter]
@@ -327,25 +329,17 @@ if __name__ == "__main__":
     OUT_MD   = RESULTS_DIR / f"longctx_{TODAY}{suffix}.md"
     print(f"Output: {OUT_JSON}\n", flush=True)
 
-    # ── Resume / merge (24h window, same semantics as the aptitude batteries) ──
-    all_results, completed = [], set()
-    source = None
-    if not (force and not model_args):
-        source = OUT_JSON if OUT_JSON.exists() else latest_result(RESULTS_DIR, "longctx", fast_mode, 24)
-    if source is not None:
-        try:
-            existing = json.load(source.open())
-            if model_args:
-                targets = {m for m, *_ in MODELS}
-                all_results = [r for r in existing if r["model"] not in targets]
-            else:
-                all_results = [r for r in existing if r.get("summary", {}).get("n_depths")]
-                completed   = {r["model"] for r in all_results}
-                if completed:
-                    via = "" if source == OUT_JSON else f" (carried from {source.name})"
-                    print(f"  Resuming — {len(completed)} model(s) already done{via}: {sorted(completed)}", flush=True)
-        except Exception:
-            all_results, completed = [], set()
+    # ── Content-addressed resume (docs/resume-spec.md): skip models unchanged since scored; carry
+    #    their prior result forward from the DB (lossless). No time window. ──
+    import resume
+    eligible = [n for n, *_ in MODELS]
+    cloud = {m["name"] for m in registry if m.get("cloud")}
+    run_names, all_results, why = resume.plan_single_pass(
+        "G", eligible, host=ollama_host, cloud=cloud, force=force,
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+    all_results = list(all_results)
+    completed = set(eligible) - set(run_names)
+    print("  " + resume.format_report("G", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
 
     first_run = True
     for model_name, disk_gb, role in MODELS:

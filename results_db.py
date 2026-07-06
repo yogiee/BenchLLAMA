@@ -142,6 +142,25 @@ def latest(battery: str, path: Path = DB_PATH) -> dict:
     return out
 
 
+def latest_env_by_model(battery: str, path: Path = DB_PATH) -> dict:
+    """{model: run_env_dict} — the provenance fingerprint (runs.env) of the run that produced each
+    model's LATEST result for this battery. Powers content-addressed resume (resume.py): the env a
+    model was scored under, to diff against the current env. `{}` for a model whose run has no env
+    (pre-provenance) — resume treats that as unknown → re-run."""
+    with _conn(path) as c:
+        rows = c.execute(
+            "SELECT r.model, ru.env FROM results r "
+            "JOIN runs ru ON ru.run_id=r.run_id "
+            "WHERE r.battery=? ORDER BY ru.started_at ASC", (battery,)).fetchall()
+    out: dict = {}
+    for row in rows:  # ascending → last write per model wins = latest
+        try:
+            out[row["model"]] = json.loads(row["env"]) if row["env"] else {}
+        except Exception:
+            out[row["model"]] = {}
+    return out
+
+
 def history(model: str, battery: str, path: Path = DB_PATH) -> list:
     """Chronological trend for one (model, battery)."""
     with _conn(path) as c:

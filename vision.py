@@ -324,11 +324,15 @@ if __name__ == "__main__":
     OUT_MD   = RESULTS_DIR / f"vision_{TODAY}{suffix}.md"
 
     tasks = load_tasks()
+    # Eligible universe = all vision-capable models (independent of --models, so carry-forward stays
+    # complete); --models handled by resume as explicit targets.
+    reg = {m["name"]: m for m in json.load((REPO / "models.json").open())}
+    MODELS = load_models_by_cap("vision")
     if model_args:
-        reg = {m["name"]: m for m in json.load((REPO / "models.json").open())}
-        MODELS = [(m, reg.get(m, {}).get("disk_gb", 0.0)) for m in model_args]
-    else:
-        MODELS = load_models_by_cap("vision")
+        have = {n for n, *_ in MODELS}
+        for m in model_args:
+            if m not in have:
+                MODELS.append((m, reg.get(m, {}).get("disk_gb", 0.0)))
 
     if not MODELS:
         sys.exit("No vision-capable models found. Run update_registry.py, or pass --models <name>.")
@@ -339,20 +343,17 @@ if __name__ == "__main__":
     print(f"ollama={ollama_host} | {len(tasks)} tasks | models: {[m[0] for m in MODELS]}", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
-    # Resume SOURCE = today's file if present, else most recent vision within 24h
-    # (cross-day). Writes today's file, carrying prior results forward.
-    all_results, completed = [], set()
-    source = OUT_JSON if OUT_JSON.exists() else (None if force else latest_result(RESULTS_DIR, "vision", fast_mode, 24))
-    if source is not None and not force:
-        try:
-            loaded      = json.load(source.open())
-            all_results = [r for r in loaded if not r.get("errors")]   # retry replaces, no dupes
-            completed   = {r["model"] for r in all_results}
-            if completed:
-                via = "" if source == OUT_JSON else f" (carried from {source.name})"
-                print(f"  Resuming — done{via}: {sorted(completed)}", flush=True)
-        except Exception:
-            all_results, completed = [], set()
+    # ── Content-addressed resume (docs/resume-spec.md): skip unchanged models, carry their prior
+    #    result forward from the DB (lossless). No time window. ──
+    import resume
+    eligible = [n for n, *_ in MODELS]
+    cloud = {n for n, m in reg.items() if m.get("cloud")}
+    run_names, all_results, why = resume.plan_single_pass(
+        "vision", eligible, host=ollama_host, cloud=cloud, force=force,
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+    all_results = list(all_results)
+    completed = set(eligible) - set(run_names)
+    print("  " + resume.format_report("vision", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
 
     first = True
     for model_name, disk_gb in MODELS:

@@ -66,30 +66,27 @@ def _completion_models():
 
 
 def _resume_targets(explicit_models, force, bat):
-    """Which models to actually run this invocation. Mirrors runner.py/ctx_ladder resume-skip, but
-    keyed on the SQLite DB (never expires) — NOT a time-windowed file — so a fleet scored days ago is
-    still carried forward, and only genuinely-missing models re-run.
-
-      --models X Y  → run exactly those (explicit)
-      --force       → run the whole completion universe (full refresh)
-      (default)     → universe MINUS models already scored for this battery in the DB
-                      → [] means every model is already done (nothing to run)
-
-    Passes always run internal --force (a fresh pass each), so scoping is done via --models here.
-    The DB carries the skipped models forward automatically (export reads results_db.latest)."""
-    if explicit_models:
-        return explicit_models, f"explicit --models ({len(explicit_models)})"
+    """Content-addressed resume via the shared `resume` policy (docs/resume-spec.md): skip models whose
+    weights + runtime + test-identity are unchanged since they were scored, run only the rest. Passes
+    always run internal --force (a fresh pass each), so scoping is done via --models here; the DB carries
+    the skipped models forward (export reads results_db.latest). Returns (targets, report_line)."""
+    import resume
     universe = _completion_models()
-    if force:
-        return universe, f"--force → full refresh ({len(universe)} models)"
-    try:
-        import results_db
-        done = set(results_db.latest("F-elastic" if bat == "F-ELASTIC" else bat).keys())
-    except Exception:
-        done = set()
-    todo = [m for m in universe if m not in done]
-    return todo, (f"resume: {len(universe) - len(todo)} already in DB (skipped), {len(todo)} to run"
-                  if todo else "resume: all completion models already scored in the DB")
+    reg = json.loads((REPO / "models.json").read_text())
+    cloud = {m["name"] for m in reg if m.get("cloud")}
+    tr, sk, why = resume.resolve("F-elastic" if bat == "F-ELASTIC" else bat, universe,
+                                 cloud=cloud, force=force,
+                                 explicit_models=explicit_models or None,
+                                 ignore_runtime="--ignore-runtime" in sys.argv)
+    if explicit_models:
+        line = f"explicit --models ({len(tr)})"
+    elif force:
+        line = f"--force → full refresh ({len(tr)} models)"
+    elif tr:
+        line = f"resume: {len(sk)} up-to-date (skipped), {len(tr)} to run — {sorted(set(why[m] for m in tr))}"
+    else:
+        line = "resume: all completion models up-to-date in the DB (nothing to run)"
+    return tr, line
 
 
 # Reuse weights / thresholds / overlay from aptitude.py (no duplication).
