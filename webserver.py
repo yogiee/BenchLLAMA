@@ -29,6 +29,7 @@ WEB = REPO / "web"
 RESULTS = REPO / "results"
 RANKINGS_JSON = REPO / "rankings" / "rankings.json"
 MASTER_MD = REPO / "rankings" / "master.md"
+IMAGEGEN_PROMPTS = REPO / "suites" / "imagegen" / "prompts.json"
 DEFAULT_PORT = 8077
 
 
@@ -234,6 +235,89 @@ async def _master(request):
                         content_type="text/plain")
 
 
+# ── Image Review (Battery I) — human-in-the-loop grading over the VLM's checklist ───────────────
+
+async def _imagegen_runs(request):
+    """Canonical imagegen result files (imagegen_<date>.json — skips _fast / _human)."""
+    runs = []
+    for p in sorted(RESULTS.glob("imagegen_*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+        if "_human" in p.name or "_fast" in p.name:
+            continue
+        try:
+            data = json.loads(p.read_text())
+        except Exception:
+            continue
+        models = [r["model"] for r in data if r.get("prompts")]
+        if models:
+            runs.append({"date": p.name[len("imagegen_"):-len(".json")], "models": models})
+    return web.json_response(runs)
+
+
+async def _imagegen_run(request):
+    """Everything the review UI needs for one run: models, the prompt checklists, per-image VLM
+    verdicts + image src, and any saved human grades."""
+    date = request.match_info["date"]
+    f = RESULTS / f"imagegen_{date}.json"
+    if "/" in date or ".." in date or not f.is_file():
+        return web.json_response({"error": "no such run"}, status=404)
+    data = json.loads(f.read_text())
+    try:
+        pdefs = json.loads(IMAGEGEN_PROMPTS.read_text())["prompts"]
+    except Exception:
+        pdefs = []
+    images = {}
+    for r in data:
+        if not r.get("prompts"):
+            continue
+        m = r["model"]; images[m] = {}
+        for pid, pr in r["prompts"].items():
+            arr = []
+            for im in pr.get("images", []):
+                adh = im.get("adherence") or {}
+                arr.append({"idx": im.get("seed"),
+                            "src": "/api/imagegen/img/" + im.get("file", ""),
+                            "vlm_core": adh.get("core", {}), "vlm_fine": adh.get("fine", {}),
+                            "text": im.get("text")})
+            images[m][pid] = arr
+    models = [r["model"] for r in data if r.get("prompts")]
+    used = {pid for m in models for pid in images.get(m, {})}
+    prompts = [{"id": q["id"], "name": q["name"], "kind": q["kind"], "prompt": q["prompt"],
+                "core": q["core"], "fine": q["fine"],
+                "text_mode": q.get("text_mode"), "text_target": q.get("text_target")}
+               for q in pdefs if q["id"] in used]
+    hf = RESULTS / f"imagegen_{date}_human.json"
+    human = json.loads(hf.read_text()) if hf.is_file() else {}
+    return web.json_response({"date": date, "models": models, "prompts": prompts,
+                             "images": images, "human": human})
+
+
+async def _imagegen_img(request):
+    """Serve a full-res generated PNG (results/imagegen_images/… only, path-guarded)."""
+    rel = request.match_info["path"]
+    if ".." in rel or not rel.startswith("imagegen_images/"):
+        return web.Response(status=404, text="not found")
+    f = RESULTS / rel
+    if f.suffix.lower() != ".png" or not f.is_file():
+        return web.Response(status=404, text="not found")
+    return web.FileResponse(f, headers={"Cache-Control": "max-age=3600"})
+
+
+async def _imagegen_human_save(request):
+    """Persist the human grades to a sidecar (imagegen_<date>_human.json) — the DB stays objective."""
+    blocked = _guard(request)
+    if blocked:
+        return blocked
+    date = request.match_info["date"]
+    if "/" in date or ".." in date:
+        return web.json_response({"ok": False, "msg": "bad date"}, status=400)
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "msg": "bad json"}, status=400)
+    (RESULTS / f"imagegen_{date}_human.json").write_text(json.dumps(payload, indent=2))
+    return web.json_response({"ok": True})
+
+
 async def _on_startup(app):
     boot = app.get("_boot")
     if boot:
@@ -273,6 +357,10 @@ def main():
     app.router.add_get("/api/results", _results_list)
     app.router.add_get("/api/results/{name}", _result_file)
     app.router.add_get("/api/master", _master)
+    app.router.add_get("/api/imagegen/runs", _imagegen_runs)
+    app.router.add_get("/api/imagegen/run/{date}", _imagegen_run)
+    app.router.add_get("/api/imagegen/img/{path:.*}", _imagegen_img)
+    app.router.add_post("/api/imagegen/human/{date}", _imagegen_human_save)
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 

@@ -12,4 +12,8 @@ CLAUDE.md
 *.bak
 WORKSPACE/
 results/*.db
-results/imagegen_images/
+# Image-gen output folder: TRACK the folder (so it exists on clone + the webserver has a stable
+# target) but IGNORE the generated PNGs. Keep the .gitkeep + README, drop everything else.
+results/imagegen_images/*
+!results/imagegen_images/.gitkeep
+!results/imagegen_images/README.md

@@ -223,6 +223,59 @@
   .montabs button { flex:1; padding:10px 6px; background:none; border:none; border-bottom:2px solid transparent;
     color:var(--dim); font:inherit; font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; }
   .montabs button.on { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* ── Image Review ── */
+  #view-review { flex-direction:column; overflow:hidden; }
+  #rvBar { display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--surface);
+           border-bottom:1px solid var(--border); flex-wrap:wrap; font-size:12.5px; }
+  #rvBar select { background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font:inherit; }
+  .rv-sub { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  .rv-spacer { flex:1; }
+  .rv-seg { display:inline-flex; gap:2px; }
+  .rv-seg button { background:var(--bg); color:var(--dim); border:1px solid var(--border); border-radius:6px;
+                   padding:4px 9px; font:inherit; font-size:12px; cursor:pointer; min-width:30px; }
+  .rv-seg button.on { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); font-weight:600; }
+  .rv-blind { color:var(--dim); display:flex; align-items:center; gap:4px; cursor:pointer; }
+  .rv-prog { color:var(--dim); font-size:11.5px; }
+  .rv-prog b { color:var(--accent); }
+  .rv-ptext { padding:7px 14px; font-size:12.5px; color:var(--dim); background:var(--bg);
+              border-bottom:1px solid var(--border); max-height:3.2em; overflow-y:auto; }
+  .rv-ptext b { color:var(--text); }
+  #rvPanes { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); overflow:hidden; min-height:0; }
+  #rvPanes.single { grid-template-columns:1fr; }
+  .rv-pane { display:flex; flex-direction:column; background:var(--bg); min-height:0; overflow:hidden; }
+  .rv-phead { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border); background:var(--surface); }
+  .rv-phead select { flex:1; }
+  .rv-spec { color:var(--dim); font-size:11px; }
+  .rv-vp { flex:1; position:relative; overflow:hidden; background:#0c0a08; cursor:grab; min-height:200px; }
+  .rv-vp.drag { cursor:grabbing; }
+  .rv-vp img { position:absolute; top:0; left:0; transform-origin:0 0; user-select:none; -webkit-user-drag:none;
+               image-rendering:auto; will-change:transform; }
+  .rv-vlmpct { position:absolute; top:6px; right:8px; background:rgba(0,0,0,.6); color:#fff; font-size:11px;
+               padding:2px 7px; border-radius:10px; pointer-events:none; }
+  .rv-grade { border-top:1px solid var(--border); background:var(--surface); padding:8px 10px; overflow-y:auto; max-height:42%; }
+  table.rv-chk { width:100%; border-collapse:collapse; font-size:11.5px; }
+  table.rv-chk th { color:var(--dim); font-weight:600; text-align:left; padding:2px 4px; font-size:10px;
+                    text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--border); }
+  table.rv-chk td { padding:2px 4px; border-bottom:1px solid var(--panel); vertical-align:middle; }
+  table.rv-chk td.el { color:var(--text); width:100%; }
+  table.rv-chk tr.fine td.el { color:var(--dim); }
+  .rv-v { font-weight:700; width:1.4em; text-align:center; display:inline-block; }
+  .rv-v.yes { color:var(--green,#4caf50); } .rv-v.no { color:#e05555; } .rv-v.unsure { color:#e0a83c; }
+  .rv-hbtns { display:inline-flex; gap:2px; }
+  .rv-hbtns button { width:22px; height:20px; border:1px solid var(--border); background:var(--bg); color:var(--dim);
+                     border-radius:4px; cursor:pointer; font-size:11px; font-weight:700; padding:0; line-height:1; }
+  .rv-hbtns button.on.yes { color:#fff; background:var(--green,#4caf50); border-color:var(--green,#4caf50); }
+  .rv-hbtns button.on.no { color:#fff; background:#e05555; border-color:#e05555; }
+  .rv-hbtns button.on.unsure { color:#241606; background:#e0a83c; border-color:#e0a83c; }
+  .rv-rate { display:flex; align-items:center; gap:8px; margin:8px 0 4px; }
+  .rv-rate input[type=range] { flex:1; accent-color:var(--accent); }
+  .rv-rate .rv-rval { color:var(--accent); font-weight:700; min-width:2.2em; }
+  .rv-notes { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;
+              padding:5px 8px; font:inherit; font-size:12px; resize:vertical; min-height:34px; box-sizing:border-box; }
+  .rv-agree { color:var(--dim); font-size:10.5px; margin-top:3px; }
+  .rv-blindmsg { color:var(--dim); font-style:italic; font-size:11px; padding:4px; }
+  .rv-empty { padding:40px; text-align:center; color:var(--dim); }
   /* ── mobile / narrow screens: RUN | MODELS | LOG sub-tabs (one column at a time) ── */
   @media (max-width: 700px) {
     header { gap:10px; padding:8px 12px; }
@@ -273,6 +326,7 @@
     <button data-tab="monitor" aria-pressed="true">Monitor</button>
     <button data-tab="rankings" aria-pressed="false">Rankings</button>
     <button data-tab="files" aria-pressed="false">Files</button>
+    <button data-tab="review" aria-pressed="false">Image Review</button>
   </nav>
   <main>
     <section id="view-monitor" class="view mt-left">
@@ -347,6 +401,22 @@
     <section id="view-files" class="view hidden">
       <div id="filesList"></div>
       <div id="fileView"><span class="fv-empty">select a result file…</span></div>
+    </section>
+    <section id="view-review" class="view hidden">
+      <div id="rvBar">
+        <select id="rvRun" title="run"></select>
+        <span id="rvPrompts" class="rv-seg"></span>
+        <span class="rv-sub">image</span><span id="rvImgs" class="rv-seg"></span>
+        <span class="rv-spacer"></span>
+        <span class="rv-sub">zoom</span>
+        <span id="rvZoom" class="rv-seg">
+          <button data-z="fit" class="on">Fit</button><button data-z="1">1:1</button><button data-z="2">200%</button>
+        </span>
+        <label class="rv-blind"><input type="checkbox" id="rvBlind"> blind</label>
+        <span id="rvProg" class="rv-prog"></span>
+      </div>
+      <div id="rvPromptText" class="rv-ptext"></div>
+      <div id="rvPanes"></div>
     </section>
   </main>
 
@@ -565,6 +635,7 @@ $("#tabs").onclick = e => {
   $("#view-"+b.dataset.tab).classList.remove("hidden");
   if(b.dataset.tab==="rankings") loadRankings();
   if(b.dataset.tab==="files") loadFiles();
+  if(b.dataset.tab==="review") loadReview();
 };
 
 // ── rankings viewer ─────────────────────────────────────────────────────────
@@ -834,6 +905,120 @@ function connect(){
   ws.onerror = ()=>ws.close();
 }
 connect();
+
+// ── Image Review ────────────────────────────────────────────────────────────
+const RV = { data:null, prompt:null, imgIdx:0, paneModels:[null,null], zoom:"fit",
+             pos:{tx:0,ty:0}, human:{}, blind:false, saveT:null };
+const rvKey = (m,p,i)=> `${m}|${p}|${i}`;
+
+async function loadReview(){
+  let runs=[]; try{ runs=await (await fetch("/api/imagegen/runs")).json(); }catch{}
+  if(!runs.length){ $("#rvPanes").innerHTML='<div class="rv-empty">No image-gen runs yet — run <code>./bench.sh imagegen</code> first.</div>';
+    $("#rvRun").innerHTML=""; $("#rvPrompts").innerHTML=""; $("#rvImgs").innerHTML=""; $("#rvPromptText").innerHTML=""; return; }
+  $("#rvRun").innerHTML = runs.map(r=>`<option value="${r.date}">${r.date} · ${r.models.length} models</option>`).join("");
+  if(!RV.data || !runs.find(r=>r.date===RV.data.date)) rvLoadRun(runs[0].date); else rvRender();
+}
+async function rvLoadRun(date){
+  RV.data = await (await fetch("/api/imagegen/run/"+date)).json();
+  RV.human = RV.data.human || {};
+  const ms = RV.data.models;
+  RV.paneModels = ms.length>=2 ? [ms[0],ms[1]] : [ms[0],ms[0]];
+  RV.prompt = RV.data.prompts[0]?.id || null; RV.imgIdx = 0;
+  rvRender();
+}
+function rvNImg(){ return (RV.data?.images?.[RV.paneModels[0]]?.[RV.prompt]||[]).length; }
+function rvPrompt(){ return RV.data.prompts.find(x=>x.id===RV.prompt); }
+
+function rvRender(){
+  if(!RV.data) return;
+  const P=RV.data.prompts, ms=RV.data.models;
+  $("#rvPrompts").innerHTML = P.map(q=>`<button data-p="${q.id}" class="${q.id===RV.prompt?'on':''}">${q.id}</button>`).join("");
+  const n=Math.max(rvNImg(),1);
+  $("#rvImgs").innerHTML = Array.from({length:n},(_,i)=>`<button data-i="${i}" class="${i===RV.imgIdx?'on':''}">${i+1}</button>`).join("");
+  const q=rvPrompt();
+  $("#rvPromptText").innerHTML = q ? `<b>${esc(q.id)} · ${esc(q.name)}</b> — ${esc(q.prompt)}` : "";
+  const single = ms.length<2, np = single?1:2;
+  const wrap=$("#rvPanes"); wrap.classList.toggle("single", single);
+  wrap.innerHTML = Array.from({length:np},(_,i)=>`
+    <div class="rv-pane" data-pane="${i}">
+      <div class="rv-phead"><select class="rv-model" data-pane="${i}">${ms.map(m=>`<option value="${esc(m)}" ${m===RV.paneModels[i]?'selected':''}>${esc(m)}</option>`).join("")}</select></div>
+      <div class="rv-vp" data-pane="${i}"><img alt=""><span class="rv-vlmpct"></span></div>
+      <div class="rv-grade" data-pane="${i}"></div>
+    </div>`).join("");
+  if(single) RV.paneModels[1]=RV.paneModels[0];
+  for(let i=0;i<np;i++) rvRenderPane(i);
+  rvBindViewer(); rvCenter(); rvClampAndApply(); rvProgress();
+}
+function rvRenderPane(i){
+  const pane=document.querySelector(`.rv-pane[data-pane="${i}"]`); if(!pane) return;
+  const m=RV.paneModels[i], rec=(RV.data.images[m]?.[RV.prompt]||[])[RV.imgIdx];
+  const img=pane.querySelector("img"), pct=pane.querySelector(".rv-vlmpct");
+  if(!rec){ img.removeAttribute("src"); pct.textContent=""; pane.querySelector(".rv-grade").innerHTML='<div class="rv-empty">no image</div>'; return; }
+  img.src = rec.src;
+  const core=rvPrompt()?.core||[], cv=rec.vlm_core||{};
+  const yes=core.filter(e=>cv[e]==="yes").length;
+  pct.textContent = core.length? `VLM ${Math.round(100*yes/core.length)}%` : "";
+  pct.style.display = RV.blind ? "none":"block";
+  rvRenderGrade(pane, m, rec);
+}
+function rvVicon(v){ const s=v==="yes"?"✓":v==="no"?"✗":"?", c=v==="yes"?"yes":v==="no"?"no":"unsure"; return `<span class="rv-v ${c}">${s}</span>`; }
+function rvRenderGrade(pane, m, rec){
+  const g=pane.querySelector(".rv-grade"), q=rvPrompt(), key=rvKey(m,RV.prompt,RV.imgIdx);
+  const h=RV.human[key]||(RV.human[key]={core:{},rating:0,notes:""});
+  const mkrows=(list,cls)=> list.map(el=>{
+    const vv=(cls==="fine"?rec.vlm_fine:rec.vlm_core)?.[el]??"unsure", hv=h.core[el];
+    const hbtn=(val,lab)=>`<button data-el="${esc(el)}" data-hv="${val}" class="${hv===val?'on '+val:''}">${lab}</button>`;
+    return `<tr class="${cls}"><td class="el">${esc(el)}</td><td class="vlm">${RV.blind?'<span class="rv-v unsure">·</span>':rvVicon(vv)}</td>
+      <td><span class="rv-hbtns">${hbtn('yes','Y')}${hbtn('no','N')}${hbtn('unsure','?')}</span></td></tr>`;
+  }).join("");
+  let agree="";
+  if(!RV.blind){ const graded=q.core.filter(e=>h.core[e]);
+    if(graded.length){ const ok=graded.filter(e=>h.core[e]===(rec.vlm_core?.[e]??"unsure")).length;
+      agree=`<div class="rv-agree">VLM agreed on ${ok}/${graded.length} core element(s)</div>`; } }
+  g.innerHTML = `<table class="rv-chk"><thead><tr><th>expected</th><th>VLM</th><th>you</th></tr></thead>
+      <tbody>${mkrows(q.core,"core")}${mkrows(q.fine,"fine")}</tbody></table>${agree}
+    <div class="rv-rate"><span class="rv-sub">rate</span><input type="range" min="0" max="5" step="1" value="${h.rating||0}" data-role="rate">
+      <span class="rv-rval">${h.rating? h.rating+'/5':'—'}</span></div>
+    <textarea class="rv-notes" placeholder="notes…" data-role="notes">${esc(h.notes||"")}</textarea>`;
+  g.querySelectorAll(".rv-hbtns button").forEach(b=> b.onclick=()=>{ const el=b.dataset.el, val=b.dataset.hv;
+    if(h.core[el]===val) delete h.core[el]; else h.core[el]=val; rvRenderGrade(pane,m,rec); rvSaveSoon(); rvProgress(); });
+  g.querySelector('[data-role=rate]').oninput=e=>{ h.rating=+e.target.value; g.querySelector('.rv-rval').textContent=h.rating?h.rating+'/5':'—'; rvSaveSoon(); rvProgress(); };
+  g.querySelector('[data-role=notes]').oninput=e=>{ h.notes=e.target.value; rvSaveSoon(); rvProgress(); };
+}
+// ── synced viewer (both images are 1024², so one transform drives both) ──
+function rvScale(){ const vp=document.querySelector('.rv-vp'); if(!vp||!vp.clientWidth) return {scale:1,W:1,H:1};
+  const W=vp.clientWidth,H=vp.clientHeight; return {scale: RV.zoom==="fit"?Math.min(W/1024,H/1024):+RV.zoom, W,H}; }
+function rvCenter(){ const {scale,W,H}=rvScale(), s=1024*scale; RV.pos={tx:(W-s)/2, ty:(H-s)/2}; }
+function rvClampAndApply(){ const {scale,W,H}=rvScale(), s=1024*scale; let {tx,ty}=RV.pos;
+  tx = s<=W ? (W-s)/2 : Math.max(W-s,Math.min(0,tx));
+  ty = s<=H ? (H-s)/2 : Math.max(H-s,Math.min(0,ty));
+  RV.pos={tx,ty};
+  document.querySelectorAll('.rv-vp img').forEach(im=> im.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`); }
+function rvBindViewer(){ document.querySelectorAll('.rv-vp').forEach(vp=>{
+  vp.onpointerdown=e=>{ if(RV.zoom==="fit") return; e.preventDefault();
+    vp.classList.add("drag"); vp.setPointerCapture(e.pointerId); let lx=e.clientX, ly=e.clientY;
+    const mv=ev=>{ RV.pos.tx+=ev.clientX-lx; RV.pos.ty+=ev.clientY-ly; lx=ev.clientX; ly=ev.clientY; rvClampAndApply(); };
+    const up=()=>{ vp.classList.remove("drag"); vp.removeEventListener("pointermove",mv); vp.removeEventListener("pointerup",up); };
+    vp.addEventListener("pointermove",mv); vp.addEventListener("pointerup",up); }; }); }
+function rvProgress(){ if(!RV.data) return; let total=0, done=0;
+  RV.data.models.forEach(m=>RV.data.prompts.forEach(q=>{ (RV.data.images[m]?.[q.id]||[]).forEach((_,i)=>{ total++;
+    const h=RV.human[rvKey(m,q.id,i)]; if(h&&((h.core&&Object.keys(h.core).length)||h.rating||(h.notes&&h.notes.trim()))) done++; }); }));
+  $("#rvProg").innerHTML = `graded <b>${done}</b>/${total}`; }
+function rvSave(){ if(RV.saveT){clearTimeout(RV.saveT);RV.saveT=null;} if(!RV.data) return;
+  const clean={}; for(const[k,v]of Object.entries(RV.human)){ if((v.core&&Object.keys(v.core).length)||v.rating||(v.notes&&v.notes.trim())) clean[k]=v; }
+  fetch("/api/imagegen/human/"+RV.data.date,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(clean)}).catch(()=>{}); }
+function rvSaveSoon(){ if(RV.saveT)clearTimeout(RV.saveT); RV.saveT=setTimeout(rvSave,600); }
+// controls (delegated on stable containers)
+$("#rvRun").onchange=e=> rvLoadRun(e.target.value);
+$("#rvPrompts").onclick=e=>{ const b=e.target.closest("[data-p]"); if(!b)return; RV.prompt=b.dataset.p; RV.imgIdx=0; rvRender(); };
+$("#rvImgs").onclick=e=>{ const b=e.target.closest("[data-i]"); if(!b)return; RV.imgIdx=+b.dataset.i;
+  $("#rvImgs").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".rv-pane").forEach((_,i)=>rvRenderPane(i)); rvClampAndApply(); };
+$("#rvZoom").onclick=e=>{ const b=e.target.closest("[data-z]"); if(!b)return; RV.zoom=b.dataset.z;
+  $("#rvZoom").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b)); rvCenter(); rvClampAndApply(); };
+$("#rvBlind").onchange=e=>{ RV.blind=e.target.checked; document.querySelectorAll(".rv-pane").forEach((_,i)=>rvRenderPane(i)); };
+$("#rvPanes").onchange=e=>{ const s=e.target.closest("select.rv-model"); if(!s)return; RV.paneModels[+s.dataset.pane]=s.value; rvRenderPane(+s.dataset.pane); rvClampAndApply(); };
+window.addEventListener("resize", ()=>{ if(!$("#view-review").classList.contains("hidden")){ rvCenter(); rvClampAndApply(); } });
 </script>
 </body>
 </html>
