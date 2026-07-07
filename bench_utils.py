@@ -73,6 +73,7 @@ _DATASET_FILES = {
     "elasticity_ladder": "suites/elasticity/ladder.json",
     "longctx":           "suites/longctx/dataset.json",
     "vision_gt":         "suites/vision/ground_truth.json",
+    "confab_items":      "suites/confab/items.json",
     "prompt_worker":     "prompts/worker_default.md",
     "prompt_router":     "prompts/router_default.md",
 }
@@ -91,6 +92,7 @@ BATTERY_REVISION = {
     "vision": 2,      # two-band V-hard (2026-07-05)
     "embedding": 2,   # length-stratified re-tune (2026-06-13)
     "image": 1,
+    "confab": 1,      # Battery H — honesty/confabulation (2026-07-07)
 }
 
 # Which dataset/prompt hashes (keys of _DATASET_FILES) actually feed each battery's result.
@@ -107,6 +109,7 @@ BATTERY_DATASETS = {
     "vision": ["vision_gt"],
     "embedding": [],
     "image": [],
+    "confab": ["confab_items"],
 }
 
 

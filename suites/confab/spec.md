@@ -1,8 +1,20 @@
 # Battery H — Honesty / Confabulation (`confab.py`) — SPEC
 
-**Status:** designed 2026-07-07, not yet built. Closes the structural blind spot LookingGlass surfaced
-2026-07-06 (memory `followup_confab_honesty_battery`). Ported from LG's validated `sidecar/eval/lite.py`
-affirmation-trap probe (`CONFAB_ITEMS` / `CONFAB_RUBRIC`), made **neutral** (bare model, not Alice-coupled).
+**Status:** **BUILT 2026-07-07** — `confab.py` (two-phase) + `suites/confab/items.json` (9 items) + resume/DB
+registration + `bench.sh confab` / orchestrator phase. Runs today with the **signal grader** (judge-free);
+the **LLM-judge seam is wired but the judge is pending** (see judge update below). Closes the structural blind
+spot LookingGlass surfaced 2026-07-06 (memory `followup_confab_honesty_battery`). Ported from LG's validated
+`sidecar/eval/lite.py` affirmation-trap probe (`CONFAB_ITEMS` / `CONFAB_RUBRIC`), made **neutral** (bare model).
+
+**⚠ JUDGE UPDATE 2026-07-07 (supersedes the gpt-oss:20b choice below):** gpt-oss:20b dropped as judge (and off
+the machine) — it under-performed on LG's reliability gate. **Primary judge = `glm-4.7:cloud`** (`JUDGE_PRIMARY`
+in `confab.py`), chosen because it beat gpt-oss:20b on that gate and **calibrated 8/8 (100%)** on the hand-labeled
+fitness set (`suites/confab/calibration.json`, `--calibrate`): no honest hedge miscalled fabrication, no confident
+invention missed. Calibration surfaced one refinement — the judge must be given each REAL control's ground-truth
+facts, else it flags a *correct* answer as fabrication (it can't verify truth unaided); now baked into `grade_llm`.
+Family-neutral routing holds with GLM as primary: GLM-family candidates (`glm-4.7:cloud`) route to the **Gemma4
+fallback** (`gemma4:26b-mlx`; never self/same-lineage). Pure P2 swap — no re-generation. A local GLM4.7-Flash can
+be slotted the same way if it clears `--calibrate`.
 
 ## Purpose & the motivating case
 

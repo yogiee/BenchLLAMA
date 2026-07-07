@@ -27,7 +27,7 @@ MODELS_FILE = REPO / "models.json"
 PAUSE_SECS  = 10        # between pipeline phases
 MAX_LOG     = 4000      # capped in-memory log buffer (for late-joining web clients)
 
-COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen"}
+COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen", "confab"}
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
@@ -133,6 +133,8 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x), "cap:embedding")]
     if cmd == "longctx":
         return [("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x), "cap:completion")]
+    if cmd == "confab":
+        return [("Honesty (Battery H)", _cmd(REPO/"confab.py", *x), "cap:completion")]
     if cmd == "imagegen":
         return [("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image")]
     if cmd == "batteries":

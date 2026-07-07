@@ -179,7 +179,7 @@ _UNIVERSE = {  # battery → (registry capability/role filter)
     "standard": ("role", {"worker", "router"}), "ladder": ("role", {"worker", "router"}),
     "A": ("role", {"router"}), "B": ("role", {"worker"}), "C": ("role", {"worker"}), "D": ("role", {"worker"}),
     "E": ("cap", "completion"), "F": ("cap", "completion"), "F-elastic": ("cap", "completion"),
-    "G": ("role", {"worker", "router"}),
+    "G": ("role", {"worker", "router"}), "confab": ("cap", "completion"),
     "vision": ("cap", "vision"), "embedding": ("cap", "embedding"), "image": ("cap", "image"),
 }
 
