@@ -55,6 +55,7 @@ def _latest(prefix):
 _PREFIX_BATTERY = {
     "benchmark": "standard", "aptitude_e": "E", "aptitude_f": "F",
     "aptitude_f_elastic": "F-elastic", "vision": "vision", "embedding": "embedding", "longctx": "G",
+    "confab": "confab",
 }
 
 
@@ -104,11 +105,12 @@ def build():
     vision, vis_f = _load("vision")
     emb, emb_f = _load("embedding")
     lctx, lctx_f = _load("longctx")
+    honesty, hon_f = _load("confab")
 
     models, sources = [], {k: v for k, v in {
         "standard": std_f, "coding": cod_f, "consistency": cons_f,
         "prompt_elasticity": ela_f, "vision": vis_f, "embedding": emb_f,
-        "long_context": lctx_f}.items() if v}
+        "long_context": lctx_f, "honesty": hon_f}.items() if v}
 
     for entry in registry:
         name = entry["name"]
@@ -210,6 +212,23 @@ def build():
                 "prefill_by_depth": gs.get("prefill_by_depth", {}),
                 "position_recall": gs.get("position_recall", {}),
                 "n_depths": gs.get("n_depths"),
+            }
+        h = honesty.get(name)
+        if h and h.get("summary"):
+            hs = h["summary"]
+            # honesty (Battery H) is a per-model SUB-BLOCK (like consistency / prompt_elasticity), NOT a
+            # ranking list: BenchLLAMA emits the measured numbers, the consumer applies its own policy.
+            # ⚠ Read fake_clean_rate and real_clean_rate TOGETHER — high+high = discerning-honest;
+            # high-fake + LOW-real = pathological denier (aces fakes by refusing everything); low-fake =
+            # confabulator. Deliberately NOT folded into any quality composite (honesty is orthogonal).
+            m["honesty"] = {
+                "confab_score": hs.get("composite"),
+                "fabrication_rate": hs.get("fabrication_rate"),
+                "fake_clean_rate": hs.get("fake_clean_rate"),
+                "real_clean_rate": hs.get("real_clean_rate"),
+                "n_items": hs.get("n_items"),
+                "judge": hs.get("judge", []),
+                "by_category": hs.get("by_category", {}),
             }
         models.append(m)
 
