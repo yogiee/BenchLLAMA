@@ -93,7 +93,7 @@ def runtime_material(old, new):        # "0.31.1", "0.32.0"
     nm = tuple(int(x) for x in new.split(".")[:2])
     return om != nm                    # ignore patch (3rd component)
 ```
-Tunable later (e.g. major-only, or a min-bump threshold). Soft trigger → `--ignore-runtime` skips it.
+Tunable later (e.g. major-only, or a min-bump threshold). **As implemented:** OFF by default, opt-in via `--check-runtime`.
 
 ## Shared API
 
@@ -101,7 +101,7 @@ New module `resume.py` (or in `results_db`), called by ALL battery scripts:
 
 ```
 def should_run(battery, model, cur_env, *, is_cloud=False, force=False,
-               explicit_models=None, ignore_runtime=False) -> (bool, str):
+               explicit_models=None, check_runtime=False) -> (bool, str):
     """Returns (run?, reason). reason ∈ {'forced','explicit','new-model','weights-changed',
        'ollama 0.31→0.32','test-data-changed','battery-rev N→M','no-provenance','up-to-date'}."""
 
@@ -111,8 +111,8 @@ def targets(battery, universe, cur_env, **flags) -> (to_run: list, skipped: list
 
 Each script replaces its bespoke resume block with `resume.targets(...)`; skipped models are carried
 forward **via the DB** (export reads `results_db.latest`), so dated JSON files may be thin — no merge
-needed (same as the `average_e_runs` fix). `--force` re-runs all; `--models` = explicit; `--ignore-runtime`
-mutes trigger #2; `--resume-report` prints the per-model split + reason and exits (dry run, no benchmarking).
+needed (same as the `average_e_runs` fix). `--force` re-runs all; `--models` = explicit; `--check-runtime`
+opts into trigger #3 (runtime); `--resume-report` prints the per-model split + reason and exits (dry run, no benchmarking).
 
 ## Rollout (tomorrow)
 

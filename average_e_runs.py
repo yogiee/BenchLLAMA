@@ -77,7 +77,7 @@ def _resume_targets(explicit_models, force, bat):
     tr, sk, why = resume.resolve("F-elastic" if bat == "F-ELASTIC" else bat, universe,
                                  cloud=cloud, force=force,
                                  explicit_models=explicit_models or None,
-                                 ignore_runtime="--ignore-runtime" in sys.argv)
+                                 check_runtime="--check-runtime" in sys.argv)
     if explicit_models:
         line = f"explicit --models ({len(tr)})"
     elif force:
