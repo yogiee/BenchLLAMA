@@ -31,16 +31,6 @@
     "added_idx": 17
   },
   {
-    "name": "moondream:1.8b",
-    "disk_gb": 1.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "vision"
-    ],
-    "extended_roles": []
-  },
-  {
     "name": "llama3.2:3b",
     "disk_gb": 2.0,
     "role": "router",
@@ -65,29 +55,6 @@
       "coder"
     ],
     "added_idx": 10
-  },
-  {
-    "name": "granite3.2-vision:2b",
-    "disk_gb": 2.4,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "phi4-mini:latest",
-    "disk_gb": 2.5,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
   },
   {
     "name": "ministral-3:3b",
@@ -127,69 +94,6 @@
     "added_idx": 0
   },
   {
-    "name": "qwen3.5:4b-mlx",
-    "disk_gb": 4.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 13
-  },
-  {
-    "name": "blaifa/InternVL3:latest",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "insert",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "deepseek-r1:7b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "hermes3:8b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "qwen2.5:7b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
     "name": "s80982708/ZINI-LOCAL:latest",
     "disk_gb": 4.7,
     "role": "worker",
@@ -202,50 +106,8 @@
     "added_idx": 18
   },
   {
-    "name": "dolphin3:latest",
-    "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "granite3-dense:8b",
-    "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
     "name": "llama3.1:8b",
     "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "lukashabtoch/plutotext-r3-emotional:latest",
-    "disk_gb": 4.9,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "command-r7b:7b",
-    "disk_gb": 5.1,
     "role": "worker",
     "capabilities": [
       "completion",
@@ -280,31 +142,6 @@
       "coder"
     ],
     "added_idx": 2
-  },
-  {
-    "name": "minicpm-v4.5:8b",
-    "disk_gb": 6.1,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": []
-  },
-  {
-    "name": "gemma4:e2b-mlx",
-    "disk_gb": 6.5,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
   },
   {
     "name": "mistral-nemo:12b",
@@ -349,19 +186,6 @@
     "added_idx": 6
   },
   {
-    "name": "gemma4:e4b-mlx",
-    "disk_gb": 8.8,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
     "name": "gemma4:latest",
     "disk_gb": 9.6,
     "role": "worker",
@@ -394,6 +218,19 @@
     ]
   },
   {
+    "name": "gpt-oss:20b",
+    "disk_gb": 13.8,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
     "name": "gemma4:26b-mlx",
     "disk_gb": 17.6,
     "role": "worker",
@@ -406,21 +243,6 @@
       "coder"
     ],
     "added_idx": 3
-  },
-  {
-    "name": "gemma4:26b",
-    "disk_gb": 18.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 7
   },
   {
     "name": "gemma4:31b-cloud",
