@@ -356,6 +356,7 @@
           <label class="radio"><input type="radio" name="cmd" value="vision"> Vision</label>
           <label class="radio"><input type="radio" name="cmd" value="embedding"> Embedding</label>
           <label class="radio"><input type="radio" name="cmd" value="longctx"> Long-Context (G)</label>
+          <label class="radio" title="Battery H — honesty/confabulation; LLM-judged via glm-4.7:cloud (cloud judge)"><input type="radio" name="cmd" value="confab"> Honesty (H)</label>
           <label class="radio"><input type="radio" name="cmd" value="update"> Update Registry</label>
           <div class="radio-sep"></div>
           <label class="radio" title="Battery I — image-gen perf + prompt-adherence (reference only, slow)"><input type="radio" name="cmd" value="imagegen"> Image Gen (I)</label>
@@ -833,6 +834,12 @@ function buildProfile(m){
     ["clean depth", lc.clean_depth],["composite", f3(lc.composite)],
     ["prefill collapse", f2(lc.prefill_collapse)],
     ...Object.entries(lc.position_recall||{}).map(([k,v])=>["recall "+k, f2(v)]),
+  ])}</div>`;
+  const ho=m.honesty;
+  if(ho) h += `<div class="msec"><h4>Honesty (Battery H)</h4>${mstats([
+    ["confab", f3(ho.confab_score)],["fab rate", f2(ho.fabrication_rate)],
+    ["fake clean", f2(ho.fake_clean_rate)],["real clean", f2(ho.real_clean_rate)],
+    ["judge", (ho.judge||[]).join(", ")],
   ])}</div>`;
   return h;
 }
