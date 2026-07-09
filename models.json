@@ -1,27 +1,14 @@
 [
   {
-    "name": "llama3.1:8b",
-    "disk_gb": 4.9,
+    "name": "glm-4.7-flash:latest",
+    "disk_gb": 19.0,
     "role": "worker",
     "capabilities": [
       "completion",
+      "thinking",
       "tools"
     ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "mistral-nemo:12b",
-    "disk_gb": 7.1,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
+    "extended_roles": []
   },
   {
     "name": "ministral-3:3b",
