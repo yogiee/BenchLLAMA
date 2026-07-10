@@ -250,7 +250,8 @@ async def _stop(request):
 async def _rankings(request):
     if not RANKINGS_JSON.exists():
         return web.json_response({"error": "no rankings.json yet — run export.py"}, status=404)
-    return web.json_response(json.loads(RANKINGS_JSON.read_text()))
+    return web.json_response(json.loads(RANKINGS_JSON.read_text()),
+                             headers={"Cache-Control": "no-store"})
 
 
 async def _model_detail(request):
@@ -284,7 +285,8 @@ async def _model_detail(request):
 async def _results_list(request):
     files = sorted(RESULTS.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
     return web.json_response([{"name": f.name, "mtime": int(f.stat().st_mtime),
-                               "size": f.stat().st_size} for f in files])
+                               "size": f.stat().st_size} for f in files],
+                             headers={"Cache-Control": "no-store"})
 
 
 async def _result_file(request):
@@ -293,12 +295,13 @@ async def _result_file(request):
     # path-traversal guard: must resolve inside RESULTS and be a result file
     if "/" in name or ".." in name or f.suffix not in (".md", ".json") or not f.is_file():
         return web.Response(status=404, text="not found")
-    return web.Response(text=f.read_text(), content_type="text/plain")
+    return web.Response(text=f.read_text(), content_type="text/plain",
+                        headers={"Cache-Control": "no-store"})
 
 
 async def _master(request):
     return web.Response(text=MASTER_MD.read_text() if MASTER_MD.exists() else "# (no master.md yet)",
-                        content_type="text/plain")
+                        content_type="text/plain", headers={"Cache-Control": "no-store"})
 
 
 # ── Image Review (Battery I) — human-in-the-loop grading over the VLM's checklist ───────────────

@@ -875,15 +875,18 @@ async function loadRankings(){
 // ── files browser ─────────────────────────────────────────────────────────────
 async function loadFiles(){
   const files=await (await fetch("/api/results")).json();
-  $("#filesList").innerHTML = files.length
+  // master.md lives in rankings/ (gitignored), served via /api/master — pin it at the top.
+  const master=`<div class="fitem" data-f="master.md" data-master="1"><span>★ master.md</span><span class="meta">rankings</span></div>`;
+  $("#filesList").innerHTML = master + (files.length
     ? files.map(f=>`<div class="fitem" data-f="${esc(f.name)}"><span>${esc(f.name)}</span><span class="meta">${(f.size/1024).toFixed(0)}k</span></div>`).join("")
-    : "<p class='meta'>no result files yet</p>";
+    : "");
 }
 $("#filesList").onclick = async e=>{
   const it=e.target.closest(".fitem"); if(!it) return;
   $("#filesList").querySelectorAll(".fitem").forEach(x=>x.classList.remove("sel")); it.classList.add("sel");
   const name = it.dataset.f;
-  const text = await (await fetch("/api/results/"+encodeURIComponent(name))).text();
+  const url = it.dataset.master ? "/api/master" : "/api/results/"+encodeURIComponent(name);
+  const text = await (await fetch(url)).text();
   $("#fileView").innerHTML = /\.md$/i.test(name) ? mdToHtml(text) : `<pre class="fv-raw">${esc(text)}</pre>`;
 };
 
