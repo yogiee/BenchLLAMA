@@ -585,7 +585,9 @@ if __name__ == "__main__":
     if model_args:
         have = {n for n, *_ in MODELS}
         for m in model_args:
-            if m not in have:
+            # Admit an explicit --models entry only if it ACTUALLY has the embedding cap — never force a
+            # completion-only model through Embedding (it 501s and writes a junk row). 2026-07-11.
+            if m not in have and "embedding" in (reg.get(m, {}).get("capabilities") or []):
                 MODELS.append((m, reg.get(m, {}).get("disk_gb", 0.0)))
 
     if not MODELS:
@@ -621,7 +623,7 @@ if __name__ == "__main__":
         all_results = [x for x in all_results if x["model"] != model_name] + [r]
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
         try:
-            import results_db; results_db.record_all("embedding", all_results)
+            import results_db; results_db.record_all("embedding", all_results, only=set(run_names))
         except Exception:
             pass
         unload(model_name)

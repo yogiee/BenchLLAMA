@@ -429,7 +429,7 @@ if __name__ == "__main__":
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
         try:
-            import results_db; results_db.record_all("ladder", all_results)
+            import results_db; results_db.record_all("ladder", all_results, only=set(run_names))
         except Exception:
             pass
 

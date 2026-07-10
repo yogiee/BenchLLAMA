@@ -206,6 +206,23 @@ def set_env(run_id: str, env: dict, path: Path = DB_PATH) -> None:
         pass
 
 
+def ensure_env(run_id: str, models=None, path: Path = DB_PATH) -> None:
+    """Guarantee the run row carries a provenance fingerprint. Best-effort, idempotent, never raises.
+    Captures bench_utils.env_fingerprint() — a network probe done OUTSIDE any write lock — ONLY when the
+    run has none yet, so a standalone/bare script run (`python3 runner.py …`) is provenanced exactly like
+    an orchestrated one. Without this, a bare run's carry-forward writes would re-stamp the fleet under an
+    env-less run and strip its provenance (the resume `no-provenance` bug, 2026-07-11)."""
+    try:
+        with _conn(path) as c:
+            row = c.execute("SELECT env FROM runs WHERE run_id=?", (run_id,)).fetchone()
+        if row and row["env"]:
+            return
+        from bench_utils import env_fingerprint
+        set_env(run_id, env_fingerprint(models=list(models) if models else None), path=path)
+    except Exception:
+        pass
+
+
 def latest_env(path: Path = DB_PATH) -> dict:
     """Provenance fingerprint of the most recent run that recorded one ({} if none).
     Surfaced by export.py as the `environment` block."""
@@ -308,29 +325,39 @@ def composite_of(rec: dict):
     return None
 
 
-def record_all(battery: str, results: list, run_id: str | None = None, path: Path = DB_PATH) -> int:
+def record_all(battery: str, results: list, run_id: str | None = None,
+               only: set | None = None, path: Path = DB_PATH) -> int:
     """Dual-write hook called by each writer right after it writes its JSON: UPSERT every per-model
     record for this battery+run in ONE transaction (the write-points fire per-model, so a single
     connection per call keeps it cheap). NEVER raises into the caller — a DB hiccup must not break a
-    live benchmark (the JSON write already succeeded). Returns the number of rows written."""
+    live benchmark (the JSON write already succeeded). Returns the number of rows written.
+
+    `only` (model-name set) restricts the write to the models actually scored THIS invocation — pass
+    the caller's `run_names`. Carried models are then left on their ORIGINAL (run_id, env) row instead
+    of being re-stamped under the current run, so a provenance-less/bare run can never strip the rest
+    of the fleet's provenance (the `no-provenance` bug, 2026-07-11). only=None keeps every non-error
+    row (the force-based averager already passes only its freshly-run rows)."""
     rid = run_id or current_run_id()
     n = 0
     try:
+        recs = [r for r in results
+                if isinstance(r, dict) and r.get("model") and "error" not in r
+                and (only is None or r["model"] in only)]
         started = rid if (rid and rid[0].isdigit() and "T" in rid) else _now()
         now = _now()
         with _conn(path) as c:
             c.execute("INSERT INTO runs(run_id,started_at,host,flags) VALUES(?,?,?,?) "
                       "ON CONFLICT(run_id) DO NOTHING",
                       (rid, started, socket.gethostname(), "{}"))
-            for rec in results:
-                if isinstance(rec, dict) and rec.get("model") and "error" not in rec:
-                    c.execute(
-                        "INSERT INTO results(run_id,model,battery,composite,metrics,per_test,created_at) "
-                        "VALUES(?,?,?,?,?,?,?) ON CONFLICT(run_id,model,battery) DO UPDATE SET "
-                        "  composite=excluded.composite, metrics=excluded.metrics, "
-                        "  per_test=excluded.per_test, created_at=excluded.created_at",
-                        (rid, rec["model"], battery, composite_of(rec), json.dumps(rec), None, now))
-                    n += 1
+            for rec in recs:
+                c.execute(
+                    "INSERT INTO results(run_id,model,battery,composite,metrics,per_test,created_at) "
+                    "VALUES(?,?,?,?,?,?,?) ON CONFLICT(run_id,model,battery) DO UPDATE SET "
+                    "  composite=excluded.composite, metrics=excluded.metrics, "
+                    "  per_test=excluded.per_test, created_at=excluded.created_at",
+                    (rid, rec["model"], battery, composite_of(rec), json.dumps(rec), None, now))
+                n += 1
+        ensure_env(rid, [r["model"] for r in recs], path=path)   # Guard 2: never leave a run env-less
     except Exception:
         pass
     return n

@@ -532,7 +532,7 @@ if __name__ == "__main__":
         all_results = [x for x in all_results if x["model"] != model_name] + [r]
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
         try:
-            import results_db; results_db.record_all("image", all_results)
+            import results_db; results_db.record_all("image", all_results, only={n for n, _ in MODELS} - completed)
         except Exception:
             pass
         unload(model_name)

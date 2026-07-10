@@ -459,7 +459,7 @@ if __name__ == "__main__":
     judge_used = sorted({j for r in results for j in (r.get("summary", {}).get("judge") or [])}) or [grade_mode]
     write_summary(results, OUT_MD, grade_mode, judge_used, fast_mode)
     try:
-        import results_db; results_db.record_all("confab", results)
+        import results_db; results_db.record_all("confab", results, only=set(run_names))
     except Exception:
         pass
 

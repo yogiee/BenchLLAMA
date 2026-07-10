@@ -2336,7 +2336,7 @@ if __name__ == "__main__":
         try:
             import results_db
             if battery_arg in ("A", "B", "C", "D"):   # E/F/F-elastic canonical handled by average_e_runs
-                results_db.record_all(battery_arg, all_results)
+                results_db.record_all(battery_arg, all_results, only=set(run_names))
         except Exception:
             pass
         print(f"  ✓ {model_name} done — JSON updated", flush=True)
