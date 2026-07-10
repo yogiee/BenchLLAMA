@@ -7,7 +7,7 @@
 
 ---
 
-BenchLLAMA runs structured, repeatable benchmarks against any model served by [Ollama](https://ollama.com). It measures personality, reasoning, research depth, instruction following, tool use, coding, consistency, long-context retrieval, vision, embedding, and image generation — then produces ranked results you can act on, served live in a browser dashboard.
+BenchLLAMA runs structured, repeatable benchmarks against any model served by [Ollama](https://ollama.com). It measures personality, reasoning, research depth, instruction following, tool use, coding, consistency, honesty (confabulation), long-context retrieval, vision, embedding, and image generation — then produces ranked results you can act on, served live in a browser dashboard.
 
 ## What's inside
 
@@ -17,9 +17,11 @@ BenchLLAMA runs structured, repeatable benchmarks against any model served by [O
 | `ctx_ladder.py` | Context window characterisation — finds optimal `num_ctx` per model |
 | `aptitude.py` | Role-specific batteries (A–F, F-elastic) — deep evaluation for router and worker models |
 | `longctx.py` | Battery G — long-context retrieval & degradation (planted needles + prefill/decode speed-collapse) |
+| `confab.py` | Battery H — honesty/confabulation probe (bare fabrication rate vs real-item accuracy, LLM-judge graded) |
 | `vision.py` | Battery V — capability-routed vision/OCR evaluation |
 | `embedding.py` | Battery EMB — capability-routed embedding evaluation |
 | `imagegen.py` | Battery I — capability-routed image-gen perf + prompt-adherence (reference-only, opt-in) |
+| `export.py` | Neutral rankings exporter — aggregates every battery's latest results into `rankings/rankings.json` |
 | `orchestrator.py` | Headless orchestration core + plain-text console runner |
 | `webserver.py` | Web UI server (aiohttp) — drives the orchestrator, serves the live dashboard over WebSocket |
 | `web/index.html` | The browser dashboard — phase tree, model cards, streamed log, Rankings + Files + Image Review |
@@ -31,8 +33,8 @@ BenchLLAMA runs structured, repeatable benchmarks against any model served by [O
 ```bash
 pip install requests aiohttp beautifulsoup4 html5lib tinycss2
 
-# Web dashboard (default) — opens browser model selection, then Start/Stop from the UI
-./bench.sh                 # no command → browser selection
+# Web dashboard (default) — compose a run in the browser (suite cards + model picker), Start/Stop from the UI
+./bench.sh                 # no command → browser run composer
 ./bench.sh all             # full pipeline in the dashboard
 
 # Plain terminal instead of the browser (headless / SSH / quick glance)
@@ -53,9 +55,11 @@ pip install requests aiohttp beautifulsoup4 html5lib tinycss2
 ./bench.sh aptitude --battery D --capable-only
 ./bench.sh aptitude --battery E       # coding — 3-run averaged by default
 ./bench.sh longctx                    # Battery G — long-context needles + speed-collapse
+./bench.sh confab                     # Battery H — honesty/confabulation (opt-in; --grade llm default, --judge overridable)
 ./bench.sh vision                     # every vision-capable model
 ./bench.sh embedding                  # every embedding model
 ./bench.sh imagegen                   # Battery I — image-gen (opt-in, reference-only, slow)
+./bench.sh export                     # re-export rankings/rankings.json (also a dashboard button)
 
 # Fast mode (skip cooldown — informal results)
 ./bench.sh standard --fast
@@ -78,7 +82,14 @@ caffeinate -dimsu bash -c '
 `./bench.sh` launches the aiohttp web UI (`webserver.py`) and serves `web/index.html` —
 a single-file dashboard (orange-cream theme, light/dark/system) showing the phase tree,
 per-model cards (role + extended-role badges, capability tags, tok/s), a streamed log,
-and built-in **Rankings** + **Files** viewers. Selection and Start/Stop are browser-driven.
+and built-in **Rankings**, **Files**, and **Image Review** viewers.
+
+Run selection is a **multi-select suite-card composer**: tick any combination of suites
+and batteries — the **ALL** preset selects everything except the opt-ins (Honesty,
+F-elastic); Aptitude expands into per-battery rows with a `runs ×N` control; Honesty
+exposes grade + judge pickers; Image Gen runs solo-only. One morphing **Start ↔ Stop**
+button drives the run; a finished run shows a per-phase ✓/✗ summary and offers
+**⭱ Export Rankings**. Update Registry is an instant top button.
 Bind to the LAN with `--host 0.0.0.0` (read-only unless you add `--allow-control`).
 
 > The Textual TUI (`bench_ui.py` / `monitor.py`) was retired 2026-06-15 in favour of the
@@ -96,7 +107,7 @@ Bind to the LAN with `--host 0.0.0.0` (read-only unless you add `--allow-control
 
 ## Aptitude batteries
 
-Batteries A–F run after the standard suite on models that qualify. Battery G is completion-routed (like E). Vision, Embedding, and Image-gen are **capability-routed** — selected by a model's `capabilities` array in `models.json` (`vision` / `embedding` / `image`), not gated by the standard suite. F-elastic and Image-gen are opt-in (never in `all`; append with `--with-elastic` / `--with-imagegen`).
+Batteries A–F run after the standard suite on models that qualify. Batteries G and H are completion-routed (like E). Vision, Embedding, and Image-gen are **capability-routed** — selected by a model's `capabilities` array in `models.json` (`vision` / `embedding` / `image`), not gated by the standard suite. F-elastic, Image-gen, and Honesty (H) are opt-in — never in `all`; append the first two with `--with-elastic` / `--with-imagegen`, run Honesty with `./bench.sh confab`.
 
 | Battery | Role / routing | What it measures |
 |---------|----------------|-----------------|
@@ -108,6 +119,7 @@ Batteries A–F run after the standard suite on models that qualify. Battery G i
 | F | Worker — Chat | Conversational consistency across multi-turn runs (within-run-relative; reports σ) |
 | F-elastic | Completion (opt-in) | Prompt-elasticity — how the F-composite moves across a system-prompt complexity ladder; judge-free adherence meter. Never in `all`; append with `--with-elastic` |
 | G | Completion (worker + router) | Long-context retrieval & degradation — fills the window (1k–16k+) with distractors + planted needles + a 3-hop chain; exact-match accuracy AND prefill/decode speed-collapse; headline `clean_depth` |
+| H | Completion (opt-in) | Honesty / confabulation — planted fake **and** real items; measures bare fabrication rate vs real-item accuracy (so over-denial can't masquerade as honesty). LLM-judge graded by default (`--grade llm`, `--judge` overridable; deterministic `--grade signal` fallback). Never in `all`; run `./bench.sh confab` |
 | V | `vision` capability | Vision/OCR vs PIL ground truth — ocr, count, chart, spatial, describe |
 | EMB | `embedding` capability | Embedding quality — STS, triplet, retrieval (length-stratified), clustering; quality-per-GB |
 | I | `image` capability (opt-in) | Image-gen characterisation — **perf + prompt-adherence, not quality**. Blind-VLM ✓-core checklist, OCR text-fidelity, per-image reliability (retries + unload/reload recovery). Reference-only, never ranked; append with `--with-imagegen` |
@@ -142,6 +154,7 @@ Results land in `results/` (gitignored). Each run produces a JSON + Markdown rep
 | `aptitude.py --battery E` | `aptitude_e_YYYY-MM-DD.json` + `.md` |
 | `aptitude.py --battery F-elastic` | `aptitude_f_elastic_YYYY-MM-DD.json` + `.md` |
 | `longctx.py` | `longctx_YYYY-MM-DD.json` + `.md` |
+| `confab.py` | `confab_YYYY-MM-DD.json` + `.md` |
 | `vision.py` | `vision_YYYY-MM-DD.json` + `.md` |
 | `embedding.py` | `embedding_YYYY-MM-DD.json` + `.md` |
 | `imagegen.py` | `imagegen_YYYY-MM-DD.json` + `.md` (+ PNGs under `results/imagegen_images/`) |
