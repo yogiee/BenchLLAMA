@@ -1,5 +1,38 @@
 [
   {
+    "name": "minicpm5:1b-q4_k_m",
+    "disk_gb": 0.7,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "minicpm5:1b-q8_0",
+    "disk_gb": 1.2,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": []
+  },
+  {
+    "name": "minicpm5:1b-f16",
+    "disk_gb": 2.2,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": []
+  },
+  {
     "name": "ministral-3:3b",
     "disk_gb": 3.0,
     "role": "worker",
