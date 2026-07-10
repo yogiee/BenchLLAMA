@@ -1,16 +1,5 @@
 [
   {
-    "name": "glm-4.7-flash:latest",
-    "disk_gb": 19.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
     "name": "ministral-3:3b",
     "disk_gb": 3.0,
     "role": "worker",
