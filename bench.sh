@@ -3,7 +3,7 @@
 #   ./bench.sh [command] [flags]            → web UI (default). No command → browser selection screen.
 #   ./bench.sh [command] [flags] --console  → plain-text terminal (headless / SSH / quick glance).
 #
-# Commands: standard · ladder · aptitude · batteries · all · vision · embedding · longctx · imagegen · confab · update
+# Commands: standard · ladder · aptitude · batteries · all · vision · embedding · longctx · imagegen · confab · update · export
 #   all flags: --with-elastic (append F-elastic) · --with-imagegen (append Battery I) — one unattended run does everything
 # Web: binds 0.0.0.0 by default (reachable on the LAN for monitoring from phone/iPad).
 #   Control (Start/Stop) is allowed from the host machine only; LAN clients are read-only.

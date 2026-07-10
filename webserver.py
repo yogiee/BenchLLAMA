@@ -13,6 +13,7 @@ so LAN exposure is a deliberate trust decision (see P5 for read-only/token gatin
 import asyncio
 import json
 import os
+import re
 import signal
 import socket
 import sys
@@ -76,8 +77,57 @@ def _build_extra(payload: dict) -> list:
     return extra
 
 
-def start_run(app, cmd: str, extra: list, sort: str = "size"):
-    """Create + launch an Orchestrator run. Returns (ok, msg). One run at a time.
+_NAME_RE = re.compile(r"^[\w./:-]+$")   # model names in payloads → subprocess argv (no shell, but keep tight)
+
+
+def _units_phases(payload: dict):
+    """Translate the multi-select payload → (phases, err).
+
+    Payload: {units: [...], params: {runs, grade, judge}, fast, force, models}.
+    Common flags go to every benchmark phase; params are routed only to the units
+    that understand them (runs → E/F/F-elastic, grade/judge → confab)."""
+    units = payload.get("units") or []
+    if not isinstance(units, list) or not units:
+        return None, "no units selected"
+    unknown = [u for u in units if u not in O.UNIT_ORDER]
+    if unknown:
+        return None, f"unknown units: {', '.join(map(str, unknown))}"
+    common = []
+    if payload.get("fast"):
+        common.append("--fast")
+    if payload.get("force"):
+        common.append("--force")
+    models = (payload.get("models") or "").split()
+    if models:
+        if not all(_NAME_RE.match(m) for m in models):
+            return None, "bad model name"
+        common += ["--models", *models]
+    p = payload.get("params") or {}
+    unit_extra = {}
+    if p.get("runs") is not None:
+        try:
+            runs = max(1, min(9, int(p["runs"])))
+        except (TypeError, ValueError):
+            return None, "bad runs value"
+        if runs != 3:                                   # 3 = the averager's default
+            for u in ("E", "F", "F-elastic"):
+                unit_extra[u] = ["--runs", str(runs)]
+    confab = []
+    if p.get("grade") in ("llm", "signal"):
+        confab += ["--grade", p["grade"]]
+    judge = (p.get("judge") or "").strip()
+    if judge:
+        if not _NAME_RE.match(judge):
+            return None, "bad judge name"
+        confab += ["--judge", judge]
+    if confab:
+        unit_extra["confab"] = confab
+    return O.build_phases_units(units, common, unit_extra), None
+
+
+def start_phases(app, phases: list, sort: str = "size"):
+    """Launch an Orchestrator run from an assembled phase list. Returns (ok, msg).
+    One run at a time.
 
     Per-run state lives in the mutable `app["rt"]` holder (created pre-startup) — we
     mutate its CONTENTS, never the app mapping itself, so aiohttp doesn't warn about
@@ -87,14 +137,21 @@ def start_run(app, cmd: str, extra: list, sort: str = "size"):
     task = rt.get("task")
     if orch and task and not task.done() and not orch.state.finished:
         return False, "a run is already active"
-    phases = O.build_phases(cmd, extra)
     if not phases:
-        return False, f"unknown command: {cmd}"
+        return False, "nothing to run"
     orch = O.Orchestrator(phases)
     orch.sort = sort if sort in ("size", "name", "fresh") else "size"   # → BENCH_SORT for subprocs
     rt["orch"] = orch
     rt["task"] = asyncio.create_task(orch.run())
     return True, "started"
+
+
+def start_run(app, cmd: str, extra: list, sort: str = "size"):
+    """Single-command launcher (CLI boot path + legacy /api/start payloads)."""
+    phases = O.build_phases(cmd, extra)
+    if not phases:
+        return False, f"unknown command: {cmd}"
+    return start_phases(app, phases, sort)
 
 
 async def _index(request):
@@ -163,7 +220,16 @@ async def _start(request):
         payload = await request.json()
     except Exception:
         return web.json_response({"ok": False, "msg": "bad json"}, status=400)
-    if payload.get("cmd") not in O.COMMANDS:
+    if payload.get("units"):                      # multi-select payload (web UI)
+        phases, err = _units_phases(payload)
+        if err:
+            return web.json_response({"ok": False, "msg": err}, status=400)
+        if payload.get("dry"):                    # preview: assembled phases, nothing started
+            return web.json_response({"ok": True, "dry": True,
+                                      "phases": [{"label": p[0], "argv": p[1][1:]} for p in phases]})
+        ok, msg = start_phases(request.app, phases, payload.get("sort", "size"))
+        return web.json_response({"ok": ok, "msg": msg}, status=200 if ok else 409)
+    if payload.get("cmd") not in O.COMMANDS:      # legacy single-command payload
         return web.json_response({"ok": False, "msg": "bad command"}, status=400)
     ok, msg = start_run(request.app, payload["cmd"], _build_extra(payload), payload.get("sort", "size"))
     return web.json_response({"ok": ok, "msg": msg}, status=200 if ok else 409)

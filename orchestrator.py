@@ -27,7 +27,7 @@ MODELS_FILE = REPO / "models.json"
 PAUSE_SECS  = 10        # between pipeline phases
 MAX_LOG     = 4000      # capped in-memory log buffer (for late-joining web clients)
 
-COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen", "confab"}
+COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen", "confab", "export"}
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
@@ -127,6 +127,8 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Aptitude", _cmd(apt, *x), role_in_extra)]
     if cmd == "update":
         return [("Update Registry", _cmd(REPO/"update_registry.py", *x), None)]
+    if cmd == "export":
+        return [("Export Rankings", _cmd(REPO/"export.py", *x), None)]
     if cmd == "vision":
         return [("Vision (Battery V)", _cmd(REPO/"vision.py", *x), "cap:vision")]
     if cmd == "embedding":
@@ -175,6 +177,48 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
             phases.append(("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image"))
         return phases
     return []
+
+# ── Composable units (multi-select pipeline) ───────────────────────────────────
+# The web UI (and any future package entry point) composes a run from UNITS; assembly
+# order is ALWAYS UNIT_ORDER, never selection order. Mirrors the `all` pipeline order,
+# with Honesty (H) after G and F-elastic last among benchmarks (= `--with-elastic`
+# append semantics). `update` first / `export` last so a maintenance unit can ride
+# along with a benchmark selection and still land in the sane spot.
+UNIT_ORDER = ["update", "standard", "ladder", "A", "B", "C", "D", "E", "F",
+              "longctx", "confab", "vision", "embedding", "F-elastic", "imagegen", "export"]
+
+def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
+    """Phase list for an arbitrary unit selection, in canonical order.
+
+    `extra`      — common flags every benchmark phase understands (--fast/--force/--models …).
+    `unit_extra` — {unit: [flags]} appended only to that unit's argv (e.g.
+                   {"E": ["--runs", "5"], "confab": ["--grade", "llm", "--judge", "gemma4:26b-mlx"]}).
+    Maintenance units (update/export) get ONLY their unit_extra — common benchmark
+    flags like --models/--fast would be noise (or positional-arg hazards) there."""
+    apt = REPO / "aptitude.py"
+    x   = list(extra or [])
+    ux  = lambda u: list((unit_extra or {}).get(u, []))
+    P = {
+        "update":    ("Update Registry", _cmd(REPO/"update_registry.py", *ux("update")), None),
+        "standard":  ("Standard Suite",  _cmd(REPO/"runner.py", *x, *ux("standard")), None),
+        "ladder":    ("ctx Ladder",      _cmd(REPO/"ctx_ladder.py", *x, *ux("ladder")), None),
+        "A": (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x, *ux("A")), "router"),
+        "B": (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x, *ux("B")), "worker"),
+        "C": (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x, *ux("C")), "worker"),
+        "D": (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x, *ux("D")), "worker"),
+        "E": (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x, *ux("E")), "cap:completion"),
+        "F": (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x, *ux("F")), "cap:completion"),
+        "longctx":   ("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x, *ux("longctx")), "cap:completion"),
+        "confab":    ("Honesty (Battery H)",      _cmd(REPO/"confab.py", *x, *ux("confab")), "cap:completion"),
+        "vision":    ("Vision (Battery V)",       _cmd(REPO/"vision.py", *x, *ux("vision")), "cap:vision"),
+        "embedding": ("Embedding (Battery EMB)",  _cmd(REPO/"embedding.py", *x, *ux("embedding")), "cap:embedding"),
+        "F-elastic": (BATTERY_LABELS["F-ELASTIC"] + _AVG3,
+                      _cmd(REPO/"average_e_runs.py", "--battery", "F-elastic", *x, *ux("F-elastic")), "cap:completion"),
+        "imagegen":  ("Image Gen (Battery I)",    _cmd(REPO/"imagegen.py", *x, *ux("imagegen")), "cap:image"),
+        "export":    ("Export Rankings",          _cmd(REPO/"export.py", *ux("export")), None),
+    }
+    want = set(units)
+    return [P[u] for u in UNIT_ORDER if u in want]
 
 # ── Orchestrator ────────────────────────────────────────────────────────────────
 

@@ -87,16 +87,32 @@
             background:var(--accent-soft); border-radius:4px; padding:1px 7px; }
   .cbadge.cloud { color:var(--cloud); background:transparent; border:1px solid var(--cloud); }
   .cbadge.size  { color:var(--accent); background:transparent; border:1px solid var(--accent); }
-  /* suite radios + models-column header (Dashboard v2) */
-  .radios { display:flex; flex-direction:column; gap:5px; }
-  .radio { flex-direction:row !important; align-items:center; gap:7px; font-size:13px; color:var(--text); cursor:pointer; }
-  .radio.disabled { opacity:.45; cursor:default; }
-  .radio-sep { border-top:1px solid var(--border); margin:5px 0 3px; }
-  .soon { font-size:10px; color:var(--dim); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
+  /* suite cards — the multi-select run composer (mirrors the model-card picker) */
+  .suites { display:flex; flex-direction:column; gap:6px; }
+  .scard { background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--border);
+           border-radius:8px; padding:7px 9px; cursor:pointer; user-select:none;
+           transition:border-color .12s, background .12s; }
+  .scard:hover { border-color:var(--accent); }
+  .scard.selected { border-left-color:var(--accent); background:var(--accent-soft); }
+  .scard-top { display:flex; align-items:center; gap:7px; }
+  .scard .sname { font-weight:600; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .scard .sdesc { font-size:11px; color:var(--dim); margin:1px 0 0 21px; }
+  .sflag { flex:none; font-size:9px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+           color:var(--yellow); border:1px solid var(--yellow); border-radius:4px; padding:0 4px; }
+  .sexpand { margin:7px 0 1px; padding:7px 9px; background:var(--bg); border:1px solid var(--border);
+             border-radius:6px; display:flex; flex-direction:column; gap:5px; cursor:default; }
+  .srow { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text); cursor:pointer; }
+  .scard .sel-dot, .srow .sel-dot { flex:none; color:var(--dim); }
+  .scard.selected .scard-top .sel-dot, .srow .sel-dot.on { color:var(--accent); }
+  .sopt { display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--dim); flex-wrap:wrap; }
+  .sopt select, .sopt input[type=number] { background:var(--surface); color:var(--text); border:1px solid var(--border);
+        border-radius:5px; padding:3px 6px; font:inherit; font-size:12px; }
+  .sopt input[type=number] { width:52px; }
+  .sopt select { max-width:150px; }
+  .suite-sep, .radio-sep { border-top:1px solid var(--border); margin:4px 0 2px; }
   .mh-row { display:flex; justify-content:space-between; align-items:baseline; min-height:1.4em; margin-bottom:10px; }
   .mh-row h2 { margin:0; }
   .mh-row .count { margin-top:0; }   /* the global .count margin-top would drag the header baseline down */
-  #batWrap { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 10px; margin:2px 0 4px 8px; }
   .mf-row { display:flex; align-items:center; gap:6px; margin:0 0 7px; }
   .mf-row select, .mf-row .mf-clear {
     background:var(--bg); color:var(--text); border:1px solid var(--border);
@@ -121,12 +137,7 @@
   .conn { padding:4px 16px; font-size:11px; color:var(--dim); border-top:1px solid var(--border); background:var(--surface); }
   .conn.down { color:var(--red); }
   .hidden { display:none !important; }
-  #selector { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
-  #selector label { font-size:12px; color:var(--dim); display:flex; flex-direction:column; gap:3px; }
-  #selector select, #selector input[type=text] {
-    background:var(--bg); color:var(--text); border:1px solid var(--border);
-    border-radius:6px; padding:6px 8px; font:inherit; font-size:13px;
-  }
+  #selector { display:flex; flex-direction:column; gap:10px; }
   .checks { display:flex; gap:16px; }
   .checks label { flex-direction:row !important; align-items:center; gap:5px; color:var(--text); font-size:13px; }
   /* model-list header tools (sort + role filter + clear) are styled by .mf-row above */
@@ -134,7 +145,18 @@
   .btn { background:var(--accent); color:#241606; border:none; border-radius:7px; padding:9px 14px;
          font:inherit; font-weight:600; cursor:pointer; }
   .btn:hover { filter:brightness(1.08); }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .btn:disabled:hover { filter:none; }
   .btn.stop { background:var(--red); color:#fff; padding:4px 12px; font-size:12px; font-weight:600; }
+  .btn.stopfull { background:var(--red); color:#fff; }          /* the START→STOP morph */
+  .btn.ghost { background:none; border:1px solid var(--border); color:var(--dim); }
+  .btn.ghost:hover { color:var(--accent); border-color:var(--accent); filter:none; }
+  #updateBtn { width:100%; margin-bottom:14px; }
+  #runRow { display:flex; gap:8px; margin-top:12px; }
+  #runRow .btn { flex:1; }
+  #runRow .btn.ghost { flex:0 0 auto; }
+  #startMsg { margin-top:6px; }
+  #summary .count { margin-top:8px; }
   /* ── tabs + views ── */
   nav#tabs { display:flex; gap:4px; padding:6px 14px; background:var(--surface); border-bottom:1px solid var(--border); }
   nav#tabs button { background:none; border:none; color:var(--dim); cursor:pointer; padding:5px 12px; border-radius:6px; font:inherit; font-size:13px; }
@@ -336,40 +358,23 @@
       <button type="button" data-mt="right">LOG</button>
     </div>
     <div class="left">
-      <div class="mh-row"><h2>NEW RUN</h2></div>
-      <form id="selector">
-        <div id="cmdRadios" class="radios" role="radiogroup" aria-label="Suite">
-          <label class="radio"><input type="radio" name="cmd" value="all" checked> ALL (full pipeline)</label>
-          <label class="radio"><input type="radio" name="cmd" value="standard"> Standard Suite</label>
-          <label class="radio"><input type="radio" name="cmd" value="ladder"> Ladder (CTX)</label>
-          <label class="radio"><input type="radio" name="cmd" value="batteries"> Aptitude (All Batteries)</label>
-          <label class="radio"><input type="radio" name="cmd" value="aptitude"> Aptitude (Single Battery)</label>
-          <div id="batWrap" class="hidden radios" role="radiogroup" aria-label="Battery">
-            <label class="radio"><input type="radio" name="battery" value="B" checked> B — worker chat</label>
-            <label class="radio"><input type="radio" name="battery" value="A"> A — router</label>
-            <label class="radio"><input type="radio" name="battery" value="C"> C — research</label>
-            <label class="radio"><input type="radio" name="battery" value="D"> D — tool-heavy</label>
-            <label class="radio"><input type="radio" name="battery" value="E"> E — coding (3-run avg)</label>
-            <label class="radio"><input type="radio" name="battery" value="F"> F — consistency (3-run avg)</label>
-            <label class="radio"><input type="radio" name="battery" value="F-elastic"> F-elastic — prompt-σ (opt-in)</label>
-          </div>
-          <label class="radio"><input type="radio" name="cmd" value="vision"> Vision</label>
-          <label class="radio"><input type="radio" name="cmd" value="embedding"> Embedding</label>
-          <label class="radio"><input type="radio" name="cmd" value="longctx"> Long-Context (G)</label>
-          <label class="radio" title="Battery H — honesty/confabulation; LLM-judged via glm-4.7:cloud (cloud judge)"><input type="radio" name="cmd" value="confab"> Honesty (H)</label>
-          <label class="radio"><input type="radio" name="cmd" value="update"> Update Registry</label>
-          <div class="radio-sep"></div>
-          <label class="radio" title="Battery I — image-gen perf + prompt-adherence (reference only, slow)"><input type="radio" name="cmd" value="imagegen"> Image Gen (I)</label>
-        </div>
-        <div class="radio-sep"></div>
+      <button type="button" class="btn ghost" id="updateBtn"
+              title="sync models.json from Ollama — new models added, uninstalled pruned (cloud entries kept)">⟳ Update Registry</button>
+      <div class="mh-row" id="newRunHead"><h2>NEW RUN</h2><span id="unitCount" class="count"></span></div>
+      <div id="selector">
+        <div id="suites" class="suites"></div>
         <div class="checks">
-          <label><input type="checkbox" id="fast"> fast</label>
-          <label><input type="checkbox" id="force"> force</label>
+          <label title="skip cool-downs — informal results"><input type="checkbox" id="fast"> fast</label>
+          <label title="ignore content-addressed resume — re-run everything (cloud models too)"><input type="checkbox" id="force"> force</label>
         </div>
-        <button type="submit" class="btn" id="startBtn">▶ Start</button>
-        <div id="startMsg" class="meta"></div>
-      </form>
+      </div>
+      <div id="runRow">
+        <button type="button" class="btn" id="runBtn">▶ Start</button>
+        <button type="button" class="btn ghost hidden" id="newRunBtn" title="back to the run picker">‹ New Run</button>
+      </div>
+      <div id="startMsg" class="meta"></div>
       <div id="roNote" class="hidden">Read-only (LAN). Start a run from the host, or relaunch with <code>--allow-control</code>.</div>
+      <div id="summary"></div>
       <div id="pipeline"></div>
     </div>
     <div class="mid">
@@ -547,8 +552,11 @@ function renderStatus(models, lastTps){
 }
 
 async function renderIdle(){
-  if(CANDIDATES===null){ try { CANDIDATES = await (await fetch("/api/models")).json(); } catch { CANDIDATES = []; } }
-  $("#pipeline").innerHTML = "";
+  if(CANDIDATES===null){
+    try { CANDIDATES = await (await fetch("/api/models")).json(); } catch { CANDIDATES = []; }
+    renderSuites();                       // judge dropdown options need the capability list
+  }
+  if(RUN_STATE !== "done") $("#pipeline").innerHTML = "";
   const list = byFilter(CANDIDATES);
   $("#models").innerHTML = list.length
     ? list.map(m=>modelCard(m, null, true)).join("")
@@ -575,19 +583,186 @@ function appendLog(lines){
   if(nearBottom) logEl.scrollTop = logEl.scrollHeight;
 }
 
-// ── view state (idle → selector · active → monitor · finished → both) ─────────
+// ── run composer (multi-select suite cards → /api/start {units}) ──────────────
 let READONLY = false;
 function show(el, on){ $(el).classList.toggle("hidden", !on); }
-function setView({idle, finished}){
-  const picking = idle || finished;            // not actively running → cards are a picker
-  show("#selector", !READONLY && picking);
-  show("#stopBtn",  !READONLY && !picking);
-  show("#roNote",   READONLY && picking);
-  show("#modelsHint", !READONLY && picking);   // the models panel itself is always visible
+
+let RUN_STATE = "idle";     // idle (picking) | running | done (summary + export offer)
+let DONE_ACK  = false;      // user dismissed the finished run (or it was maintenance-only)
+
+const APT_DEFAULT = ["B", "A", "C", "D", "E", "F"];                        // F-elastic = conscious opt-in
+const ALL_PRESET  = ["standard", "ladder", "aptitude", "vision", "embedding", "longctx"];  // NOT confab/imagegen
+const SUITES = [
+  {id:"all",       name:"ALL (Full Pipeline)", desc:"everything below — opt-ins (H, F-elastic) stay a conscious choice"},
+  {sep:true},
+  {id:"standard",  name:"Standard Suite",      desc:"13 tests · 5 dimensions · assigns roles"},
+  {id:"ladder",    name:"Ladder (CTX)",        desc:"num_ctx characterisation"},
+  {id:"aptitude",  name:"Aptitude (Batteries)",desc:"role-targeted batteries A–F", expand:"apt"},
+  {id:"vision",    name:"Vision (V)",          desc:"vision-capable models vs ground truth"},
+  {id:"embedding", name:"Embedding (EMB)",     desc:"short + long-doc retrieval quality"},
+  {id:"longctx",   name:"Long-Context (G)",    desc:"filled-window needles + speed-collapse"},
+  {id:"confab",    name:"Honesty (H)",         desc:"confabulation probe · LLM judge", expand:"judge", flag:"opt-in"},
+  {sep:true},
+  {id:"imagegen",  name:"Image Gen (I)",       desc:"perf + adherence · reference-only", flag:"solo · slow", exclusive:true},
+];
+const BATTERIES = [
+  {id:"B", label:"B — worker chat"},
+  {id:"A", label:"A — router"},
+  {id:"C", label:"C — research"},
+  {id:"D", label:"D — tool-heavy"},
+  {id:"E", label:"E — coding", avg:true},
+  {id:"F", label:"F — consistency", avg:true},
+  {id:"F-elastic", label:"F-elastic — prompt-σ", avg:true, optin:true},
+];
+const SEL_S = new Set(["all", ...ALL_PRESET]);   // default = the ALL preset, like the old checked radio
+const SEL_B = new Set(APT_DEFAULT);
+let RUNS = 3, GRADE = "llm", JUDGE = "";
+
+function currentUnits(){
+  const u = [];
+  for(const s of SEL_S){
+    if(s === "all") continue;
+    if(s === "aptitude") u.push(...SEL_B); else u.push(s);
+  }
+  return u;
+}
+function syncAll(){   // the ALL card reflects "preset fully selected" (H/F-elastic never counted)
+  const full = ALL_PRESET.every(s=>SEL_S.has(s)) && APT_DEFAULT.every(b=>SEL_B.has(b));
+  if(full) SEL_S.add("all"); else SEL_S.delete("all");
+}
+function toggleSuite(id){
+  if(id === "all"){
+    if(SEL_S.has("all")){ SEL_S.clear(); }
+    else { SEL_S.delete("imagegen"); ALL_PRESET.forEach(s=>SEL_S.add(s)); APT_DEFAULT.forEach(b=>SEL_B.add(b)); }
+  } else if(id === "imagegen"){
+    if(SEL_S.has("imagegen")) SEL_S.delete("imagegen");
+    else { SEL_S.clear(); SEL_S.add("imagegen"); }    // Battery I runs solo, never mid-pipeline
+  } else {
+    if(SEL_S.has(id)) SEL_S.delete(id);
+    else { SEL_S.delete("imagegen"); SEL_S.add(id); }
+  }
+  syncAll(); renderSuites();
+}
+function toggleBat(id){
+  if(SEL_B.has(id)) SEL_B.delete(id); else SEL_B.add(id);
+  if(!SEL_B.size) SEL_S.delete("aptitude");           // aptitude with zero batteries = nothing to run
+  syncAll(); renderSuites();
 }
 
-// ── controls ──────────────────────────────────────────────────────────────────
-$("#cmdRadios").onchange = e => { if(e.target.name === "cmd") show("#batWrap", e.target.value === "aptitude"); };
+function suiteCard(s){
+  if(s.sep) return '<div class="suite-sep"></div>';
+  const on = SEL_S.has(s.id);
+  const flag = s.flag ? `<span class="sflag">${s.flag}</span>` : "";
+  let expand = "";
+  if(on && s.expand === "apt"){
+    expand = `<div class="sexpand">` + BATTERIES.map(b=>{
+      const bon = SEL_B.has(b.id);
+      return `<div class="srow" data-bat="${b.id}"><span class="sel-dot ${bon?"on":""}">${bon?"☑":"☐"}</span>`
+           + `<span>${b.label}${b.avg?` <span class="meta">×${RUNS}</span>`:""}</span>`
+           + `${b.optin?'<span class="spacer"></span><span class="sflag">opt-in</span>':""}</div>`;
+    }).join("")
+    + `<div class="sopt"><span>runs</span><input type="number" min="1" max="9" value="${RUNS}" data-role="runs">`
+    + `<span>avg passes for E · F · F-elastic</span></div></div>`;
+  }
+  if(on && s.expand === "judge"){
+    const opts = (CANDIDATES||[]).filter(m=>(m.caps||[]).includes("completion"));
+    expand = `<div class="sexpand">
+      <div class="sopt"><span>grade</span><span class="rv-seg">
+        <button type="button" data-grade="llm" class="${GRADE==='llm'?'on':''}">LLM judge</button>
+        <button type="button" data-grade="signal" class="${GRADE==='signal'?'on':''}">signal</button></span></div>
+      <div class="sopt"><span>judge</span><select data-role="judge" ${GRADE==='signal'?'disabled':''}>
+        <option value="">default — glm-4.7:cloud</option>
+        ${opts.map(m=>`<option value="${esc(m.name)}" ${JUDGE===m.name?'selected':''}>${esc(m.name)}</option>`).join("")}
+      </select></div>
+    </div>`;
+  }
+  return `<div class="scard ${on?"selected":""}" data-suite="${s.id}">
+    <div class="scard-top"><span class="sel-dot">${on?"☑":"☐"}</span><span class="sname">${esc(s.name)}</span>${flag}</div>
+    <div class="sdesc">${esc(s.desc)}</div>${expand}</div>`;
+}
+function renderSuites(){
+  $("#suites").innerHTML = SUITES.map(suiteCard).join("");
+  const n = currentUnits().length;
+  $("#unitCount").textContent = n ? `${n} phase${n>1?"s":""}` : "";
+  if(RUN_STATE === "idle") $("#runBtn").disabled = n === 0;
+}
+$("#suites").onclick = e => {
+  if(RUN_STATE !== "idle" || READONLY) return;
+  if(e.target.closest(".sexpand")){                    // clicks inside an expansion never toggle the card
+    const row = e.target.closest(".srow[data-bat]");
+    if(row) toggleBat(row.dataset.bat);
+    const gb = e.target.closest("[data-grade]");
+    if(gb){ GRADE = gb.dataset.grade; renderSuites(); }
+    return;
+  }
+  const card = e.target.closest(".scard");
+  if(card) toggleSuite(card.dataset.suite);
+};
+$("#suites").onchange = e => {
+  if(e.target.matches("[data-role=runs]")){ RUNS = Math.max(1, Math.min(9, +e.target.value || 3)); renderSuites(); }
+  if(e.target.matches("[data-role=judge]")) JUDGE = e.target.value;
+};
+
+async function startUnits(units, bare){
+  if(!units.length) return;
+  const body = { units, params:{runs:RUNS, grade:GRADE, judge:JUDGE}, sort:SORT_BY,
+                 fast: !bare && $("#fast").checked, force: !bare && $("#force").checked,
+                 models: bare ? "" : [...SELECTED].join(" ") };
+  if(window.DRY_RUN) body.dry = true;                  // debug: preview assembled phases, start nothing
+  $("#startMsg").textContent = "starting…";
+  try {
+    const r = await fetch("/api/start", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const d = await r.json();
+    if(d.dry){ $("#startMsg").textContent = "DRY: " + d.phases.map(p=>p.label).join(" → "); console.log("DRY phases", d.phases); return; }
+    $("#startMsg").textContent = d.ok ? "" : ("⚠ " + d.msg);
+  } catch(err){ $("#startMsg").textContent = "⚠ " + err; }
+}
+$("#runBtn").onclick = () => {
+  if(RUN_STATE === "running"){ fetch("/api/stop", {method:"POST"}); return; }
+  if(RUN_STATE === "done"){ startUnits(["export"], true); return; }
+  startUnits(currentUnits());
+};
+$("#newRunBtn").onclick = () => {
+  DONE_ACK = true; RUN_STATE = "idle"; MODE = "idle";
+  $("#summary").innerHTML = ""; $("#pipeline").innerHTML = ""; $("#startMsg").textContent = "";
+  renderIdle(); applyRunState();
+};
+$("#updateBtn").onclick = () => {
+  if(confirm("Sync models.json from Ollama?\nNew models are added; uninstalled ones are pruned (cloud entries kept)."))
+    startUnits(["update"], true);
+};
+
+function isMaint(snap){   // update/export-only runs bounce straight back to the picker
+  return (snap.phases||[]).every(p => /^(Export Rankings|Update Registry)$/.test(p.label));
+}
+function renderSummary(snap){
+  const models = snap.models||[];
+  const ok  = models.filter(m=>m.status==="done").length;
+  const err = models.filter(m=>m.status==="error").length;
+  $("#summary").innerHTML = "<h2>Run Summary</h2>" + (snap.phases||[]).map(p =>
+      `<div class="phase"><span class="dot s-${p.status}">${ICON[p.status]||"·"}</span><span class="name">${esc(p.label)}</span></div>`
+    ).join("")
+    + `<div class="count">${fmtElapsed(snap.elapsed||0)} · ${ok} model pass${ok!==1?"es":""} ok`
+    + `${err?` · <span style="color:var(--red)">${err} error${err!==1?"s":""}</span>`:""}`
+    + `${snap.aborted?' · <span style="color:var(--red)">aborted</span>':""}</div>`;
+  $("#pipeline").innerHTML = "";
+}
+function applyRunState(){
+  const idle = RUN_STATE==="idle", running = RUN_STATE==="running", done = RUN_STATE==="done";
+  show("#updateBtn",  !READONLY && idle);
+  show("#newRunHead", idle);
+  show("#selector",   !READONLY && idle);
+  show("#runRow",     !READONLY);
+  show("#newRunBtn",  !READONLY && done);
+  show("#stopBtn",    !READONLY && running);
+  show("#roNote",     READONLY && !running);
+  show("#modelsHint", !READONLY && !running);
+  const b = $("#runBtn");
+  if(running){      b.textContent = "■ Stop";            b.classList.add("stopfull");    b.disabled = false; }
+  else if(done){    b.textContent = "⭱ Export Rankings"; b.classList.remove("stopfull"); b.disabled = false; }
+  else {            b.textContent = "▶ Start";           b.classList.remove("stopfull"); b.disabled = currentUnits().length === 0; }
+}
+renderSuites(); applyRunState();
 
 // cards double as the picker (only when not running) ──────────────────────────
 $("#models").onclick = e => {
@@ -612,20 +787,6 @@ $("#sortBy").onchange = e => {
 };
 $("#mfClear").onclick = () => { SELECTED.clear(); if(!RUN_ACTIVE) renderIdle(); };
 
-$("#selector").onsubmit = async e => {
-  e.preventDefault();
-  const body = {
-    cmd: document.querySelector('input[name=cmd]:checked')?.value || 'all',
-    battery: document.querySelector('input[name=battery]:checked')?.value || 'B', sort: SORT_BY,
-    fast: $("#fast").checked, force: $("#force").checked, models: [...SELECTED].join(" "),
-  };
-  $("#startMsg").textContent = "starting…";
-  try {
-    const r = await fetch("/api/start", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-    const d = await r.json();
-    $("#startMsg").textContent = d.ok ? "" : ("⚠ " + d.msg);
-  } catch(err){ $("#startMsg").textContent = "⚠ " + err; }
-};
 $("#stopBtn").onclick = ()=> fetch("/api/stop", {method:"POST"});
 
 // ── tabs ──────────────────────────────────────────────────────────────────────
@@ -887,26 +1048,35 @@ function connect(){
     const d = JSON.parse(e.data);
     if("read_only" in d) READONLY = d.read_only;
     if(d.idle){
-      RUN_ACTIVE = false; LAST_SNAP = null;
+      RUN_ACTIVE = false; LAST_SNAP = null; RUN_STATE = "idle";
       $("#phaseLabel").textContent = "no active run";
       $("#badge").textContent = ""; $("#badge").className = "badge";
       $("#timer").textContent = "00:00:00";
-      if(MODE!=="idle"){ MODE="idle"; renderIdle(); }
-      setView({idle:true, finished:false});
+      if(MODE!=="idle"){ MODE="idle"; $("#summary").innerHTML=""; renderIdle(); }
+      applyRunState();
       return;
     }
     const snap = d.snapshot;
     render(snap); appendLog(d.log);
     if(snap.finished){
       RUN_ACTIVE = false;
-      // back to the selectable candidate list for the next run (results live in Files/Rankings)
-      if(MODE!=="idle"){ MODE="idle"; renderIdle(); }
+      if(!DONE_ACK){
+        if(isMaint(snap)){                 // update/export run → straight back to the picker
+          DONE_ACK = true; RUN_STATE = "idle";
+          if(MODE!=="idle"){ MODE="idle"; renderIdle(); }
+          if(!snap.aborted) $("#startMsg").textContent = "✓ " + (snap.phases||[]).map(p=>p.label).join(" + ") + " finished";
+        } else if(RUN_STATE!=="done"){     // benchmark run → summary + export offer
+          RUN_STATE = "done"; MODE = "done";
+          renderSummary(snap); renderIdle();   // model cards become the picker for the next run
+        }
+      }
     } else {
-      RUN_ACTIVE = true; MODE = "run";
+      RUN_ACTIVE = true; DONE_ACK = false; MODE = "run";
+      if(RUN_STATE!=="running"){ RUN_STATE="running"; $("#summary").innerHTML=""; $("#startMsg").textContent=""; }
       renderPipeline(snap);
       renderStatus(snap.models, snap.last_tps);
     }
-    setView({idle:false, finished:snap.finished});
+    applyRunState();
   };
   ws.onclose = ()=>{ $("#conn").className="conn down"; $("#conn").textContent="○ disconnected — retrying…"; setTimeout(connect, 1500); };
   ws.onerror = ()=>ws.close();
