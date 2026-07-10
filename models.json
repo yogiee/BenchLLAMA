@@ -1,5 +1,15 @@
 [
   {
+    "name": "qwen2.5:7b",
+    "disk_gb": 4.7,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": []
+  },
+  {
     "name": "minicpm5:1b-q4_k_m",
     "disk_gb": 0.7,
     "role": "router",
