@@ -43,6 +43,15 @@ DEFAULT_JUDGE = "glm-4.7:cloud"
 JUDGE_OPTIONS = {"temperature": 0, "seed": 42, "num_ctx": 4096, "num_predict": 120}
 TIMEOUT, RETRIES = 600, 3
 
+# ⚠ REASONING-NATIVE JUDGES need a bigger num_predict (--num-predict).
+# The 120-token default assumes the judge answers immediately (glm-4.7 did). A model that
+# ALWAYS emits reasoning tokens — `minimax-m2.5:cloud` ignores `think:False` outright — spends
+# the whole budget thinking, returns `done_reason:"length"` with EMPTY content, and every entry
+# scores UNPARSEABLE. That reads like a judge that can't follow the rubric; it's actually a
+# truncation artifact. Symptom: 100% UNPARSEABLE from call #1. Fix: --num-predict 800.
+# This changes only the room to ANSWER, not the question — the anchor's stored verdicts and the
+# byte-identical prompts are untouched — but the override IS recorded in the screen report.
+
 
 def _arg(name, default=None):
     if name in sys.argv:
@@ -138,6 +147,12 @@ def main():
     judge = _arg("--judge", DEFAULT_JUDGE)
     backset = _arg("--backset")
 
+    np_override = _arg("--num-predict")
+    if np_override:
+        JUDGE_OPTIONS["num_predict"] = int(np_override)
+        print(f"⚠ num_predict override: {np_override} (default 120) — "
+              f"reasoning-native judge headroom; see module docstring\n", flush=True)
+
     if "--capture" in sys.argv:
         if not backset:
             cands = sorted((REPO / "results").glob("confab_????-??-??.json"), reverse=True)
@@ -202,6 +217,8 @@ def main():
             by_kind[k] = f"{sum(1 for r in sub if r['cand_verdict'] == r['anchor_verdict'])}/{len(sub)}"
     report = {"candidate": judge, "anchor": anchor["judge"], "anchor_file": str(anchor_path),
               "date": date.today().isoformat(),
+              "judge_options": dict(JUDGE_OPTIONS),
+              "anchor_judge_options": anchor.get("judge_options"),
               "calibration_accuracy": f"{hits}/{len(calib)} (anchor was {anchor['calibration_accuracy']})",
               "backset_agreement": f"{agree}/{len(back)} = {agree / len(back):.1%}" if back else "n/a",
               "agreement_by_kind": by_kind, "disagreement_profile": conf,
