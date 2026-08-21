@@ -24,14 +24,21 @@ It does NOT define a veto/role/deploy gate — that's the consumer's policy agai
   average_e_runs --average-only).
 
 Grading modes:
-  --grade signal   (DEFAULT, runnable with no judge) — deterministic hedge/fabrication heuristic. Noisier.
-  --grade llm      — capable LLM judge, family-neutral routing (see below). Pass --judge <model> to set the
-                     primary judge; JUDGE_PRIMARY is unset until the GLM4.7 verdict lands.
+  --grade signal   — deterministic hedge/fabrication heuristic, runnable with no judge. Noisier.
+  --grade llm      (DEFAULT) — capable LLM judge, self-neutral routing (see below). Pass --judge <model>
+                     to override the primary judge set in JUDGE_PRIMARY.
 
-⚠ Judge must be family-NEUTRAL: an LLM judge rates its own lineage higher, and self-judging is the extreme
-case. Invariant: no candidate is judged by a same-family judge. Primary judge grades every cross-family
-candidate; a different-family FALLBACK grades candidates in the primary's own family (e.g. GLM judge →
-glm-4.7:cloud candidate routed to the Gemma4 fallback). Never self-judge, never same-lineage.
+⚠ A judge must never grade ITSELF. Invariant: the primary grades every other candidate; a different-lineage
+FALLBACK grades the primary's own row. Never self-judge.
+
+SCOPE NOTE (2026-08-21) — why self-only, not same-family. The rule used to hand off every same-LINEAGE
+candidate. The 07-10 anchor screen (commit 6a13b40) tested that assumption directly and it did not hold on
+this axis: gemma4:26b-mlx agreed with the stored glm-4.7:cloud anchor on 44/45 (97.8%) of gemma-family
+candidates and 9/9 of its OWN replies — zero self-lenient flips — against 91.9% on non-gemma. It graded its
+own lineage MORE accurately than strangers. Battery H is ground-truth-anchored (a fabricated item is
+verifiably nonexistent), so lineage affinity has nothing to bite on. Set JUDGE_NEUTRALITY = "family" to
+restore the strict rule — it still applies to SUBJECTIVE axes (voice/quality, LG lite.py), where the bias
+is real.
 
   python3 confab.py                       # all completion models, signal grader (resumes content-addressed)
   python3 confab.py --grade llm --judge glm-4.7:cloud
@@ -87,11 +94,18 @@ NUM_CTX     = 4096
 COMPLETION_ROLES = ("worker", "router")
 
 # ── Judge configuration (the pluggable seam) ──────────────────────────────────
-# JUDGE_PRIMARY is UNSET until the GLM4.7 verdict lands (cloud glm-4.7 vs a local GLM4.7-Flash). Set it
-# here or pass --judge <model>. FALLBACK judges only candidates in the primary's own family (never
-# self/same-lineage) — a capable Gemma4, a distinct lineage from GLM and from most of the fleet.
-JUDGE_PRIMARY  = "glm-4.7:cloud"     # chosen 2026-07-07 (beat gpt-oss:20b on LG's reliability gate)
-JUDGE_FALLBACK = "gemma4:26b-mlx"    # cross-family grader for the primary's own family (GLM candidates)
+# glm-4.7:cloud was the calibrated primary until Ollama RETIRED it 2026-07-15. gemma4:26b-mlx is the
+# screened successor: 93.3% verdict agreement with the stored glm-4.7 anchor, calibration 8/8
+# (suites/confab/judge_screen_gemma4-26b-mlx_2026-07-10.json, commit 6a13b40). Override with --judge.
+# ⚠ Changing the judge BREAKS cross-run comparability — every score shifts with the grader, so re-grade
+# the whole back-set (--judge-only, free) rather than mixing judges across runs.
+JUDGE_PRIMARY  = "gemma4:26b-mlx"      # anchor-screened successor (93.3%); glm-4.7:cloud retired 07-15
+JUDGE_FALLBACK = "gpt-oss:120b-cloud"  # distinct lineage; grades the primary's own row only
+
+# Neutrality rule — see the SCOPE NOTE in the module docstring.
+#   "self"   → primary grades every candidate but its own row   (Battery H: ground-truth-anchored axis)
+#   "family" → primary also hands off same-lineage candidates   (strict; subjective axes)
+JUDGE_NEUTRALITY = "self"
 
 def _family(name: str) -> str:
     """Coarse lineage bucket from the model name — enough to enforce 'never same-family judge'."""
@@ -104,9 +118,12 @@ def _family(name: str) -> str:
     return n.split(":")[0]
 
 def _judge_for(candidate: str, primary: str) -> str:
-    """Family-neutral routing: primary grades cross-family candidates; a same-family candidate is routed
-    to the fallback. Guarantees the judge is never the candidate's own lineage."""
-    if _family(candidate) == _family(primary):
+    """Route a candidate to its judge. Self-judging is banned under BOTH neutrality rules; under
+    "family" the primary additionally hands off its whole lineage. See the SCOPE NOTE in the module
+    docstring for why Battery H runs "self"."""
+    if candidate == primary:
+        return JUDGE_FALLBACK
+    if JUDGE_NEUTRALITY == "family" and _family(candidate) == _family(primary):
         return JUDGE_FALLBACK
     return primary
 
@@ -380,8 +397,8 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if grade_mode == "llm" and not primary_judge:
-        sys.exit("--grade llm needs a judge: set JUDGE_PRIMARY in confab.py or pass --judge <model> "
-                 "(pending the GLM4.7 verdict). Meanwhile `--grade signal` (default) runs judge-free.")
+        sys.exit("--grade llm needs a judge: set JUDGE_PRIMARY in confab.py or pass --judge <model>. "
+                 "`--grade signal` runs judge-free.")
 
     OUT_JSON = RESULTS_DIR / f"confab_{TODAY}{suffix}.json"
     OUT_MD   = RESULTS_DIR / f"confab_{TODAY}{suffix}.md"

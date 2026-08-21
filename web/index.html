@@ -671,7 +671,7 @@ function suiteCard(s){
         <button type="button" data-grade="llm" class="${GRADE==='llm'?'on':''}">LLM judge</button>
         <button type="button" data-grade="signal" class="${GRADE==='signal'?'on':''}">signal</button></span></div>
       <div class="sopt"><span>judge</span><select data-role="judge" ${GRADE==='signal'?'disabled':''}>
-        <option value="">default — glm-4.7:cloud</option>
+        <option value="">default — gemma4:26b-mlx (anchor-screened)</option>
         ${opts.map(m=>`<option value="${esc(m.name)}" ${JUDGE===m.name?'selected':''}>${esc(m.name)}</option>`).join("")}
       </select></div>
     </div>`;
