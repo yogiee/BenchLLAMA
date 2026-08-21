@@ -1,24 +1,49 @@
 #!/usr/bin/env python3
 """
-Battery G — Long-Context Retrieval dataset builder.
+Battery G — Long-Context Retrieval dataset builder.  **TWO-BAND (v2, 2026-08-21).**
 
-Deterministic, self-contained (no external download — the GraphWalks analog, BenchLLAMA-style).
-Generates, per token bucket, ONE haystack prompt that:
-  • fills the context to a target size with plausible distractor text, and
-  • plants verifiable NEEDLES at controlled positions (early ~10% / mid ~50% / late ~90%), plus
-  • scatters a 3-hop "X manages Y" chain so the answer needs multi-fact retrieval + reasoning.
+Deterministic, self-contained (the GraphWalks analog, BenchLLAMA-style). Per token bucket it emits
+ONE haystack prompt that fills the context with plausible distractor text and plants verifiable
+facts, then asks 7 questions in a single call.
 
-The trailing question asks for all four answers at once → one call per depth grades 4 objective
-sub-tasks (3 positional single-needle retrievals + 1 multi-hop walk). Position-resolved scoring
-exposes the "lost in the middle" effect; the per-depth timings (captured by the runner) expose the
-prefill/decode speed-collapse. Distinct from Battery C's C4, which re-runs a SHORT prompt at bigger
-num_ctx *allocations* and never actually fills the window.
+── WHY v2 ──────────────────────────────────────────────────────────────────────
+v1 SATURATED completely on the 2026-08-21 fleet run: all 21 models clean-depthed 32768 and
+early/mid/late needle recall was 1.00 for **every model at every depth**. Three compounding defects:
+
+  1. **The threshold was satisfiable by the easy band alone.** clean = accuracy >= 0.75 and there
+     were exactly 4 sub-tasks, so 3 trivial needles = 0.75 = clean. `minicpm-v4.6:1b` failed the
+     multi-hop at EVERY depth and was still reported "clean to 32k". The headline metric was free.
+  2. **The needles were lexically unique.** They were the only lines in the haystack containing a
+     digit, or the words "OPERATIONS NOTICE" / "activation code" / "relay". Finding them needed no
+     comprehension — just a pattern match on the one line that looked different.
+  3. **No decoys.** Nothing punished grabbing the first plausible match.
+
+v2 keeps the same shape but makes each of those cost something:
+
+  **G-core** (3 sub-tasks — the "can it retrieve at depth?" gate)
+     The 3 positional needles (early ~10% / mid ~50% / late ~90%), now competing against SIX decoy
+     relay notices in the same format with their own 4-digit codes. "Find the line with a number"
+     no longer works; the right relay name has to be matched.
+
+  **G-hard** (4 sub-tasks — the discriminator)
+     • `multihop`   3-hop manage-chain (unchanged from v1 — decoy chains were tried and REVERTED,
+                    see the note at HOPS; they add ordering noise, not difficulty).
+     • `superseded` a relay code planted early and CORRECTED later in the haystack. The answer is the
+                    LATEST value. Catches first-match grabbing, which v1 rewarded.
+     • `aggregate`  the SUM of two scattered codes. Cannot be lexically matched at all — both facts
+                    must be located and combined.
+     • `absent`     a relay that is NEVER mentioned. The correct answer is to say so. This is
+                    **confabulation-at-depth** — the failure that actually bites in RAG, and the one
+                    v1 could not see. Ties Battery G to the Battery H concern.
+
+`clean_depth` now requires BOTH bands to clear their bar, so a model that never solves a hard task
+can no longer be reported as clean at 32k.
 
   python3 suites/longctx/build.py            # → suites/longctx/dataset.json
   python3 suites/longctx/build.py --deep     # also emit the 32768 bucket
 
 Reproducible: fixed seed. Target ~0.70 words/token (conservative) so actual prompt tokens land just
-UNDER the bucket and the runner's num_ctx margin never truncates our own planted needles.
+UNDER the bucket and the runner's num_ctx margin never truncates our own planted facts.
 """
 
 import json
@@ -29,37 +54,70 @@ from pathlib import Path
 HERE = Path(__file__).parent
 OUT  = HERE / "dataset.json"
 
-SEED          = 42
-WORDS_PER_TOK = 0.70                 # conservative: keeps actual tokens under the bucket
-THRESHOLD     = 0.75                 # per-depth "clean" accuracy bar (3 of 4 sub-tasks)
-BUCKETS       = [1024, 2048, 4096, 8192, 16384]
-DEEP_BUCKET   = 32768
+SEED           = 42
+WORDS_PER_TOK  = 0.70    # conservative: keeps actual tokens under the bucket
+CORE_THRESHOLD = 0.66    # G-core bar: 2 of 3 needles. ⚠ 2/3 stores as round(...,3)=0.667,
+                         # so a 0.67 bar silently means 3-of-3 — keep this strictly BELOW 0.667.
+HARD_THRESHOLD = 0.50    # G-hard bar: 2 of 4 discriminator tasks (0.5 stores exactly)
+BUCKETS        = [1024, 2048, 4096, 8192, 16384]
+DEEP_BUCKET    = 32768
 
-# ── Needles (objective, exact-checkable) ──────────────────────────────────────
-# Codes are arbitrary 4-digit strings; the relays are distinct so the three single-needle
-# retrievals don't collide. The manage-chain terminal is the multi-hop answer.
+# ── Planted facts ─────────────────────────────────────────────────────────────
+NOTICE = "OPERATIONS NOTICE: the activation code for the {name} relay is {code}."
+
+# The three positional needles (G-core). Asked as Q1-Q3.
 NEEDLES = {
-    "needle_early": {"text": "OPERATIONS NOTICE: the activation code for the NORTH relay is 4821.", "answer": "4821"},
-    "needle_mid":   {"text": "OPERATIONS NOTICE: the activation code for the EAST relay is 7193.",  "answer": "7193"},
-    "needle_late":  {"text": "OPERATIONS NOTICE: the activation code for the SOUTH relay is 3056.", "answer": "3056"},
+    "needle_early": {"name": "NORTH", "code": "4821"},
+    "needle_mid":   {"name": "EAST",  "code": "7193"},
+    "needle_late":  {"name": "SOUTH", "code": "3056"},
 }
-# 3-hop chain scattered through the haystack. Marcus → Priya → Theodore → Helena (top).
-HOPS = [
-    "STAFF RECORD: Helena manages Theodore.",
-    "STAFF RECORD: Theodore manages Priya.",
-    "STAFF RECORD: Priya manages Marcus.",
-]
+# Decoys: same format, same salience, never asked about. These are what make G-core non-trivial.
+# ⚠ No decoy name may CONTAIN the absent relay's name as a substring (an early draft used
+# "SOUTHWEST", which contains "WEST" and silently broke the absent-fact premise). "NORTHEAST" is
+# deliberate: it contains NORTH and EAST, so Q1/Q2 require distinguishing two separately-stated
+# relays rather than substring-matching a direction.
+DECOY_RELAYS = [("NORTHEAST", "5140"), ("RIDGELINE", "8267"), ("UPPER", "2935"),
+                ("LOWER", "6714"), ("COASTAL", "1508"), ("HARBOR", "3372")]
+
+# Superseded: planted early, corrected later. Answer = the LATEST value.
+SUPERSEDED = {"name": "CENTRAL", "old": "6602", "new": "9418"}
+CORRECTION = ("CORRECTION TO EARLIER NOTICE: the activation code for the CENTRAL relay "
+              "is no longer 6602 — the current code is 9418.")
+
+# Aggregate: sum of the NORTH and SOUTH codes. 4821 + 3056 = 7877.
+AGGREGATE_ANSWER = str(int(NEEDLES["needle_early"]["code"]) + int(NEEDLES["needle_late"]["code"]))
+
+# Absent: never appears anywhere in the haystack. Correct answer = say it isn't stated.
+ABSENT_RELAY = "WEST"
+
+# 3-hop chain: Marcus → Priya → Theodore → Helena (top). SINGLE chain, deliberately.
+#
+# ⚠ DO NOT ADD DECOY CHAINS. Tried and reverted 2026-08-21. Adding two same-predicate decoy chains
+# (Nadia→Oscar→Ruth, Ingrid→Bartholomew→Cleo) did not harden this task — it destabilised it. With
+# multiple roots in one graph the answer flips with RECORD ORDER, not with model capability:
+# controls run on the bare 7 records with NO haystack at all gave gemma4:12b-mlx "Helena" in one
+# arrangement and "Ingrid" in another, and granite4.1:3b flipped the opposite way on the same pair.
+# Every model failed the adjacent-decoy arrangement, and sharpening the question to bind explicitly
+# to Marcus did not fix it. A task ~100% of models fail for positional reasons is as useless as one
+# they all pass, and it would move with the seed. The single unambiguous chain already discriminates
+# honestly on the real battery (fleet multihop recall spanned 1.00 → 0.00 on the 08-21 run).
+HOPS = ["STAFF RECORD: Helena manages Theodore.",
+        "STAFF RECORD: Theodore manages Priya.",
+        "STAFF RECORD: Priya manages Marcus."]
 MULTIHOP_ANSWER = "Helena"
 
 QUESTION = (
-    "\n\nUsing ONLY the facts stated in the text above, answer all four questions. "
-    "Each answer is stated explicitly somewhere above — find it.\n"
+    "\n\nUsing ONLY the facts stated in the text above, answer all seven questions.\n"
     "1. What is the activation code for the NORTH relay?\n"
     "2. What is the activation code for the EAST relay?\n"
     "3. What is the activation code for the SOUTH relay?\n"
-    "4. Marcus is managed by someone, who is managed by someone, and so on. "
+    "4. What is the CURRENT activation code for the CENTRAL relay?\n"
+    "5. What is the sum of the NORTH relay code and the SOUTH relay code?\n"
+    "6. Marcus is managed by someone, who is managed by someone, and so on. "
     "Who is at the very TOP of Marcus's management chain?\n"
-    "Answer each on its own line, numbered 1-4."
+    f"7. What is the activation code for the {ABSENT_RELAY} relay? "
+    "If it is not stated in the text, say exactly: NOT STATED.\n"
+    "Answer each on its own line, numbered 1-7. Give just the answer, no explanation."
 )
 
 # ── Distractor generator (deterministic) ──────────────────────────────────────
@@ -81,7 +139,6 @@ def _sentence(rng):
     return f"{rng.choice(_SUBJ)} {rng.choice(_VERB)} {rng.choice(_OBJ)} {rng.choice(_TAIL)}"
 
 def _filler(rng, n_words):
-    """Emit distractor sentences until at least n_words words; return the text."""
     out, count = [], 0
     while count < n_words:
         s = _sentence(rng)
@@ -91,38 +148,62 @@ def _filler(rng, n_words):
 
 def build_item(bucket, rng):
     target_words = round(bucket * WORDS_PER_TOK)
-    fixed = [NEEDLES["needle_early"]["text"], NEEDLES["needle_mid"]["text"],
-             NEEDLES["needle_late"]["text"], *HOPS, QUESTION]
-    fixed_words = sum(len(s.split()) for s in fixed)
+
+    # Planted lines in reading order. Real needles hold their ~10/50/90% positions; decoys and the
+    # hop records (real + decoy) are interleaved so no planted line is locally distinctive.
+    planted = [
+        NOTICE.format(**{"name": SUPERSEDED["name"], "code": SUPERSEDED["old"]}),   # ~5%  superseded (old)
+        NOTICE.format(name=DECOY_RELAYS[0][0], code=DECOY_RELAYS[0][1]),
+        NOTICE.format(name=NEEDLES["needle_early"]["name"], code=NEEDLES["needle_early"]["code"]),  # ~10% EARLY
+        NOTICE.format(name=DECOY_RELAYS[1][0], code=DECOY_RELAYS[1][1]),
+        HOPS[0],
+        NOTICE.format(name=DECOY_RELAYS[2][0], code=DECOY_RELAYS[2][1]),
+        NOTICE.format(name=NEEDLES["needle_mid"]["name"], code=NEEDLES["needle_mid"]["code"]),      # ~50% MID
+        HOPS[1],
+        NOTICE.format(name=DECOY_RELAYS[3][0], code=DECOY_RELAYS[3][1]),
+        CORRECTION,                                                                 # ~70% supersede
+        NOTICE.format(name=DECOY_RELAYS[4][0], code=DECOY_RELAYS[4][1]),
+        HOPS[2],
+        NOTICE.format(name=NEEDLES["needle_late"]["name"], code=NEEDLES["needle_late"]["code"]),    # ~90% LATE
+        NOTICE.format(name=DECOY_RELAYS[5][0], code=DECOY_RELAYS[5][1]),
+    ]
+    fixed_words = sum(len(s.split()) for s in planted) + len(QUESTION.split())
     filler_budget = max(0, target_words - fixed_words)
 
-    # 6 planted facts → 7 filler segments. Weight so needles sit at ~10/50/90% and the hops
-    # scatter between them. Segment fractions of the filler budget:
-    fracs = [0.10, 0.18, 0.16, 0.16, 0.16, 0.14, 0.10]
-    segs  = [_filler(rng, max(8, round(filler_budget * f))) for f in fracs]
+    # One filler segment before each planted line, plus a trailing one.
+    n_seg = len(planted) + 1
+    fracs = [1.0 / n_seg] * n_seg
+    segs = [_filler(rng, max(8, round(filler_budget * f))) for f in fracs]
 
-    # Interleave: seg0 [early] seg1 [hop0] seg2 [mid] seg3 [hop1] seg4 [late] seg5 [hop2] seg6
-    body = " ".join([
-        segs[0], NEEDLES["needle_early"]["text"],
-        segs[1], HOPS[0],
-        segs[2], NEEDLES["needle_mid"]["text"],
-        segs[3], HOPS[1],
-        segs[4], NEEDLES["needle_late"]["text"],
-        segs[5], HOPS[2],
-        segs[6],
-    ])
-    preface = ("You are reading an operations log. Most lines are routine distractors; a few "
-               "carry specific facts you will be asked about. Read carefully.\n\n")
+    parts = []
+    for i, line in enumerate(planted):
+        parts.append(segs[i]); parts.append(line)
+    parts.append(segs[-1])
+    body = " ".join(parts)
+
+    preface = ("You are reading an operations log. Most lines are routine distractors; several carry "
+               "specific facts you will be asked about, and some facts are superseded later in the "
+               "log. Read carefully.\n\n")
     prompt = preface + body + QUESTION
     return {
         "bucket": bucket,
         "target_words": target_words,
         "actual_words": len(prompt.split()),
         "answer_key": {
-            "needle_early": NEEDLES["needle_early"]["answer"],
-            "needle_mid":   NEEDLES["needle_mid"]["answer"],
-            "needle_late":  NEEDLES["needle_late"]["answer"],
-            "multihop":     MULTIHOP_ANSWER,
+            # G-core
+            "needle_early": NEEDLES["needle_early"]["code"],
+            "needle_mid":   NEEDLES["needle_mid"]["code"],
+            "needle_late":  NEEDLES["needle_late"]["code"],
+            # G-hard
+            "superseded":       SUPERSEDED["new"],
+            "superseded_stale": SUPERSEDED["old"],
+            "aggregate":        AGGREGATE_ANSWER,
+            "multihop":         MULTIHOP_ANSWER,
+            "absent":           None,
+        },
+        "question_index": {          # which numbered answer line carries which sub-task
+            "needle_early": 1, "needle_mid": 2, "needle_late": 3,
+            "superseded": 4, "aggregate": 5, "multihop": 6, "absent": 7,
         },
         "prompt": prompt,
     }
@@ -133,9 +214,17 @@ def main():
     items = [build_item(b, rng) for b in buckets]
     data = {
         "meta": {
-            "buckets": buckets, "words_per_tok": WORDS_PER_TOK, "threshold": THRESHOLD,
-            "subtasks": ["needle_early", "needle_mid", "needle_late", "multihop"],
-            "note": "single-needle x3 (early/mid/late position) + 3-hop manage-chain; objective exact-match",
+            "version": 2,
+            "buckets": buckets, "words_per_tok": WORDS_PER_TOK,
+            "core_threshold": CORE_THRESHOLD, "hard_threshold": HARD_THRESHOLD,
+            "threshold": CORE_THRESHOLD,        # back-compat alias
+            "core_subtasks": ["needle_early", "needle_mid", "needle_late"],
+            "hard_subtasks": ["superseded", "aggregate", "multihop", "absent"],
+            "subtasks": ["needle_early", "needle_mid", "needle_late",
+                         "superseded", "aggregate", "multihop", "absent"],
+            "note": ("TWO-BAND. G-core = 3 positional needles against 6 same-format decoy relays. "
+                     "G-hard = superseded-value / cross-fact aggregate / 3-hop walk / "
+                     "absent-fact refusal. clean_depth requires BOTH bands."),
         },
         "items": items,
     }

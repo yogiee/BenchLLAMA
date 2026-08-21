@@ -88,7 +88,7 @@ BATTERY_REVISION = {
     "E": 2,           # two-band E-hard (2026-07-02)
     "F": 1,
     "F-elastic": 1,
-    "G": 1,
+    "G": 2,           # two-band G-hard: decoys + superseded/aggregate/absent; gated clean_depth (2026-08-21)
     "vision": 2,      # two-band V-hard (2026-07-05)
     "embedding": 2,   # length-stratified re-tune (2026-06-13)
     "image": 1,

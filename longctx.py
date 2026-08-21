@@ -27,6 +27,7 @@ Deep (32768) bucket: run `python3 suites/longctx/build.py --deep` first to add i
 """
 
 import json
+import re
 import sys
 import time
 import requests
@@ -70,16 +71,96 @@ COMPLETION_ROLES = ("worker", "router")
 
 # ── Grading (objective, exact-match) ──────────────────────────────────────────
 
-def grade(response, key):
-    lo = response.lower()
-    hits = {
-        "needle_early": key["needle_early"] in response,
-        "needle_mid":   key["needle_mid"]   in response,
-        "needle_late":  key["needle_late"]  in response,
-        "multihop":     key["multihop"].lower() in lo,
-    }
+_ABSENT_MARKERS = ("not stated", "not listed", "not mentioned", "not specified", "not given",
+                   "not provided", "not in the text", "no code", "not found", "unknown", "n/a",
+                   "does not appear", "doesn't appear", "isn't stated", "is not present", "absent")
+
+def _answer_lines(response):
+    """Map numbered answer index -> that line's text. The prompt demands `N. answer` on its own
+    line; several hard sub-tasks (absent / superseded) can only be graded on the SCOPED answer,
+    because a whole-response substring scan would match the stale value or a decoy code that the
+    model correctly used for a DIFFERENT question."""
+    out = {}
+    for line in response.splitlines():
+        m = re.match(r"\s*\**\s*(\d+)\s*[.):\-]\s*(.*)", line)
+        if m:
+            idx = int(m.group(1))
+            if idx not in out:
+                out[idx] = m.group(2).strip()
+    return out
+
+
+def grade(response, key, qidx=None):
+    """Two-band grading (dataset v2). G-core = 3 positional needles; G-hard = superseded /
+    aggregate / multihop / absent. Core falls back to a whole-response scan when the numbered
+    format is not followed (lenient, and matches v1 behaviour); the hard sub-tasks that depend on
+    scoping are marked missed instead, with `parse_failed` recorded so it is visible rather than
+    silent."""
+    qidx = qidx or {}
+    ans  = _answer_lines(response)
+    lo   = response.lower()
+
+    def scoped(task):
+        return ans.get(qidx.get(task, -1))
+
+    def core_hit(task):
+        want = key[task]
+        a = scoped(task)
+        return (want in a) if a is not None else (want in response)   # lenient fallback
+
+    hits, parse_failed = {}, False
+
+    # ── G-core: the 3 positional needles (vs 6 same-format decoy relays) ──
+    for t in ("needle_early", "needle_mid", "needle_late"):
+        hits[t] = core_hit(t)
+
+    # ── G-hard ──
+    # superseded: must give the CURRENT value and not the stale one it replaced
+    a = scoped("superseded")
+    if a is None:
+        parse_failed = True
+        hits["superseded"] = False
+    else:
+        hits["superseded"] = (key["superseded"] in a) and (key["superseded_stale"] not in a)
+
+    # aggregate: the sum of two scattered codes — not lexically present anywhere in the haystack
+    a = scoped("aggregate")
+    hits["aggregate"] = (key["aggregate"] in a) if a is not None else (key["aggregate"] in response)
+
+    # multihop: walk Marcus's chain to its root, without landing on a decoy chain's root
+    a = scoped("multihop")
+    tgt = key["multihop"].lower()
+    decoys = [d.lower() for d in key.get("multihop_decoys", [])]
+    if a is not None:
+        al = a.lower()
+        hits["multihop"] = (tgt in al) and not any(d in al for d in decoys)
+    else:
+        hits["multihop"] = (tgt in lo) and not any(d in lo for d in decoys)
+
+    # absent: the relay is never mentioned — the model must SAY SO rather than invent a code
+    a = scoped("absent")
+    if a is None:
+        parse_failed = True
+        hits["absent"] = False
+    else:
+        al = a.lower()
+        hits["absent"] = any(mk in al for mk in _ABSENT_MARKERS) and not re.search(r"\b\d{4}\b", a)
+
+    core_keys = ("needle_early", "needle_mid", "needle_late")
+    hard_keys = ("superseded", "aggregate", "multihop", "absent")
+    core = sum(hits[k] for k in core_keys) / len(core_keys)
+    hard = sum(hits[k] for k in hard_keys) / len(hard_keys)
     score = sum(hits.values())
-    return {"hits": hits, "found": score, "max": 4, "accuracy": round(score / 4, 3)}
+    return {
+        "hits": hits,
+        "found": score, "max": len(hits),
+        "core_accuracy": round(core, 3),
+        "hard_accuracy": round(hard, 3),
+        # composite accuracy: the two bands weighted equally. G-core saturated at 1.00 field-wide
+        # on the v1 battery, so weighting it any higher just compresses the range again.
+        "accuracy": round(0.5 * core + 0.5 * hard, 3),
+        "parse_failed": parse_failed,
+    }
 
 # ── Ollama helpers ────────────────────────────────────────────────────────────
 
@@ -147,9 +228,12 @@ def run_longctx(model_name, role, disk_gb, items):
                               sys_msgs + [{"role": "user", "content": it["prompt"]}],
                               num_ctx=num_ctx)
             resp = data.get("message", {}).get("content", "")
-            g    = grade(resp, it["answer_key"])
+            g    = grade(resp, it["answer_key"], it.get("question_index"))
             entry = {
-                "accuracy":     g["accuracy"],
+                "accuracy":      g["accuracy"],
+                "core_accuracy": g["core_accuracy"],
+                "hard_accuracy": g["hard_accuracy"],
+                "parse_failed":  g["parse_failed"],
                 "found":        g["found"],
                 "hits":         g["hits"],
                 "prefill_tps":  prefill_tps(data),
@@ -160,7 +244,8 @@ def run_longctx(model_name, role, disk_gb, items):
             }
             depths[str(bucket)] = entry
             ok = [k.replace("needle_", "").replace("multihop", "hop") for k, v in g["hits"].items() if v]
-            print(f"    acc={g['accuracy']}  found={g['found']}/4 [{', '.join(ok) or '—'}]"
+            print(f"    acc={g['accuracy']} (core={g['core_accuracy']} hard={g['hard_accuracy']})"
+                  f"  found={g['found']}/{g['max']} [{', '.join(ok) or '—'}]"
                   f"  prefill={entry['prefill_tps']}  tps={entry['decode_tps']}"
                   f"  tok={entry['prompt_tokens']}  wall={wall:.1f}s", flush=True)
         except Exception as e:
@@ -179,47 +264,82 @@ def summarize(depths):
     if not graded:
         return {"composite": None, "clean_depth": None, "n_depths": 0}
     buckets = sorted(graded)
-    threshold = json.loads(DATASET.read_text())["meta"]["threshold"]
+    meta = json.loads(DATASET.read_text())["meta"]
+    core_bar = meta.get("core_threshold", meta.get("threshold", 0.67))
+    hard_bar = meta.get("hard_threshold", 0.5)
 
     acc_by   = {b: graded[b]["accuracy"]    for b in buckets}
+    core_by  = {b: graded[b].get("core_accuracy") for b in buckets}
+    hard_by  = {b: graded[b].get("hard_accuracy") for b in buckets}
     pre_by   = {b: graded[b]["prefill_tps"] for b in buckets}
     dec_by   = {b: graded[b]["decode_tps"]  for b in buckets}
     wall_by  = {b: graded[b]["wall_s"]      for b in buckets}
     tok_by   = {b: graded[b]["prompt_tokens"] for b in buckets}
 
-    # deepest bucket still at/above the accuracy bar (contiguous from the shallow end)
+    # Deepest bucket clearing BOTH bands, contiguous from the shallow end.
+    # v1 gated on a single 0.75 accuracy bar over 4 sub-tasks, which the 3 trivial needles satisfied
+    # on their own — every model in the 08-21 fleet reported clean_depth 32768, including one that
+    # failed the multi-hop at every depth. Requiring both bands is the fix.
+    # ⚠ compare with an epsilon: per-depth accuracies are stored ROUNDED (2/3 -> 0.667), so a bar
+    # written as the "obvious" 0.67 would silently mean 3-of-3 rather than 2-of-3.
+    EPS = 1e-6
     clean = None
     for b in buckets:
-        if acc_by[b] >= threshold:
+        ok_core = core_by[b] is None or core_by[b] >= core_bar - EPS
+        ok_hard = hard_by[b] is None or hard_by[b] >= hard_bar - EPS
+        if ok_core and ok_hard:
             clean = b
         else:
             break
-
-    # position recall across depths — exposes "lost in the middle"
-    pos = {"early": 0, "mid": 0, "late": 0, "hop": 0}
+    # clean_depth on the CORE band alone — kept so the v1 series stays interpretable/comparable
+    clean_core = None
     for b in buckets:
-        h = graded[b]["hits"]
-        pos["early"] += int(h["needle_early"]); pos["mid"] += int(h["needle_mid"])
-        pos["late"]  += int(h["needle_late"]);  pos["hop"] += int(h["multihop"])
+        if core_by[b] is None or core_by[b] >= core_bar - EPS:
+            clean_core = b
+        else:
+            break
+
+    # per-sub-task recall across depths — position effects AND which hard task breaks first
+    keys = ["needle_early", "needle_mid", "needle_late", "superseded", "aggregate", "multihop", "absent"]
+    tally = {k: 0 for k in keys}
+    for b in buckets:
+        for k, v in graded[b]["hits"].items():
+            if k in tally:
+                tally[k] += int(bool(v))
     n = len(buckets)
-    position_recall = {k: round(v / n, 3) for k, v in pos.items()}
+    recall = {k: round(v / n, 3) for k, v in tally.items()}
+    position_recall = {                       # back-compat shape for the export/consumers
+        "early": recall["needle_early"], "mid": recall["needle_mid"],
+        "late":  recall["needle_late"],  "hop": recall["multihop"],
+    }
 
     shallow, deep = buckets[0], buckets[-1]
     pre_collapse = (round(pre_by[deep] / pre_by[shallow], 3)
                     if pre_by.get(shallow) and pre_by.get(deep) else None)
+    mean = lambda d: (round(sum(v for v in d.values() if v is not None) / n, 3)
+                      if any(v is not None for v in d.values()) else None)
 
     return {
-        "composite":      round(sum(acc_by.values()) / n, 3),   # mean accuracy across depths
-        "clean_depth":    clean,                                 # the headline practical number
-        "threshold":      threshold,
+        "composite":      round(sum(acc_by.values()) / n, 3),   # mean two-band accuracy across depths
+        "composite_core": mean(core_by),
+        "composite_hard": mean(hard_by),
+        "clean_depth":    clean,                                 # BOTH bands — the headline
+        "clean_depth_core": clean_core,                          # core band only (v1-comparable)
+        "core_threshold": core_bar,
+        "hard_threshold": hard_bar,
+        "threshold":      core_bar,
         "n_depths":       n,
-        "accuracy_by_depth": acc_by,
-        "prefill_by_depth":  pre_by,
-        "decode_by_depth":   dec_by,
-        "wall_by_depth":     wall_by,
-        "tokens_by_depth":   tok_by,
-        "position_recall":   position_recall,
-        "prefill_collapse":  pre_collapse,   # prefill tok/s at deepest ÷ shallowest (<1 = slowdown)
+        "accuracy_by_depth":  acc_by,
+        "core_by_depth":      core_by,
+        "hard_by_depth":      hard_by,
+        "prefill_by_depth":   pre_by,
+        "decode_by_depth":    dec_by,
+        "wall_by_depth":      wall_by,
+        "tokens_by_depth":    tok_by,
+        "subtask_recall":     recall,
+        "position_recall":    position_recall,
+        "parse_failures":     sum(1 for b in buckets if graded[b].get("parse_failed")),
+        "prefill_collapse":   pre_collapse,   # prefill tok/s at deepest ÷ shallowest (<1 = slowdown)
     }
 
 # ── Markdown ──────────────────────────────────────────────────────────────────
@@ -229,23 +349,38 @@ def write_summary(results, out_md, fast_mode=False):
     meta = json.loads(DATASET.read_text())["meta"]
     lines = [
         f"# Battery G — Long-Context Retrieval — {out_md.stem}{flag}", "",
-        "Fill the window to each token depth, plant needles (early/mid/late) + a 3-hop manage-chain, "
-        "grade exact-match. Measures accuracy degradation **and** prefill/decode speed collapse as the "
+        "Fill the window to each token depth, plant facts among plausible distractors, grade "
+        "exact-match. Measures accuracy degradation **and** prefill/decode speed collapse as the "
         "context fills — the window-fill the C4 ctx_depth probe never does.", "",
-        f"Buckets: {meta['buckets']} · clean = deepest depth ≥ {meta['threshold']} accuracy "
-        "(3/4 sub-tasks) · collapse = prefill t/s at deepest ÷ shallowest.", "",
-        "| Model | Role | Disk | Composite | Clean depth | Prefill collapse | early | mid | late | hop |",
-        "|-------|------|-----:|----------:|------------:|-----------------:|:----:|:---:|:----:|:---:|",
+        "**TWO-BAND (dataset v2, 2026-08-21).** **G-core** = 3 positional needles (early/mid/late) "
+        "against **6 same-format decoy relays** — the *can it retrieve at depth?* gate. **G-hard** = "
+        "`superseded` (a value corrected later in the log — the answer is the LATEST) · `aggregate` "
+        "(the SUM of two scattered codes, lexically absent from the haystack) · `multihop` (3-hop "
+        "walk against **2 decoy chains**) · `absent` (a relay never mentioned — the model must SAY "
+        "SO rather than invent a code: confabulation-at-depth). "
+        "`composite = 0.5·core + 0.5·hard`.", "",
+        f"Buckets: {meta['buckets']} · **clean = deepest depth clearing BOTH bands** "
+        f"(core ≥ {meta.get('core_threshold')}, hard ≥ {meta.get('hard_threshold')}) · "
+        "collapse = prefill t/s at deepest ÷ shallowest.", "",
+        "> ⚠ **Not comparable to Battery G runs before 2026-08-21.** v1 gated `clean_depth` on a "
+        "single 0.75 bar over 4 sub-tasks, which the 3 trivial needles satisfied by themselves — "
+        "all 21 models reported clean-32k, including one that failed the multi-hop at every depth. "
+        "`clean_depth_core` is carried in the JSON for continuity with the v1 series.", "",
+        "| Model | Role | Disk | Comp | core | hard | Clean (both) | Clean (core) | Collapse | early | mid | late | sup | agg | hop | absent |",
+        "|-------|------|-----:|-----:|-----:|-----:|-------------:|-------------:|---------:|:----:|:---:|:----:|:---:|:---:|:---:|:------:|",
     ]
     for r in sorted(results, key=lambda r: (r["summary"].get("clean_depth") or 0,
                                             r["summary"].get("composite") or 0), reverse=True):
         s  = r["summary"]
-        pr = s.get("position_recall", {})
+        sr = s.get("subtask_recall", {})
         lines.append(
             f"| `{r['model']}` | {r.get('role','')} | {r.get('disk_gb','?')}GB"
-            f" | {s.get('composite','?')} | {s.get('clean_depth','—') or '—'}"
+            f" | {s.get('composite','?')} | {s.get('composite_core','—')} | {s.get('composite_hard','—')}"
+            f" | {s.get('clean_depth') or '—'} | {s.get('clean_depth_core') or '—'}"
             f" | {s.get('prefill_collapse','—') or '—'}"
-            f" | {pr.get('early','?')} | {pr.get('mid','?')} | {pr.get('late','?')} | {pr.get('hop','?')} |"
+            f" | {sr.get('needle_early','?')} | {sr.get('needle_mid','?')} | {sr.get('needle_late','?')}"
+            f" | {sr.get('superseded','?')} | {sr.get('aggregate','?')} | {sr.get('multihop','?')}"
+            f" | {sr.get('absent','?')} |"
         )
 
     lines += ["", "## Accuracy × depth", "",

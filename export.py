@@ -234,6 +234,11 @@ def build():
             # long-context (Battery G) sub-block: accuracy degradation + speed collapse as the
             # window FILLS (distinct from C4's num_ctx allocation sweep). clean_depth = deepest
             # token bucket still ≥ threshold accuracy — the headline "usable to N tokens" number.
+            # TWO-BAND as of dataset v2 (2026-08-21): G-core = 3 positional needles against 6
+            # same-format decoy relays; G-hard = superseded / aggregate / multihop / absent.
+            # `clean_depth` now requires BOTH bands — under v1 it was satisfiable by the 3 easy
+            # needles alone and every model reported 32768. `clean_depth_core` is the v1-comparable
+            # series. Keys are emitted only when present, so v1 rows stay valid.
             m["long_context"] = {
                 "composite": gs.get("composite"),
                 "clean_depth": gs.get("clean_depth"),
@@ -242,6 +247,12 @@ def build():
                 "prefill_by_depth": gs.get("prefill_by_depth", {}),
                 "position_recall": gs.get("position_recall", {}),
                 "n_depths": gs.get("n_depths"),
+                **({"composite_core": gs["composite_core"]} if gs.get("composite_core") is not None else {}),
+                **({"composite_hard": gs["composite_hard"]} if gs.get("composite_hard") is not None else {}),
+                **({"clean_depth_core": gs["clean_depth_core"]} if gs.get("clean_depth_core") is not None else {}),
+                **({"subtask_recall": gs["subtask_recall"]} if gs.get("subtask_recall") else {}),
+                **({"band_thresholds": {"core": gs.get("core_threshold"), "hard": gs.get("hard_threshold")}}
+                   if gs.get("core_threshold") is not None else {}),
             }
         # Battery A is LANE-gated (only the router lane runs it), so a worker's A row is a fossil
         # from when it was last a router — results_db.latest() happily returns it years later. Publishing
