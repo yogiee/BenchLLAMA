@@ -243,7 +243,12 @@ def build():
                 "position_recall": gs.get("position_recall", {}),
                 "n_depths": gs.get("n_depths"),
             }
-        rt = routing.get(name)
+        # Battery A is LANE-gated (only the router lane runs it), so a worker's A row is a fossil
+        # from when it was last a router — results_db.latest() happily returns it years later. Publishing
+        # that reads as a current capability: gpt-oss:120b-cloud carried classify_accuracy 0.0 from
+        # 2026-06-29, which looks damning for a model that simply is not in the router lane. Emit the
+        # sub-block only for models currently IN that lane; the fossils stay in the DB, unpublished.
+        rt = routing.get(name) if entry.get("role") == "router" else None
         if rt:
             # routing (Battery A) sub-block: measured since 2026-06, exported since 2026-08-21.
             # Before that the `routers` ranking had NO quality input at all and sorted on tok/s alone.
