@@ -53,7 +53,7 @@ def _latest(prefix):
 
 # export prefix → SQLite battery key (Phase 2: read the clobber-proof store, not latest-file-by-mtime)
 _PREFIX_BATTERY = {
-    "benchmark": "standard", "aptitude_e": "E", "aptitude_f": "F",
+    "benchmark": "standard", "aptitude_a": "A", "aptitude_e": "E", "aptitude_f": "F",
     "aptitude_f_elastic": "F-elastic", "vision": "vision", "embedding": "embedding", "longctx": "G",
     "confab": "confab",
 }
@@ -96,6 +96,35 @@ def _standard_summary(rec):
             **({"expense_split": expense} if expense is not None else {})}
 
 
+def _routing_summary(rec):
+    """Battery A signals — the router lane's actual job, previously measured but never exported.
+
+    `classify_accuracy` (A1) is the core number: does the request land in the right bucket?
+    `false_escalation_rate` (A4) is the cost of getting it wrong the EXPENSIVE way — waking the big
+    model for nothing. `prompt_weight_accuracy` (A3) shows how much accuracy survives a stripped
+    system prompt, which is how routers are usually deployed. `brevity` (A2) is saturated across the
+    fleet (everyone 5/5) — kept for provenance, not for ranking."""
+    t = rec.get("tests", {})
+    a1 = t.get("a1_classify") or {}
+    if a1.get("accuracy") is None:
+        return None
+    a2, a3, a4 = (t.get("a2_brevity") or {}, t.get("a3_prompt_minimal") or {},
+                  t.get("a4_false_escalation") or {})
+    rungs = {r: (a3.get(r) or {}).get("accuracy") for r in ("minimal", "standard", "verbose")}
+    out = {
+        "classify_accuracy": a1.get("accuracy"),
+        "classify_correct": a1.get("correct"),
+        "classify_total": a1.get("total"),
+        "false_escalation_rate": a4.get("escalation_rate"),
+        "prompt_weight_accuracy": {k: v for k, v in rungs.items() if v is not None},
+    }
+    if rungs.get("minimal") is not None:
+        out["lean_prompt_accuracy"] = rungs["minimal"]
+    if a2.get("score") is not None and a2.get("total"):
+        out["brevity"] = round(a2["score"] / a2["total"], 4)
+    return out
+
+
 def build():
     registry = json.load((REPO / "models.json").open())
     std, std_f = _load("benchmark")
@@ -106,9 +135,10 @@ def build():
     emb, emb_f = _load("embedding")
     lctx, lctx_f = _load("longctx")
     honesty, hon_f = _load("confab")
+    routing, rout_f = _load("aptitude_a")
 
     models, sources = [], {k: v for k, v in {
-        "standard": std_f, "coding": cod_f, "consistency": cons_f,
+        "standard": std_f, "routing": rout_f, "coding": cod_f, "consistency": cons_f,
         "prompt_elasticity": ela_f, "vision": vis_f, "embedding": emb_f,
         "long_context": lctx_f, "honesty": hon_f}.items() if v}
 
@@ -213,6 +243,13 @@ def build():
                 "position_recall": gs.get("position_recall", {}),
                 "n_depths": gs.get("n_depths"),
             }
+        rt = routing.get(name)
+        if rt:
+            # routing (Battery A) sub-block: measured since 2026-06, exported since 2026-08-21.
+            # Before that the `routers` ranking had NO quality input at all and sorted on tok/s alone.
+            rs = _routing_summary(rt)
+            if rs:
+                m["routing"] = rs
         h = honesty.get(name)
         if h and h.get("summary"):
             hs = h["summary"]
@@ -261,8 +298,23 @@ def build():
     def vis_ocr(m):
         return (m.get("vision") or {}).get("dimensions", {}).get("ocr")
 
+    def router_key(m):
+        """Routers rank on the job they actually do: A1 classification accuracy first, A4
+        false-escalation as the tiebreak penalty, decode tok/s last.
+
+        Until 2026-08-21 this list was sorted by tok/s ALONE, with no quality input — which ranked
+        `minicpm-v4.6:1b` (184.7 t/s, classifies 4/10) above `ministral-3:3b` (80.8 t/s, 10/10). Speed
+        is a FLOOR for a router (the role gate already enforces >=80 t/s); it is not the ranking. A
+        router with no Battery A data sorts below every router that has some, rather than dropping out
+        of the list entirely."""
+        r = m.get("routing") or {}
+        acc, tps = r.get("classify_accuracy"), (m.get("tps") or 0.0)
+        if acc is None:
+            return (0, 0.0, 0.0, tps)
+        return (1, acc, -(r.get("false_escalation_rate") or 0.0), tps)
+
     rankings = {
-        "routers": ranked(routers, lambda m: m.get("tps")),
+        "routers": ranked(routers, router_key),
         "workers": ranked(workers, worker_quality),
         "coders": ranked(completion, lambda m: (m.get("coding") or {}).get("composite")),
         "vision": ranked(has_vis, lambda m: (m.get("vision") or {}).get("composite")),
