@@ -56,9 +56,14 @@ OUT  = HERE / "dataset.json"
 
 SEED           = 42
 WORDS_PER_TOK  = 0.70    # conservative: keeps actual tokens under the bucket
-CORE_THRESHOLD = 0.66    # G-core bar: 2 of 3 needles. ⚠ 2/3 stores as round(...,3)=0.667,
-                         # so a 0.67 bar silently means 3-of-3 — keep this strictly BELOW 0.667.
-HARD_THRESHOLD = 0.50    # G-hard bar: 2 of 4 discriminator tasks (0.5 stores exactly)
+# ⚠ The grading bars are NOT defined here any more — they live in bench_utils
+# (G_CORE_THRESHOLD / G_HARD_THRESHOLD) and are imported below purely so the values echoed into
+# dataset meta stay in sync. A bar is grading POLICY, not test content: this file is hashed as a
+# resume trigger, so owning the bars here meant every re-tune forced a 2h re-measure of the whole
+# fleet to produce byte-identical replies. `longctx.py --rescore` re-derives stored summaries
+# instead. The meta keys below are DOCUMENTATION — longctx.py ignores them and reads bench_utils.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from bench_utils import G_CORE_THRESHOLD as CORE_THRESHOLD, G_HARD_THRESHOLD as HARD_THRESHOLD
 BUCKETS        = [1024, 2048, 4096, 8192, 16384]
 DEEP_BUCKET    = 32768
 

@@ -95,6 +95,26 @@ BATTERY_REVISION = {
     "confab": 1,      # Battery H — honesty/confabulation (2026-07-07)
 }
 
+# ── Battery G — grading bars (see longctx.py) ─────────────────────────────────
+# Deliberately NOT stored in suites/longctx/dataset.json: the dataset hash is a resume trigger, so
+# putting a grading POLICY there would force a 2h re-measure of 22 models every time a bar moves —
+# even though the model responses are already on disk and would be byte-identical. Bars live here;
+# `longctx.py --rescore` re-derives every stored summary from the persisted per-depth hits instead.
+# bench_utils.py is not a hashed dataset file, so editing these does NOT re-run the battery.
+#
+# G_CORE: 2 of 3 positional needles. ⚠ keep strictly BELOW 0.667 — per-depth accuracies are stored
+#         ROUNDED, so 2/3 lands on 0.667 and a bar written as the "obvious" 0.67 silently means 3-of-3.
+# G_HARD: 3 of 4 discriminators (raised from 0.50 on 2026-08-22). At 2-of-4 the band leaked: the
+#         2026-08-22 fleet run measured `absent` at 0.984 mean recall (20/21 perfect) and
+#         `superseded` at 0.960 (18/21) — those two alone satisfied a 2-of-4 bar, so a model could
+#         fail BOTH real discriminators (`aggregate` 0.611, `multihop` 0.667) and still report
+#         clean-32k. 15/21 did. At 3-of-4 that falls to 11/21 across 6 tiers, and clearing the bar
+#         now REQUIRES at least one of aggregate/multihop. Raised together with the one-dip
+#         tolerance in summarize() — a tighter bar makes the old break-on-first-failure walk
+#         brittle, and the two changes are only correct as a pair.
+G_CORE_THRESHOLD = 0.66
+G_HARD_THRESHOLD = 0.75
+
 # Which dataset/prompt hashes (keys of _DATASET_FILES) actually feed each battery's result.
 # A change to one of these = a test-data change → re-run. Batteries not listed / with [] rely on
 # BATTERY_REVISION alone (their test data isn't a hashed file — e.g. F rollout, EMB seed sets).
@@ -172,6 +192,33 @@ def _model_digests(host: str, only: set | None = None) -> dict:
     return out
 
 
+def _live_battery_revisions() -> dict:
+    """BATTERY_REVISION read FRESH from this file's source, not from the caller's import-time copy.
+
+    webserver.py is long-lived and captures the run-start fingerprint in-process (orchestrator.py),
+    so it snapshots whatever bench_utils looked like when the server booted. Bump a revision during
+    a session and the run records the OLD number — which means the bump is never consumed and that
+    battery re-arms on every subsequent run. Battery G hit exactly this on 2026-08-21: the run that
+    produced the v2 two-band results stamped `G: 1`, so a full 22-model re-run stayed pending
+    against results that were already v2. The scoring subprocesses import fresh code, so only this
+    one capture was stale.
+
+    Parsed with ast (literal only, no import, no side effects); falls back to the in-memory dict.
+    """
+    try:
+        import ast
+        tree = ast.parse(Path(__file__).read_text())
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                    isinstance(tgt, ast.Name) and tgt.id == "BATTERY_REVISION" for tgt in node.targets):
+                val = ast.literal_eval(node.value)
+                if isinstance(val, dict) and val:
+                    return val
+    except Exception:
+        pass
+    return dict(BATTERY_REVISION)
+
+
 def env_fingerprint(host: str = "http://localhost:11434", models=None) -> dict:
     """Run-provenance snapshot: ollama runtime, harness commit, model weight digests,
     dataset/prompt hashes, and structured OS/hardware. Best-effort — a failed probe
@@ -185,7 +232,7 @@ def env_fingerprint(host: str = "http://localhost:11434", models=None) -> dict:
         "ollama_version":    ver,
         "benchllama_commit": _benchllama_commit(),
         "datasets":          _dataset_hashes(),
-        "battery_revisions": dict(BATTERY_REVISION),   # content-addressed resume: test-code identity
+        "battery_revisions": _live_battery_revisions(),  # content-addressed resume: test-code identity
         "model_digests":     _model_digests(host, set(models) if models else None),
         "os":                osd,
         "hardware":          hw,

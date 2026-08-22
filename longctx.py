@@ -21,6 +21,8 @@ capability, NOT a role gate. `utility` specialists (embedding/vision/OCR) are sk
   python3 longctx.py --capable-only           # skip models that failed `calculate` in the latest standard run
   python3 longctx.py --fast                    # skip inter-model cool-down
   python3 longctx.py --force                    # ignore the 24h resume window
+  python3 longctx.py --rescore                 # re-derive stored summaries after a grading-bar change
+  python3 longctx.py --rescore --dry-run       # ...preview the clean_depth moves, write nothing
   python3 longctx.py --ollama http://host:11434
 
 Deep (32768) bucket: run `python3 suites/longctx/build.py --deep` first to add it to the dataset.
@@ -33,7 +35,8 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
-from bench_utils import cooldown, preflight, latest_result, sort_registry
+from bench_utils import (cooldown, preflight, latest_result, sort_registry,
+                         G_CORE_THRESHOLD, G_HARD_THRESHOLD)
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -264,9 +267,10 @@ def summarize(depths):
     if not graded:
         return {"composite": None, "clean_depth": None, "n_depths": 0}
     buckets = sorted(graded)
-    meta = json.loads(DATASET.read_text())["meta"]
-    core_bar = meta.get("core_threshold", meta.get("threshold", 0.67))
-    hard_bar = meta.get("hard_threshold", 0.5)
+    # Bars come from bench_utils, NOT the dataset meta — grading policy must be movable without
+    # changing the dataset hash (which is a resume trigger and would force a pointless re-measure).
+    # dataset.json may still carry older *_threshold keys; they are documentation, not authority.
+    core_bar, hard_bar = G_CORE_THRESHOLD, G_HARD_THRESHOLD
 
     acc_by   = {b: graded[b]["accuracy"]    for b in buckets}
     core_by  = {b: graded[b].get("core_accuracy") for b in buckets}
@@ -276,22 +280,39 @@ def summarize(depths):
     wall_by  = {b: graded[b]["wall_s"]      for b in buckets}
     tok_by   = {b: graded[b]["prompt_tokens"] for b in buckets}
 
-    # Deepest bucket clearing BOTH bands, contiguous from the shallow end.
+    # Deepest bucket clearing BOTH bands, walking up from the shallow end and TOLERATING ONE DIP.
+    #
     # v1 gated on a single 0.75 accuracy bar over 4 sub-tasks, which the 3 trivial needles satisfied
     # on their own — every model in the 08-21 fleet reported clean_depth 32768, including one that
     # failed the multi-hop at every depth. Requiring both bands is the fix.
+    #
+    # The one-dip tolerance is NOT leniency, it is a variance correction, and it had to land in the
+    # same change as the tighter hard bar (2026-08-22). Each depth is ONE call scored on 7 binary
+    # sub-tasks, so a single unlucky reply is well inside noise. Under strict break-on-first-failure
+    # `ornith:9b` — which answers 4-of-4 at 32768 and 3-of-4 at every other depth — scored
+    # clean_depth 2048 off one dip at 4096, and `gemma4:latest` (4-of-4 at 1024/4096/8192) scored
+    # 1024. Break-on-SECOND-failure returns 32768 and 8192. The alternative, taking the deepest
+    # clearing bucket and ignoring dips entirely, rides noise straight past a real failure — it puts
+    # `gemma4:latest` at 32768 despite a 2-of-4 at 16384 — so the dip is tolerated, not forgotten.
+    # If the per-depth call is ever repeated N times, drop this back to strict contiguity.
+    #
     # ⚠ compare with an epsilon: per-depth accuracies are stored ROUNDED (2/3 -> 0.667), so a bar
     # written as the "obvious" 0.67 would silently mean 3-of-3 rather than 2-of-3.
     EPS = 1e-6
-    clean = None
+    def _clears(b):
+        return ((core_by[b] is None or core_by[b] >= core_bar - EPS) and
+                (hard_by[b] is None or hard_by[b] >= hard_bar - EPS))
+    clean, dips = None, 0
     for b in buckets:
-        ok_core = core_by[b] is None or core_by[b] >= core_bar - EPS
-        ok_hard = hard_by[b] is None or hard_by[b] >= hard_bar - EPS
-        if ok_core and ok_hard:
+        if _clears(b):
             clean = b
         else:
-            break
-    # clean_depth on the CORE band alone — kept so the v1 series stays interpretable/comparable
+            dips += 1
+            if dips > 1:
+                break
+    # clean_depth on the CORE band alone — kept so the v1 series stays interpretable/comparable.
+    # Deliberately keeps v1's STRICT break-on-first-failure walk: its whole job is to be comparable
+    # to the pre-2026-08-21 numbers, so it must not adopt the new dip tolerance.
     clean_core = None
     for b in buckets:
         if core_by[b] is None or core_by[b] >= core_bar - EPS:
@@ -355,17 +376,26 @@ def write_summary(results, out_md, fast_mode=False):
         "**TWO-BAND (dataset v2, 2026-08-21).** **G-core** = 3 positional needles (early/mid/late) "
         "against **6 same-format decoy relays** — the *can it retrieve at depth?* gate. **G-hard** = "
         "`superseded` (a value corrected later in the log — the answer is the LATEST) · `aggregate` "
-        "(the SUM of two scattered codes, lexically absent from the haystack) · `multihop` (3-hop "
-        "walk against **2 decoy chains**) · `absent` (a relay never mentioned — the model must SAY "
+        "(the SUM of two scattered codes, lexically absent from the haystack) · `multihop` (a 3-hop "
+        "manage-chain walk) · `absent` (a relay never mentioned — the model must SAY "
         "SO rather than invent a code: confabulation-at-depth). "
         "`composite = 0.5·core + 0.5·hard`.", "",
         f"Buckets: {meta['buckets']} · **clean = deepest depth clearing BOTH bands** "
-        f"(core ≥ {meta.get('core_threshold')}, hard ≥ {meta.get('hard_threshold')}) · "
+        f"(core ≥ {G_CORE_THRESHOLD} = 2 of 3 needles, hard ≥ {G_HARD_THRESHOLD} = 3 of 4 "
+        f"discriminators), walking up from the shallow end and tolerating ONE dip · "
         "collapse = prefill t/s at deepest ÷ shallowest.", "",
         "> ⚠ **Not comparable to Battery G runs before 2026-08-21.** v1 gated `clean_depth` on a "
         "single 0.75 bar over 4 sub-tasks, which the 3 trivial needles satisfied by themselves — "
         "all 21 models reported clean-32k, including one that failed the multi-hop at every depth. "
         "`clean_depth_core` is carried in the JSON for continuity with the v1 series.", "",
+        "> ⚠ **Bars re-tuned 2026-08-22** (`longctx.py --rescore`, no re-measure — the replies were "
+        "already on disk). The 08-21 fleet run showed the hard band still leaking: `absent` (0.984 "
+        "mean recall) and `superseded` (0.960) alone satisfied the old 2-of-4 bar, so 15/21 models "
+        "reported clean-32k while failing BOTH real discriminators. Hard is now 3-of-4 — which "
+        "requires at least one of `aggregate`/`multihop` — paired with the one-dip tolerance, "
+        "since a stricter bar makes break-on-first-failure brittle at one call per depth. "
+        "`composite`, the per-depth accuracies and every speed number are UNCHANGED; only "
+        "`clean_depth` moved (6 models).", "",
         "| Model | Role | Disk | Comp | core | hard | Clean (both) | Clean (core) | Collapse | early | mid | late | sup | agg | hop | absent |",
         "|-------|------|-----:|-----:|-----:|-----:|-------------:|-------------:|---------:|:----:|:---:|:----:|:---:|:---:|:---:|:------:|",
     ]
@@ -402,6 +432,79 @@ def write_summary(results, out_md, fast_mode=False):
     out_md.write_text("\n".join(lines))
     print(f"MD → {out_md}", flush=True)
 
+# ── Rescore (grading-policy change, no model calls) ───────────────────────────
+
+def rescore(dry_run=False):
+    """Re-derive every stored two-band summary from the PERSISTED per-depth hits.
+
+    A grading bar is not test content: the prompts, the haystack and the model replies are already
+    on disk and would come back byte-identical from a re-run. Re-measuring 22 models for 2h to move
+    a threshold would only re-roll the speed numbers and burn a thermal cycle, so the bars live in
+    bench_utils (not the hashed dataset) and this path recomputes summaries in place instead.
+
+    Rows are UPDATEd on their ORIGINAL (run_id, created_at) — a rescore must never re-stamp a score
+    under today's run, or it strips the provenance that resume reads (the 2026-07-11 no-provenance
+    bug). Only v2 rows are touched: v1 predates the core/hard split and its four sub-tasks cannot be
+    re-graded against a two-band bar.
+    """
+    import sqlite3, results_db
+    con = sqlite3.connect(results_db.DB_PATH)
+    rows = con.execute("SELECT run_id, model, metrics, composite, created_at FROM results "
+                       "WHERE battery='G' ORDER BY created_at").fetchall()
+
+    V2_KEYS = {"aggregate", "absent", "superseded"}
+    changes, skipped = [], 0
+    for run_id, model, metrics, old_comp, created in rows:
+        try:
+            rec = json.loads(metrics)
+        except Exception:
+            skipped += 1; continue
+        depths = rec.get("depths") or {}
+        graded = [e for e in depths.values() if isinstance(e, dict) and "hits" in e]
+        if not graded or not V2_KEYS.issubset(set(graded[0]["hits"])):
+            skipped += 1; continue            # v1 row — not re-gradable on a two-band bar
+        old = rec.get("summary") or {}
+        new = summarize(depths)
+        rec["summary"] = new
+        changes.append((run_id, model, created, old.get("clean_depth"), new.get("clean_depth"),
+                        old.get("hard_threshold"), new.get("hard_threshold"), json.dumps(rec),
+                        results_db.composite_of(rec)))
+
+    moved = [c for c in changes if c[3] != c[4]]
+    print(f"Battery G rescore — core ≥ {G_CORE_THRESHOLD}, hard ≥ {G_HARD_THRESHOLD}", flush=True)
+    print(f"  {len(changes)} v2 row(s) re-derived · {skipped} skipped (v1 / unparseable) · "
+          f"{len(moved)} clean_depth change(s)\n", flush=True)
+    if moved:
+        print(f"  {'model':<44}{'was':>9}{'now':>9}   run", flush=True)
+        for run_id, model, _c, was, now, *_ in moved:
+            print(f"  {model[:43]:<44}{str(was):>9}{str(now):>9}   {run_id}", flush=True)
+
+    if dry_run:
+        print("\n  --dry-run: nothing written.", flush=True)
+        return changes
+
+    with con:
+        for run_id, model, _c, _w, _n, _ot, _nt, blob, comp in changes:
+            con.execute("UPDATE results SET metrics=?, composite=? "
+                        "WHERE run_id=? AND model=? AND battery='G'", (blob, comp, run_id, model))
+    con.close()
+    print(f"\n  → updated {len(changes)} DB row(s) in place (run_id/created_at preserved)", flush=True)
+
+    # Rewrite the newest on-disk report so JSON/MD match the DB.
+    latest_json = max(RESULTS_DIR.glob("longctx_*.json"),
+                      key=lambda f: f.stat().st_mtime, default=None)
+    if latest_json and not latest_json.stem.endswith("_fast"):
+        data = json.loads(latest_json.read_text())
+        for rec in data:
+            d = rec.get("depths") or {}
+            if d and V2_KEYS.issubset(set(next(iter(d.values())).get("hits", {}))):
+                rec["summary"] = summarize(d)
+        latest_json.write_text(json.dumps(data, indent=2))
+        write_summary(data, latest_json.with_suffix(".md"))
+        print(f"  → rewrote {latest_json.name} + .md", flush=True)
+    return changes
+
+
 # ── Capable-only gate (reuse the latest standard run's `calculate` result) ─────
 
 def _capable_models():
@@ -420,6 +523,10 @@ def _capable_models():
 if __name__ == "__main__":
     TODAY  = date.today().isoformat()
     suffix = "_fast" if fast_mode else ""
+
+    if _flag("--rescore"):                       # grading-policy change — no model calls, no cooldown
+        rescore(dry_run=_flag("--dry-run"))
+        sys.exit(0)
 
     if not DATASET.exists():
         sys.exit(f"dataset not found — run: python3 {DATASET.relative_to(REPO)}".replace("dataset.json", "build.py"))
