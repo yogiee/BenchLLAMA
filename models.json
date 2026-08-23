@@ -33,16 +33,6 @@
     ]
   },
   {
-    "name": "qwen2.5:7b",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
     "name": "ministral-3:3b",
     "disk_gb": 3.0,
     "role": "router",
@@ -260,16 +250,6 @@
     ],
     "extended_roles": [],
     "added_idx": 17
-  },
-  {
-    "name": "s80982708/ZINI-LOCAL:latest",
-    "disk_gb": 4.7,
-    "role": "worker",
-    "capabilities": [
-      "completion"
-    ],
-    "extended_roles": [],
-    "added_idx": 18
   },
   {
     "name": "gemma4:e4b-mlx",
