@@ -1,5 +1,17 @@
 [
   {
+    "name": "gemma4:26b-a4b-it-qat",
+    "disk_gb": 15.6,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": []
+  },
+  {
     "name": "codecraftersllc/bonsai-27b:latest",
     "disk_gb": 4.7,
     "role": "worker",
@@ -178,20 +190,6 @@
       "coder"
     ],
     "added_idx": 11
-  },
-  {
-    "name": "gemma4:latest",
-    "disk_gb": 9.6,
-    "role": "worker",
-    "capabilities": [
-      "audio",
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [],
-    "added_idx": 12
   },
   {
     "name": "x/z-image-turbo:latest",
