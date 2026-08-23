@@ -218,8 +218,15 @@ def build():
                 "verdict": pes.get("verdict"),
                 "prompt_sigma": pes.get("prompt_sigma"),
                 "instruction_adherence": pes.get("instruction_adherence"),
+                # two-band since 2026-08-23 — core numbers above stay v1-comparable, the hard band
+                # is the one that separates. Absent on rows measured before the hard rung existed.
+                **({"hard_adherence": pes["hard_adherence"]}
+                   if pes.get("hard_adherence") is not None else {}),
+                **({"prompt_sigma_all": pes["prompt_sigma_all"]}
+                   if pes.get("prompt_sigma_all") is not None else {}),
                 "length_adherence": pes.get("length_adherence"),
-                "cutoffs": {k: rc.get(k) for k in ("sigma_hi", "adherence_hi", "adherence_lo", "keyed_on")},
+                "cutoffs": {k: rc.get(k) for k in ("sigma_hi", "adherence_hi", "adherence_lo",
+                                                   "hard_adherence_hi", "keyed_on")},
                 "verdict_stable": pes.get("verdict_stable"),
                 "prompt_sigma_stdev": pes.get("prompt_sigma_stdev"),
                 "instruction_adherence_stdev": pes.get("instruction_adherence_stdev"),

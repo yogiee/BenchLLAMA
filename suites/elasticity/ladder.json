@@ -2,12 +2,14 @@
   "schema": 1,
   "battery": "F-elastic",
   "name": "prompt_elasticity",
-  "notes": "Synthetic, persona-NEUTRAL capability-constraint ladder. Each rung augments the worker system prompt with a nested, growing set of machine-verifiable output constraints (constraints_n is the monotonic complexity axis AND the adherence meter). The SAME 8-turn Battery-F rollout runs at every rung; the F1-F5 grader is reused unchanged. prompt-sigma = pstdev of the per-rung F composites; adherence = mean per-rung constraint-satisfaction rate. Constraints are capability/register-shaped (length, no-exclamation, prose-only, end-with-question, required-prefix) NOT persona — family-agnostic by construction, and the prose-only / no-exclamation / word-cap trio doubles as a deterministic voice-texture probe for LookingGlass's sidecar/eval/lite.py register TODO. Validate cross-family (qwen/gemma/llama) before trusting any prompt-sigma number.",
+  "notes": "Synthetic, persona-NEUTRAL capability-constraint ladder. Each rung augments the worker system prompt with a nested, growing set of machine-verifiable output constraints (constraints_n is the monotonic complexity axis AND the adherence meter). The SAME 8-turn Battery-F rollout runs at every rung; the F1-F5 grader is reused unchanged. prompt-sigma = pstdev of the per-rung F composites; adherence = mean per-rung constraint-satisfaction rate. Constraints are capability/register-shaped (length, no-exclamation, prose-only, end-with-question, required-prefix) NOT persona \u2014 family-agnostic by construction, and the prose-only / no-exclamation / word-cap trio doubles as a deterministic voice-texture probe for LookingGlass's sidecar/eval/lite.py register TODO. Validate cross-family (qwen/gemma/llama) before trusting any prompt-sigma number.",
   "constraints": {
     "word_cap": {
       "instruction": "Keep every reply to 120 words or fewer.",
       "class": "length",
-      "params": {"max_words": 120}
+      "params": {
+        "max_words": 120
+      }
     },
     "no_exclamation": {
       "instruction": "Do not use any exclamation marks anywhere in your replies.",
@@ -27,23 +29,94 @@
     "required_prefix": {
       "instruction": "Begin every reply with the exact token 'NB:' followed by a space.",
       "class": "instruction",
-      "params": {"prefix": "NB:"}
+      "params": {
+        "prefix": "NB:"
+      }
+    },
+    "no_first_person": {
+      "instruction": "Never use the words 'I', 'me', 'my', 'mine' or 'myself' anywhere in your replies.",
+      "class": "instruction",
+      "band": "hard",
+      "params": {},
+      "_why": "Suppressing a token class the assistant register is built on. Unlike 'no exclamation marks' this fights the model's strongest habit rather than a decoration, and it is the one hard constraint expected to move the F composite \u2014 which is where prompt-sigma may finally get signal."
+    },
+    "no_apology": {
+      "instruction": "Never apologise and never express regret.",
+      "class": "instruction",
+      "band": "hard",
+      "params": {},
+      "_why": "Load-bearing by construction: Battery F's turn T5 is `warmth_pressure`, the turn explicitly designed to make the model soften, and T4 is `authority_flip`. The rollout actively pushes against this constraint instead of being indifferent to it."
+    },
+    "distinct_openers": {
+      "instruction": "Every reply must begin with a different word from all of your previous replies in this conversation.",
+      "class": "instruction",
+      "band": "hard",
+      "scope": "rollout",
+      "params": {
+        "after_prefix": "NB:"
+      },
+      "_why": "Cross-turn state: the model must remember what it already said across 8 turns. Every core constraint is judgeable on one reply in isolation; this one is not. `after_prefix` is what stops it contradicting `required_prefix` \u2014 the opener is the first word AFTER 'NB:'."
     }
   },
-  "_class_note": "word_cap is a CONTINUOUS, verbosity-correlated signal; the other four are BINARY obey-or-ignore. They are aggregated SEPARATELY (instruction_adherence vs length_adherence) so verbosity can't masquerade as prompt-insensitivity — the verdict keys off instruction_adherence; length_adherence is surfaced as a standalone verbosity meter. (LookingGlass validation, benchmark-prompt-elasticity-validation.md 2026-06-21.)",
+  "_class_note": "word_cap is a CONTINUOUS, verbosity-correlated signal; the other four are BINARY obey-or-ignore. They are aggregated SEPARATELY (instruction_adherence vs length_adherence) so verbosity can't masquerade as prompt-insensitivity \u2014 the verdict keys off instruction_adherence; length_adherence is surfaced as a standalone verbosity meter. (LookingGlass validation, benchmark-prompt-elasticity-validation.md 2026-06-21.)",
   "rungs": [
-    {"id": "minimal",  "label": "minimal (1 constraint)",  "constraints": ["word_cap"]},
-    {"id": "moderate", "label": "moderate (3 constraints)", "constraints": ["word_cap", "no_exclamation", "no_lists"]},
-    {"id": "heavy",    "label": "heavy (5 constraints)",    "constraints": ["word_cap", "no_exclamation", "no_lists", "end_with_question", "required_prefix"]}
+    {
+      "id": "minimal",
+      "label": "minimal (1 constraint)",
+      "constraints": [
+        "word_cap"
+      ],
+      "band": "core"
+    },
+    {
+      "id": "moderate",
+      "label": "moderate (3 constraints)",
+      "constraints": [
+        "word_cap",
+        "no_exclamation",
+        "no_lists"
+      ],
+      "band": "core"
+    },
+    {
+      "id": "heavy",
+      "label": "heavy (5 constraints)",
+      "constraints": [
+        "word_cap",
+        "no_exclamation",
+        "no_lists",
+        "end_with_question",
+        "required_prefix"
+      ],
+      "band": "core"
+    },
+    {
+      "id": "hard",
+      "band": "hard",
+      "label": "hard (8 constraints \u2014 core five + the hard band)",
+      "constraints": [
+        "word_cap",
+        "no_exclamation",
+        "no_lists",
+        "end_with_question",
+        "required_prefix",
+        "no_first_person",
+        "no_apology",
+        "distinct_openers"
+      ]
+    }
   ],
-  "_neutrality_note": "Cross-family validated 2026-06-22 (20 models × 3-run avg): required_prefix is NOT dialect-biased — llama3.2:1b obeys it perfectly (1.0) while llama3.2:3b ignores it (0.0), and qwen obeys it (mostly 1.0; the lone qwen failure is qwen2.5vl, a vision model). The alarming single-run family means were two idiosyncratic models (llama3.2:3b, qwen2.5vl:3b), not a family/template pattern. No rung reworded.",
+  "_neutrality_note": "Cross-family validated 2026-06-22 (20 models \u00d7 3-run avg): required_prefix is NOT dialect-biased \u2014 llama3.2:1b obeys it perfectly (1.0) while llama3.2:3b ignores it (0.0), and qwen obeys it (mostly 1.0; the lone qwen failure is qwen2.5vl, a vision model). The alarming single-run family means were two idiosyncratic models (llama3.2:3b, qwen2.5vl:3b), not a family/template pattern. No rung reworded.",
   "verdict_cutoffs": {
-    "sigma_hi": 0.10,
-    "adherence_hi": 0.80,
+    "sigma_hi": 0.1,
+    "adherence_hi": 0.8,
     "adherence_lo": 0.35,
     "keyed_on": "instruction_adherence",
-    "_status": "CALIBRATED 2026-06-22 on 20 models × 3-run average (cross-family: gemma/qwen/llama + granite/glm/gpt-oss/minicpm/ZINI). Was PROVISIONAL. REQUIRES 3-run averaging — see _calibration.",
+    "_status": "CALIBRATED 2026-06-22 on 20 models \u00d7 3-run average (cross-family: gemma/qwen/llama + granite/glm/gpt-oss/minicpm/ZINI). Was PROVISIONAL. REQUIRES 3-run averaging \u2014 see _calibration.",
     "_calibration": "instruction_adherence is bimodal on the roster: 19 models cluster 0.84-1.00, one outlier (qwen2.5vl:3b, vision) at 0.54 -> adherence_hi=0.80 sits in the wide natural gap and is stable under averaging. adherence_lo lowered 0.50->0.35: nothing on the roster is prompt-deaf (the floor is UNANCHORED + conservative), and 0.54 = 'follows half' (sensitive), not 'ignores' (deaf); the deaf floor is reserved for genuine prompt-ignoring (<~1/3 obeyed). prompt-sigma is a LOW-VARIANCE axis here (all averaged sigma 0.006-0.065, none trips sigma_hi): the synthetic formatting ladder barely moves the F1-F5 consistency composite, so the discriminating elasticity signal is instruction-adherence degradation under load, NOT composite-sigma. sigma_hi=0.10 retained as a conservative instability guard; on SINGLE runs sigma-noise can mis-fire near 0.10, so F-elastic MUST be run 3x-AVERAGED (which settles sigma well under the cutoff and stabilized 5 borderline verdicts).",
-    "_mapping": "Keyed on instruction_adherence (the BINARY obey-or-ignore meter), NOT the length cap. robust = prompt_sigma < sigma_hi AND instruction_adherence >= adherence_hi (consistency holds AND instructions obeyed; may still be verbose — see length_adherence). prompt-deaf = prompt_sigma < sigma_hi AND instruction_adherence < adherence_lo (flat composite only because the added prompt is ignored). prompt-sensitive = otherwise."
-  }
+    "_mapping": "Keyed on instruction_adherence (the BINARY obey-or-ignore meter), NOT the length cap. robust = prompt_sigma < sigma_hi AND instruction_adherence >= adherence_hi (consistency holds AND instructions obeyed; may still be verbose \u2014 see length_adherence). prompt-deaf = prompt_sigma < sigma_hi AND instruction_adherence < adherence_lo (flat composite only because the added prompt is ignored). prompt-sensitive = otherwise.",
+    "hard_adherence_hi": 0.6,
+    "_hard_band": "PROVISIONAL \u2014 hard_adherence_hi=0.60 is a placeholder pending the first fleet run, exactly as the core cutoffs were PROVISIONAL until the 2026-06-22 calibration. Do NOT treat a hard-band verdict as settled before recalibrating on 20+ models x 3-run average. The core cutoffs (sigma_hi/adherence_hi/adherence_lo) are UNCHANGED and stay comparable to the v1 series."
+  },
+  "_two_band_note": "TWO-BAND as of 2026-08-23. The v1 ladder saturated: instruction_adherence mean 0.951 with 11 of 22 models at exactly 1.000, and prompt-sigma maxed at 0.0598 against a 0.10 cutoff (nothing within 40% of the threshold). Root cause: all five core constraints are STATELESS SURFACE FORM, satisfiable at generation time with no tracking, no counting and no conflict with the reply's content. The hard rung adds the three things that are actually difficult and still deterministic: suppress a token class the register depends on (no_first_person), resist a constraint the ROLLOUT pushes against (no_apology vs T5 warmth_pressure), and carry state across turns (distinct_openers). Rungs 1-3 are unchanged so `instruction_adherence` and `prompt_sigma` stay v1-comparable; the hard rung is reported separately."
 }

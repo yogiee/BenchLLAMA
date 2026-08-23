@@ -2281,6 +2281,7 @@ def run_battery_f_elastic(model_name):
         adh       = _elastic.score_rung(rung, ladder, responses)
         per_rung.append({
             "rung": rung["id"], "label": rung.get("label", rung["id"]),
+            "band": rung.get("band", "core"),
             "constraints": rung["constraints"], "constraints_n": len(rung["constraints"]),
             "composite": g["composite"], "run_sigma": None,   # single-pass; populated by Phase-2 averager
             "adherence": adh["adherence"],
@@ -2295,21 +2296,35 @@ def run_battery_f_elastic(model_name):
         print(f"  → rung={rung['id']} n={len(rung['constraints'])} composite={g['composite']} "
               f"instr_adh={adh['instruction_adherence']} len_adh={adh['length_adherence']}", flush=True)
 
-    _avg = lambda key: (round(statistics.mean(v), 4)
-                        if (v := [r[key] for r in per_rung if r[key] is not None]) else None)
-    prompt_sigma          = round(statistics.pstdev(composites), 4) if len(composites) > 1 else 0.0
-    instruction_adherence = _avg("instruction_adherence")   # verdict driver (binary obedience)
-    length_adherence      = _avg("length_adherence")        # standalone verbosity meter
-    adherence             = _avg("adherence")               # all-constraint mean (legacy reference)
-    cutoffs               = ladder["verdict_cutoffs"]
-    verdict               = _elastic.classify(prompt_sigma, instruction_adherence, cutoffs)
+    # TWO-BAND (2026-08-23). The headline numbers stay scoped to the CORE rungs so they remain
+    # comparable to the v1 series and to the 06-22 calibration; the hard rung is reported beside
+    # them, never folded in. Same split as clean_depth / clean_depth_core in Battery G.
+    core_rungs = [r for r in per_rung if r.get("band", "core") == "core"]
+    hard_rungs = [r for r in per_rung if r.get("band") == "hard"]
+    def _avg_over(rows, key):
+        v = [r[key] for r in rows if r.get(key) is not None]
+        return round(statistics.mean(v), 4) if v else None
+    core_comps = [r["composite"] for r in core_rungs]
 
-    print(f"\n  → prompt_sigma={prompt_sigma}  instruction_adherence={instruction_adherence}  "
+    prompt_sigma          = round(statistics.pstdev(core_comps), 4) if len(core_comps) > 1 else 0.0
+    prompt_sigma_all      = round(statistics.pstdev(composites), 4) if len(composites) > 1 else 0.0
+    instruction_adherence = _avg_over(core_rungs, "instruction_adherence")   # verdict driver (core)
+    hard_adherence        = _avg_over(hard_rungs, "instruction_adherence")   # verdict driver (hard)
+    length_adherence      = _avg_over(core_rungs, "length_adherence")        # standalone verbosity meter
+    adherence             = _avg_over(core_rungs, "adherence")               # all-constraint mean (legacy)
+    cutoffs               = ladder["verdict_cutoffs"]
+    verdict               = _elastic.classify(prompt_sigma, instruction_adherence, cutoffs,
+                                              hard_adherence=hard_adherence)
+
+    print(f"\n  → prompt_sigma={prompt_sigma} (all-rung {prompt_sigma_all})  "
+          f"instruction_adherence={instruction_adherence}  hard_adherence={hard_adherence}  "
           f"length_adherence={length_adherence}  verdict={verdict}", flush=True)
     return {
         "model": model_name, "battery": "F-elastic",
         "summary": {"prompt_sigma": prompt_sigma,
+                    "prompt_sigma_all": prompt_sigma_all,
                     "instruction_adherence": instruction_adherence,
+                    "hard_adherence": hard_adherence,
                     "length_adherence": length_adherence,
                     "adherence": instruction_adherence,   # co-equal alias: the pairing is prompt-σ + instruction-adherence
                     "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung},

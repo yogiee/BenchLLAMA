@@ -32,6 +32,29 @@ HERE = Path(__file__).parent
 
 _LIST_RE = re.compile(r"^\s*([-*•‣◦]|\d+[.)])\s+", re.M)
 
+# ── Hard-band checkers (added 2026-08-23) ─────────────────────────────────────
+# The five core constraints are all STATELESS SURFACE FORM — "no !", "prose only", "end with ?",
+# "start with NB:". A modern instruction-tuned model satisfies those at generation time with no
+# tracking, no counting and no conflict with what it wants to say, so the meter saturated:
+# instruction_adherence mean 0.951 with 11 of 22 models at exactly 1.000 (fleet run 2026-08-22).
+# The hard band attacks the three things that are genuinely difficult and still deterministic:
+#   suppress a token class the register depends on · resist a constraint the ROLLOUT pushes
+#   against · carry state across turns.
+_FIRST_PERSON_RE = re.compile(r"\b(?:i|me|my|mine|myself)\b", re.I)
+#   \bi\b matches the "I" in "I'm"/"I'll" — the apostrophe is a non-word char, so the boundary
+#   holds. That is intended: contractions are first person.
+_APOLOGY_RE = re.compile(r"\b(?:sorry|apolog\w*|regret\w*)\b", re.I)
+
+
+def _opener(text, prefix=None):
+    """First word of a reply, skipping a required prefix so the two constraints compose rather
+    than contradict (every reply starting 'NB:' would otherwise have an identical opener)."""
+    s = (text or "").lstrip()
+    if prefix and s.startswith(prefix):
+        s = s[len(prefix):].lstrip()
+    m = re.search(r"\w+", s)
+    return m.group(0).lower() if m else None
+
 
 def load_ladder():
     return json.load((HERE / "ladder.json").open())
@@ -57,7 +80,30 @@ def check(cid, params, text):
         return bool(s) and s.endswith("?")
     if cid == "required_prefix":
         return t.lstrip().startswith(params.get("prefix", "NB:"))
+    # ── hard band ──
+    if cid == "no_first_person":
+        return _FIRST_PERSON_RE.search(t) is None
+    if cid == "no_apology":
+        return _APOLOGY_RE.search(t) is None
     raise KeyError(f"unknown constraint id: {cid}")
+
+
+def check_rollout(cid, params, responses):
+    """Constraints scored over the WHOLE rollout rather than one reply at a time.
+
+    Returns a per-response bool list so a rollout constraint aggregates identically to a
+    per-reply one (rate = satisfied / total) and needs no special case in score_rung.
+    """
+    if cid == "distinct_openers":
+        prefix, seen, out = params.get("after_prefix"), set(), []
+        for r in responses:
+            w = _opener(r, prefix)
+            ok = bool(w) and w not in seen        # an empty reply has no opener -> cannot satisfy
+            if w:
+                seen.add(w)
+            out.append(ok)
+        return out
+    raise KeyError(f"unknown rollout constraint id: {cid}")
 
 
 def render_constraints(rung, ladder):
@@ -86,7 +132,10 @@ def score_rung(rung, ladder, responses):
     per_constraint, instr, length = {}, [], []
     for c in rung["constraints"]:
         params = defs[c].get("params", {})
-        sat    = [check(c, params, r) for r in responses]
+        # scope "rollout" = judged across the whole conversation (cross-turn state), still
+        # returning one bool per reply so it aggregates exactly like a per-reply constraint.
+        sat    = (check_rollout(c, params, responses) if defs[c].get("scope") == "rollout"
+                  else [check(c, params, r) for r in responses])
         rate   = round((sum(1 for s in sat if s) / len(sat)) if sat else 0.0, 4)
         per_constraint[c] = rate
         (length if defs[c].get("class") == "length" else instr).append(rate)
@@ -97,16 +146,25 @@ def score_rung(rung, ladder, responses):
             "per_constraint": per_constraint}
 
 
-def classify(prompt_sigma, instruction_adherence, cutoffs):
+def classify(prompt_sigma, instruction_adherence, cutoffs, hard_adherence=None):
     """Producer-side categorical verdict from DECLARED cutoffs, keyed on INSTRUCTION adherence
     (binary obey-or-ignore) — NOT the verbosity-correlated length cap. Keeps the disambiguation
-    on the producer so no consumer reads prompt-σ alone and draws the wrong conclusion."""
+    on the producer so no consumer reads prompt-σ alone and draws the wrong conclusion.
+
+    TWO-BAND since 2026-08-23. `robust` now requires the CORE band (the v1 five, unchanged, so the
+    number stays comparable) AND the HARD band. The core band alone had stopped separating —
+    mean 0.951, 11 of 22 models at exactly 1.000 — because all five core constraints are stateless
+    surface form. `hard_adherence=None` (a pre-hard-band result) falls back to core-only scoring so
+    old rows still classify rather than crashing.
+    """
     flat = prompt_sigma < cutoffs["sigma_hi"]
-    if flat and instruction_adherence >= cutoffs["adherence_hi"]:
-        return "robust"
     if flat and instruction_adherence < cutoffs["adherence_lo"]:
-        return "prompt-deaf"
-    return "prompt-sensitive"
+        return "prompt-deaf"                     # ignores even the easy band
+    if not flat or instruction_adherence < cutoffs["adherence_hi"]:
+        return "prompt-sensitive"
+    if hard_adherence is not None and hard_adherence < cutoffs.get("hard_adherence_hi", 0.0):
+        return "prompt-sensitive"                # obeys surface form, breaks under real load
+    return "robust"
 
 
 # ── Deterministic self-test (no model) ────────────────────────────────────────
@@ -131,15 +189,40 @@ if __name__ == "__main__":
     expect(check("required_prefix", {"prefix": "NB:"}, "NB: here we go"), "required_prefix yes")
     expect(not check("required_prefix", {"prefix": "NB:"}, "here we go"), "required_prefix no")
 
-    ladder = load_ladder()
+    # hard band
+    expect(check("no_first_person", {}, "the answer depends on scope."), "no_first_person clean")
+    expect(not check("no_first_person", {}, "I think so."), "no_first_person I")
+    expect(not check("no_first_person", {}, "I'm certain."), "no_first_person contraction")
+    expect(not check("no_first_person", {}, "That works for me."), "no_first_person me")
+    expect(check("no_first_person", {}, "Mining is unrelated."), "no_first_person substring safe")
+    expect(check("no_apology", {}, "That is incorrect."), "no_apology clean")
+    expect(not check("no_apology", {}, "Sorry about that."), "no_apology sorry")
+    expect(not check("no_apology", {}, "Apologies, my error."), "no_apology apologies")
+    expect(not check("no_apology", {}, "We regret the delay."), "no_apology regret")
 
-    # render: heavy rung mentions all 5 instructions
-    block = render_constraints(ladder["rungs"][-1], ladder)
-    for c in ladder["rungs"][-1]["constraints"]:
-        expect(ladder["constraints"][c]["instruction"] in block, f"render missing {c}")
+    # rollout scope: one bool per reply, first repeat onwards fails
+    expect(check_rollout("distinct_openers", {}, ["alpha one", "beta two", "gamma three"])
+           == [True, True, True], "distinct_openers all distinct")
+    expect(check_rollout("distinct_openers", {}, ["alpha one", "alpha two"])
+           == [True, False], "distinct_openers repeat")
+    # composes with required_prefix instead of contradicting it
+    expect(check_rollout("distinct_openers", {"after_prefix": "NB:"}, ["NB: alpha", "NB: beta"])
+           == [True, True], "distinct_openers skips prefix")
+    expect(check_rollout("distinct_openers", {"after_prefix": "NB:"}, ["NB: alpha", "NB: alpha"])
+           == [True, False], "distinct_openers sees past prefix")
+    expect(check_rollout("distinct_openers", {}, ["", "x"]) == [False, True], "distinct_openers empty")
+
+    ladder = load_ladder()
+    by_id  = {r["id"]: r for r in ladder["rungs"]}
+
+    # render: every rung's block names every one of its instructions
+    for rung in ladder["rungs"]:
+        block = render_constraints(rung, ladder)
+        for c in rung["constraints"]:
+            expect(ladder["constraints"][c]["instruction"] in block, f"render missing {c} in {rung['id']}")
 
     # score_rung: a perfectly-obedient heavy-rung set → both class adherences 1.0
-    heavy = ladder["rungs"][-1]
+    heavy = by_id["heavy"]
     good  = ["NB: short prose answer ending in a query?"] * 8
     s_good = score_rung(heavy, ladder, good)
     expect(s_good["adherence"] == 1.0, f"score_rung obedient → {s_good['adherence']}")
@@ -153,8 +236,33 @@ if __name__ == "__main__":
     expect(s_verb["length_adherence"] == 0.0, f"verbose length should crater → {s_verb['length_adherence']}")
 
     # minimal rung is length-only → instruction_adherence is None there
-    s_min = score_rung(ladder["rungs"][0], ladder, good)
+    s_min = score_rung(by_id["minimal"], ladder, good)
     expect(s_min["instruction_adherence"] is None, "minimal rung has no instruction class")
+
+    # ── hard rung ──
+    hard = by_id["hard"]
+    # the core-rung fixture is fully obedient on the core five and must NOT score 1.0 here:
+    # identical openers every turn, which is exactly the state-tracking the band tests for.
+    s_hard_core_only = score_rung(hard, ladder, good)
+    expect(s_hard_core_only["instruction_adherence"] < 1.0,
+           f"hard rung must bite the core-obedient fixture → {s_hard_core_only['instruction_adherence']}")
+    # a fully-obedient hard-rung set: distinct openers, no first person, no apology
+    openers = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"]
+    s_hard = score_rung(hard, ladder, [f"NB: {w} covers the point, does that help?" for w in openers])
+    expect(s_hard["instruction_adherence"] == 1.0, f"hard obedient instr → {s_hard['instruction_adherence']}")
+    expect(s_hard["per_constraint"]["distinct_openers"] == 1.0, "hard obedient openers")
+    # and the failure mode the band exists to catch: perfect surface form, first person throughout
+    s_fp = score_rung(hard, ladder, [f"NB: {w}, I think that helps, right?" for w in openers])
+    expect(s_fp["per_constraint"]["required_prefix"] == 1.0, "surface form still perfect")
+    expect(s_fp["per_constraint"]["no_first_person"] == 0.0, "hard band catches first person")
+    expect(s_fp["instruction_adherence"] < 1.0, "hard instr drops on first person")
+
+    # classify: the hard band can demote a core-perfect model
+    cut = ladder["verdict_cutoffs"]
+    expect(classify(0.01, 1.0, cut, hard_adherence=1.0) == "robust", "classify robust both bands")
+    expect(classify(0.01, 1.0, cut, hard_adherence=0.10) == "prompt-sensitive", "classify hard demotes")
+    expect(classify(0.01, 1.0, cut) == "robust", "classify back-compat (no hard band)")
+    expect(classify(0.01, 0.20, cut, hard_adherence=1.0) == "prompt-deaf", "classify deaf on core")
     expect(s_min["length_adherence"] is not None, "minimal rung has length class")
 
     # verdict regions (keyed on instruction_adherence)

@@ -238,16 +238,28 @@ def _average_f_elastic(run_files):
             length = [v for c, v in pc.items() if klass(c) == "length"]
             composites.append(round(statistics.mean(comp_runs), 4))
             per_rung.append({"rung": rid, "constraints_n": len(cons),
+                             "band": prs[0].get("band", "core"),
                              "composite": composites[-1], "run_sigma": pstd(comp_runs),
                              "instruction_adherence": mean(instr), "length_adherence": mean(length),
                              "per_constraint": pc})
-        prompt_sigma = pstd(composites)
-        iadh = mean([r["instruction_adherence"] for r in per_rung if r["instruction_adherence"] is not None])
-        ladh = mean([r["length_adherence"] for r in per_rung if r["length_adherence"] is not None])
-        verdict = elastic.classify(prompt_sigma, iadh, cutoffs)
+        # TWO-BAND (2026-08-23): the headline stays scoped to the CORE rungs so the averaged
+        # numbers remain comparable to the v1 series and the 06-22 calibration; the hard rung is
+        # averaged the same way but reported separately and fed to classify() as its own gate.
+        core = [r for r in per_rung if r.get("band", "core") == "core"]
+        hard = [r for r in per_rung if r.get("band") == "hard"]
+        core_comps = [r["composite"] for r in core]
+        _m = lambda rows, k: mean([r[k] for r in rows if r.get(k) is not None])
+        prompt_sigma = pstd(core_comps)
+        iadh = _m(core, "instruction_adherence")
+        hadh = _m(hard, "instruction_adherence")
+        ladh = _m(core, "length_adherence")
+        verdict = elastic.classify(prompt_sigma, iadh, cutoffs, hard_adherence=hadh)
         run_verdicts = [rec["summary"]["verdict"] for rec in recs]
         out.append({"model": name, "battery": "F-elastic", "runs": len(recs), "summary": {
             "prompt_sigma": prompt_sigma, "instruction_adherence": iadh, "length_adherence": ladh,
+            "prompt_sigma_all": pstd(composites), "hard_adherence": hadh,
+            "hard_adherence_stdev": pstd([rec["summary"]["hard_adherence"] for rec in recs
+                                          if rec["summary"].get("hard_adherence") is not None]),
             "adherence": iadh, "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung,
             "n_runs": len(recs),
             "prompt_sigma_stdev": pstd([rec["summary"]["prompt_sigma"] for rec in recs]),
