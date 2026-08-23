@@ -174,10 +174,18 @@ def build():
             cs = c["summary"]
             comp = cs.get("composite")
             disk = m.get("disk_gb")
+            # Hysteresis made legible. `coder_eligible` answers "does it EARN the tag now?";
+            # the tag in extended_roles also survives on the retain band, so the two disagree for
+            # any retained model and a consumer reading the JSON cannot tell that from a stale
+            # tag. coder_status names which case it is.
+            _tag = "coder" in (entry.get("extended_roles") or [])
             m["coding"] = {
                 "composite": comp,
                 "category_means": cs.get("category_means", {}),
                 "coder_eligible": cs.get("coder_eligible"),
+                "coder_status": ("earned" if cs.get("coder_eligible")
+                                 else ("retained" if _tag else "none")),
+                "gate": cs.get("threshold"),
                 "composite_stdev": cs.get("composite_stdev", 0.0),   # consistency (σ over runs)
                 "composite_spread": cs.get("composite_spread", 0.0),
                 "runs": cs.get("n_runs", 1),
@@ -311,6 +319,24 @@ def build():
             return None
         return st["reasoning"] + st["instr"] + (1 if st["tool"] else 0)
 
+    def coder_key(m):
+        """Coders rank on E-hard first, composite as the tiebreak.
+
+        The full composite stopped ordering anything useful: E-core is spent (E1 mean 0.965,
+        E9 0.989, both a wall of 1.00 down the table) while E-hard spans 1.000 -> 0.000. Sorting
+        on the composite put `qwen2.5:7b` (E-hard 0.300) above `ornith:9b` (0.519) and
+        `gpt-oss:120b-cloud` (E-hard 0.167, every core test 1.00) at #12. Since 2026-08-22 E-hard
+        also gates the `coder` tag, so the gate and the ranking now read the same signal — the
+        Battery A / routers fix applied one layer up. A model with no E-hard data (pre-2026-07-02
+        row) sorts below every model that has some rather than dropping out of the list.
+        """
+        c = m.get("coding") or {}
+        comp = c.get("composite")
+        if comp is None:
+            return None
+        hard = (c.get("category_means") or {}).get("E-hard")
+        return (0, 0.0, comp) if hard is None else (1, hard, comp)
+
     def vis_ocr(m):
         return (m.get("vision") or {}).get("dimensions", {}).get("ocr")
 
@@ -332,7 +358,7 @@ def build():
     rankings = {
         "routers": ranked(routers, router_key),
         "workers": ranked(workers, worker_quality),
-        "coders": ranked(completion, lambda m: (m.get("coding") or {}).get("composite")),
+        "coders": ranked(completion, coder_key),
         "vision": ranked(has_vis, lambda m: (m.get("vision") or {}).get("composite")),
         # fast-OCR is speed-ranked → require a real tps (excludes cloud / un-timed models)
         "vision_fast_ocr": ranked(has_vis, lambda m: ((vis_ocr(m), m["tps"])

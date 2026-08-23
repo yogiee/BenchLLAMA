@@ -161,13 +161,29 @@ E_WEIGHTS = {"E1": 0.12, "E2": 0.22, "E3": 0.18, "E5": 0.18, "E7": 0.15, "E9": 0
 # `coder` overlay thresholds. HYSTERESIS: a model EARNS `coder` at composite ≥ MIN
 # (+ the gates below); once tagged it's RETAINED down to BAND, and only DROPPED below
 # BAND. The band absorbs run-to-run wobble near the line so the tag doesn't flap.
-# NOTE (2026-07-02): the gate now reads the FULL composite (incl the 4-task E-hard band),
-# not E-core — so ~5 weak "coders" that aced E-core but scored ~0 on the hard tier lose
-# the tag. MIN=0.70 was calibrated on E-core (2026-06-14); RE-VALIDATE it against full-
-# composite numbers after the next full run (16/17 cleared the old E-core gate).
+#
+# RE-VALIDATED 2026-08-22 (the open item from 07-02). The composite bar alone had stopped
+# selecting: 19 of 22 models cleared 0.70 and hysteresis left **20 of 22 holding `coder`** —
+# a 3B router (granite4.1:3b 0.891) and a 1-bit quant (bonsai-27b 0.902) among them. The
+# cause is weighting, not the bar. E-core is spent (E1 mean 0.965 / 17-of-22 perfect, E9
+# 0.989 / 14-of-22) while **E-hard is the healthiest discriminator in the harness** — mean
+# 0.483, median 0.453, spanning 1.000 → 0.000 with only 2 models perfect. But E-hard is
+# 0.18/1.18 = 15% of the composite, so `qwen2.5vl:3b` solved **4%** of the hard band
+# (E-hard 0.042) and still scored 0.782 → tagged `coder`. Raising the composite bar cannot
+# fix that: at 0.85 it still admits gpt-oss:120b-cloud (E-hard 0.167).
+#
+# Fix = an explicit E-hard FLOOR, structurally identical to the E1/E2 sub-gates that were
+# already here. "Earn at ≥ 0.50" reads as *solves at least half the hard tasks*; the 0.40
+# retain band is the same wobble absorber as the composite band. Composite MIN/BAND are
+# deliberately UNCHANGED — with a hard floor they mostly stop binding, but they still guard
+# the model that somehow aces E-hard and cannot do the basics.
+# Effect: 20 tagged → 10 earning + 3 retained. Scores do not move, only the tag, so this is
+# NOT a BATTERY_REVISION bump — re-apply offline with `aptitude.py --battery E --regate`.
 E_CODER_COMPOSITE_MIN  = 0.70  # earn the tag
 E_CODER_COMPOSITE_BAND = 0.65  # retain a tagged model down to here; drop below it
 E_CODER_GENERATE_MIN   = 0.50  # E1 mean — must be able to write, not just pattern-match
+E_CODER_HARD_MIN       = 0.50  # E-hard mean — must solve at least half the discriminator band
+E_CODER_HARD_BAND      = 0.40  # retain a tagged model down to here
 #   plus: debug_fix (E2 mean) must be > 0 — must be able to repair, not just generate
 
 # Conversational-consistency toolkit (suites/consistency) — Battery F.
@@ -1878,18 +1894,22 @@ def run_battery_e(model_name):
     composite = round(sum(cat_mean[c] * w for c, w in present.items()) / wsum, 4)
     gen_basic = cat_mean.get("E1", 0.0)
     debug_fix = cat_mean.get("E2", 0.0)
+    hard_band = cat_mean.get("E-hard", 0.0)
     coder_eligible = (composite >= E_CODER_COMPOSITE_MIN and debug_fix > 0
-                      and gen_basic >= E_CODER_GENERATE_MIN)
+                      and gen_basic >= E_CODER_GENERATE_MIN
+                      and hard_band >= E_CODER_HARD_MIN)
 
     result["summary"] = {
         "category_means": cat_mean,
         "composite":      composite,
         "generate_basic": gen_basic,
         "debug_fix":      debug_fix,
+        "hard_band":      hard_band,
         "coder_eligible": coder_eligible,
         "threshold": {"composite_min": E_CODER_COMPOSITE_MIN,
                       "composite_band": E_CODER_COMPOSITE_BAND,
-                      "generate_min": E_CODER_GENERATE_MIN, "debug_fix_gt": 0},
+                      "generate_min": E_CODER_GENERATE_MIN, "debug_fix_gt": 0,
+                      "hard_min": E_CODER_HARD_MIN, "hard_band": E_CODER_HARD_BAND},
     }
     print(f"\n  → composite={composite}  means={cat_mean}  "
           f"coder_eligible={coder_eligible}", flush=True)
@@ -1899,10 +1919,12 @@ def run_battery_e(model_name):
 def apply_coder_overlay(results, registry_path):
     """Reconcile the `coder` extended role in models.json with HYSTERESIS.
 
-    EARN at composite ≥ E_CODER_COMPOSITE_MIN (+ E1 ≥ generate_min + E2 > 0);
-    once tagged, RETAIN down to E_CODER_COMPOSITE_BAND (absorbs MLX run-to-run
-    wobble); DROP below the band. The model's primary role is never touched — the
-    overlay only stacks/removes `coder` on the lane."""
+    EARN at composite ≥ E_CODER_COMPOSITE_MIN AND E-hard ≥ E_CODER_HARD_MIN
+    (+ E1 ≥ generate_min + E2 > 0); once tagged, RETAIN while BOTH stay within their
+    bands (absorbs MLX run-to-run wobble); DROP as soon as EITHER falls below. The
+    E-hard floor is what makes the tag selective — see the threshold block above.
+    The model's primary role is never touched — the overlay only stacks/removes
+    `coder` on the lane."""
     try:
         models = sort_registry(json.load(registry_path.open()))   # run order: env BENCH_SORT (default size)
     except Exception as e:
@@ -1919,22 +1941,132 @@ def apply_coder_overlay(results, registry_path):
             continue
         roles = entry.setdefault("extended_roles", [])
         comp = s.get("composite", 0.0) or 0.0
+        hard = s.get("hard_band", (s.get("category_means") or {}).get("E-hard", 0.0)) or 0.0
         tagged = "coder" in roles
-        if s.get("coder_eligible"):                          # ≥ MIN + gates → earn
+        in_band = comp >= E_CODER_COMPOSITE_BAND and hard >= E_CODER_HARD_BAND
+        if s.get("coder_eligible"):                          # ≥ MIN on both + gates → earn
             if not tagged:
                 roles.append("coder")
                 changed = True
-                print(f"  ★ {name} earned `coder` (composite {comp})", flush=True)
-        elif tagged and comp >= E_CODER_COMPOSITE_BAND:      # in band → retain
-            print(f"  ~ {name} retained in coder band (composite {comp})", flush=True)
-        elif tagged:                                         # below band → drop
+                print(f"  ★ {name} earned `coder` (composite {comp}, E-hard {hard})", flush=True)
+        elif tagged and in_band:                             # within BOTH bands → retain
+            print(f"  ~ {name} retained in coder band (composite {comp}, E-hard {hard})", flush=True)
+        elif tagged:                                         # either band breached → drop
             roles.remove("coder")
             changed = True
-            print(f"  ⊘ {name} dropped `coder` (composite {comp} < band "
-                  f"{E_CODER_COMPOSITE_BAND})", flush=True)
+            why = (f"composite {comp} < {E_CODER_COMPOSITE_BAND}"
+                   if comp < E_CODER_COMPOSITE_BAND else
+                   f"E-hard {hard} < {E_CODER_HARD_BAND}")
+            print(f"  ⊘ {name} dropped `coder` ({why})", flush=True)
     if changed:
         registry_path.write_text(json.dumps(models, indent=2))
         print("  models.json `coder` tags reconciled", flush=True)
+
+
+def regate_coder(dry_run=False):
+    """Re-apply the `coder` overlay from STORED Battery E results — no model calls.
+
+    A gate threshold is policy, not test content: the per-category means are already on
+    disk and a re-run would reproduce them (modulo noise) at ~1.5h for 22 models. So a
+    gate re-tune re-derives `coder_eligible` from the persisted `category_means` and
+    reconciles models.json, exactly as `longctx.py --rescore` does for Battery G.
+
+    Deliberately NOT a BATTERY_REVISION bump: no score moves, only the tag.
+
+    Reads each model's LATEST E row (results_db.latest), so a targeted re-run of one
+    model does not strip the rest of the fleet's tags.
+
+    ⚠ Scoped to the CURRENT registry. `results_db.latest()` returns every model ever
+    scored — 70 rows against a 22-model registry here, most of them dropped long ago
+    (Rule #17's fossil corollary). ⚠ A row with NO `E-hard` key predates the band
+    (added 2026-07-02); that is MISSING data, not a zero, so such a model is reported
+    and left untouched rather than silently dropped for "failing" a test it never ran.
+    """
+    import results_db
+    latest = results_db.latest("E")
+    if not latest:
+        print("  regate: no Battery E rows in the DB — nothing to do", flush=True)
+        return
+
+    reg = json.load((REPO / "models.json").open())
+    registry = {m["name"] for m in reg}
+    tagged_before = {m["name"] for m in reg if "coder" in (m.get("extended_roles") or [])}
+
+    results, rows, ungradeable = [], [], []
+    for name, rec in latest.items():
+        if name not in registry:                 # fossil — not in the registry any more
+            continue
+        s  = dict(rec.get("summary") or {})
+        cm = s.get("category_means") or {}
+        if not cm:
+            continue
+        comp = s.get("composite", 0.0) or 0.0
+        gen, dbg = cm.get("E1", 0.0), cm.get("E2", 0.0)
+        hard = cm.get("E-hard")                  # None = pre-two-band row, NOT a zero
+        if hard is None:
+            ungradeable.append((name, comp))
+            continue
+        s["hard_band"] = hard
+        s["coder_eligible"] = (comp >= E_CODER_COMPOSITE_MIN and dbg > 0
+                               and gen >= E_CODER_GENERATE_MIN
+                               and hard >= E_CODER_HARD_MIN)
+        results.append({"model": name, "summary": s})
+        rows.append((comp, hard, name, s["coder_eligible"]))
+
+    rows.sort(reverse=True)
+    print(f"Battery E re-gate — composite ≥ {E_CODER_COMPOSITE_MIN} (band {E_CODER_COMPOSITE_BAND}) "
+          f"AND E-hard ≥ {E_CODER_HARD_MIN} (band {E_CODER_HARD_BAND})\n", flush=True)
+    print(f"  {'model':<44}{'comp':>7}{'E-hard':>8}  {'was':<5}{'now':<9}", flush=True)
+    for comp, hard, name, elig in rows:
+        was = "coder" if name in tagged_before else "—"
+        now = ("earn" if elig else
+               ("retain" if (name in tagged_before and comp >= E_CODER_COMPOSITE_BAND
+                             and hard >= E_CODER_HARD_BAND) else "drop"))
+        mark = "  ⊘" if (name in tagged_before and now == "drop") else ""
+        print(f"  {name[:43]:<44}{comp:>7.3f}{hard:>8.3f}  {was:<5}{now:<9}{mark}", flush=True)
+
+    if ungradeable:
+        print("\n  ⚠ no E-hard data (pre-2026-07-02 row) — tag left as-is, re-run Battery E:", flush=True)
+        for name, comp in sorted(ungradeable):
+            print(f"    {name} (composite {comp})", flush=True)
+
+    if dry_run:
+        print("\n  --dry-run: models.json untouched.", flush=True)
+        return
+    print("", flush=True)
+
+    # Write the recomputed verdict back onto each model's OWN latest row (original run_id /
+    # created_at preserved — re-stamping under today's run would strip provenance). Without
+    # this, export.py keeps publishing the stale `coder_eligible` straight out of the DB and
+    # contradicts the models.json tag it just helped set.
+    import sqlite3
+    con = sqlite3.connect(results_db.DB_PATH)
+    n_db = 0
+    with con:
+        for r in results:
+            row = con.execute("SELECT run_id, metrics FROM results WHERE model=? AND battery='E' "
+                              "ORDER BY created_at DESC LIMIT 1", (r["model"],)).fetchone()
+            if not row:
+                continue
+            rec = json.loads(row[1])
+            rec.setdefault("summary", {}).update({
+                "hard_band":      r["summary"]["hard_band"],
+                "coder_eligible": r["summary"]["coder_eligible"],
+            })
+            rec["summary"].setdefault("threshold", {}).update({
+                "composite_min": E_CODER_COMPOSITE_MIN, "composite_band": E_CODER_COMPOSITE_BAND,
+                "generate_min": E_CODER_GENERATE_MIN, "debug_fix_gt": 0,
+                "hard_min": E_CODER_HARD_MIN, "hard_band": E_CODER_HARD_BAND})
+            con.execute("UPDATE results SET metrics=? WHERE run_id=? AND model=? AND battery='E'",
+                        (json.dumps(rec), row[0], r["model"]))
+            n_db += 1
+    con.close()
+    print(f"  → re-stamped {n_db} DB row(s) with the new verdict (run_id preserved)", flush=True)
+
+    apply_coder_overlay(results, REPO / "models.json")
+    after = json.load((REPO / "models.json").open())
+    n = sum(1 for m in after if "coder" in (m.get("extended_roles") or []))
+    print(f"  → `coder` roster: {len(tagged_before)} → {n}", flush=True)
 
 
 def write_battery_e_summary(results, out_md: Path, fast_mode=False):
@@ -1947,11 +2079,14 @@ def write_battery_e_summary(results, out_md: Path, fast_mode=False):
         "E5 tests `.18` · E7 constraints `.15` · E9 markup `.15` · E-hard `.18` (4-task "
         "discriminator band; also gates `coder`).",
         f"`coder` overlay (hysteresis): earn ✓ at composite ≥ {E_CODER_COMPOSITE_MIN} "
-        f"(+ generate ≥ {E_CODER_GENERATE_MIN}, debug > 0); retained ~ down to "
-        f"{E_CODER_COMPOSITE_BAND}; dropped below.",
+        f"**AND E-hard ≥ {E_CODER_HARD_MIN}** (+ generate ≥ {E_CODER_GENERATE_MIN}, debug > 0); "
+        f"retained ~ while composite ≥ {E_CODER_COMPOSITE_BAND} and E-hard ≥ {E_CODER_HARD_BAND}; "
+        "dropped as soon as either breaches. **The E-hard floor was added 2026-08-22** — the "
+        "composite bar alone left 20 of 22 models tagged, including one that solved 4% of the "
+        "hard band. E-core is spent; E-hard is the discriminator, so read that column.",
         "", "---", "", "## Overview", "",
-        "| Model | E1 gen | E2 debug | E3 multi-lang | E5 tests | E7 constr | E9 markup | Composite | coder |",
-        "|-------|--------|----------|---------------|----------|-----------|-----------|-----------|-------|",
+        "| Model | E1 gen | E2 debug | E3 multi-lang | E5 tests | E7 constr | E9 markup | **E-hard** | Composite | coder |",
+        "|-------|--------|----------|---------------|----------|-----------|-----------|-----------|-----------|-------|",
     ]
     ranked = sorted(results, key=lambda r: r.get("summary", {}).get("composite", 0), reverse=True)
     for r in ranked:
@@ -1960,9 +2095,11 @@ def write_battery_e_summary(results, out_md: Path, fast_mode=False):
         def g(c):
             return f"{cm[c]:.2f}" if c in cm else "—"
         comp = s.get("composite", 0)
-        coder = "✓" if s.get("coder_eligible") else ("~" if comp >= E_CODER_COMPOSITE_BAND else "·")
+        hard = cm.get("E-hard", 0.0)
+        coder = ("✓" if s.get("coder_eligible")
+                 else ("~" if comp >= E_CODER_COMPOSITE_BAND and hard >= E_CODER_HARD_BAND else "·"))
         lines.append(f"| `{r['model']}` | {g('E1')} | {g('E2')} | {g('E3')} | {g('E5')} | {g('E7')} | "
-                     f"{g('E9')} | **{comp:.3f}** | {coder} |")
+                     f"{g('E9')} | **{g('E-hard')}** | **{comp:.3f}** | {coder} |")
     lines.append("")
 
     # E3 per-language breakdown (JS / SQL / PHP). A dash = no scored problems
@@ -2257,6 +2394,10 @@ def write_battery_f_summary(results, out_md: Path, fast_mode=False):
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if _flag("--regate"):        # gate-policy change — re-apply from stored results, no model calls
+        regate_coder(dry_run=_flag("--dry-run"))
+        sys.exit(0)
+
     TODAY  = date.today().isoformat()
     suffix = "_fast" if fast_mode else ""
 
