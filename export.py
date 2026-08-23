@@ -89,11 +89,16 @@ def _standard_summary(rec):
         return bool(t.get(name, {}).get("correct"))
     reasoning = sum(ok(x) for x in ("bat_ball", "two_cities", "cylinder", "farm_heads"))
     instr = sum(ok(x) for x in ("format_3", "no_eiffel"))
-    jpeg = t.get("jpeg_formats", {}).get("signals")
-    expense = (t.get("expense_split") or {}).get("check_detail", {}).get("score")
+    # ⚠ Both signal-counted probes live under `check_detail`, NOT at the top level. `jpeg` read
+    # `t["jpeg_formats"]["signals"]` and so exported as ABSENT for every model since it was added —
+    # the same silent-hole family as Battery A never reaching export (Rule #17).
+    jpeg = ((t.get("jpeg_formats") or {}).get("check_detail") or {}).get("score")
+    expense = ((t.get("expense_split") or {}).get("check_detail") or {}).get("score")
     return {"reasoning": reasoning, "instr": instr, "tool": ok("calculate"),
-            **({"jpeg": jpeg} if jpeg is not None else {}),
-            **({"expense_split": expense} if expense is not None else {})}
+            # ⚠ jpeg has a documented +/-2 noise floor (same model, same prompt, 4 contexts ->
+            # 7/6/5/6). Published for provenance; NEVER read a delta and never rank on it.
+            **({"jpeg": jpeg, "jpeg_max": 7} if jpeg is not None else {}),
+            **({"expense_split": expense, "expense_split_max": 7} if expense is not None else {})}
 
 
 def _routing_summary(rec):
@@ -314,10 +319,32 @@ def build():
         return (lc.get("clean_depth") or 0, lc.get("composite"))
 
     def worker_quality(m):
+        """Workers rank on the capability TIER first, then on signals that actually discriminate.
+
+        The tier (reasoning/4 + instr/2 + tool) is unchanged — it is what `worker` means and what
+        master.md's Tier 1/2 sections are built on. What changed on 2026-08-22 is everything after
+        it: the tier ALONE was the whole key, and **10 of 16 workers tie at the maximum 7/7**, so
+        the published order inside that block fell through to `models.json` position (a disk-size
+        sort) and put a 1-bit 23 t/s model above `gemma4:26b-mlx`. Meanwhile B, C, D, E, F and H
+        all ran, all reached the export as sub-blocks, and none of them reached the key.
+
+        Tiebreaks, in order:
+          `expense_split` (0-7) — the only standard-suite reasoning probe that still spreads
+            (4 of 22 pass it outright; bat_ball and format_3 are 22/22).
+          Battery F composite — continuous and 3-run averaged, so the order is always strict and
+            never falls back to file position. It is already declared the workers sub-metric.
+
+        expense_split is a signal-counted probe like `jpeg`, which has a +/-2 noise floor, so it is
+        deliberately NOT primary: it can only reorder WITHIN a capability tier, never set one, and
+        F backstops it.
+        """
         st = m.get("standard")
         if not st:
             return None
-        return st["reasoning"] + st["instr"] + (1 if st["tool"] else 0)
+        tier = st["reasoning"] + st["instr"] + (1 if st["tool"] else 0)
+        return (tier,
+                st.get("expense_split") or 0,
+                (m.get("consistency") or {}).get("composite") or 0.0)
 
     def coder_key(m):
         """Coders rank on E-hard first, composite as the tiebreak.
