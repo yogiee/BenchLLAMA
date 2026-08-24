@@ -28,7 +28,7 @@ import requests
 from pathlib import Path
 from datetime import date
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
-                         post_with_budget_retry)
+                         post_with_budget_retry, F_ELASTIC_CUTOFFS)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -1968,6 +1968,84 @@ def apply_coder_overlay(results, registry_path):
         print("  models.json `coder` tags reconciled", flush=True)
 
 
+def regate_f_elastic(dry_run=False):
+    """Re-derive F-elastic `hard_adherence` + `verdict` from STORED per-constraint hits — no models.
+
+    A cutoff move, or a change to WHICH constraints the hard meter covers, is grading policy, not
+    test content: the rollouts, the replies and the per-constraint satisfaction rates are already on
+    disk and a re-run would reproduce them. Re-measuring 19 models for 1h44m to move a threshold
+    would only re-roll the rollouts and burn a thermal cycle. This is F-elastic's counterpart to
+    `longctx.py --rescore` and `aptitude.py --battery E --regate`; its absence was what made the
+    08-24 calibration expensive enough to defer.
+
+    ⚠ Rows are UPDATEd on their ORIGINAL (run_id, created_at). A regate must never re-stamp a score
+    under today's run — that strips the provenance resume reads (the 2026-07-11 no-provenance bug).
+
+    ⚠ Only rows carrying `per_rung[].per_constraint` can be re-derived. Pre-two-band rows have no
+    hard rung at all; they are SKIPPED, not scored as zero — a missing band is missing data.
+    """
+    import sqlite3, results_db
+    ladder  = _elastic.load_ladder()
+    cutoffs = dict(F_ELASTIC_CUTOFFS)
+    hard_ids = _elastic.hard_band_ids(ladder)
+    con = sqlite3.connect(results_db.DB_PATH)
+    rows = con.execute("SELECT run_id, model, metrics, composite, created_at FROM results "
+                       "WHERE battery='F-elastic' ORDER BY created_at").fetchall()
+
+    changes, skipped = [], 0
+    for run_id, model, metrics, _old_comp, created in rows:
+        try:
+            rec = json.loads(metrics)
+        except Exception:
+            skipped += 1; continue
+        summ = rec.get("summary") or {}
+        per_rung = summ.get("per_rung") or []
+        hard_rungs = [r for r in per_rung if r.get("band") == "hard" and r.get("per_constraint")]
+        if not hard_rungs:
+            skipped += 1; continue                 # pre-two-band row — no hard band to re-derive
+        vals = [v for v in (_elastic.hard_band_adherence(r, ladder) for r in hard_rungs)
+                if v is not None]
+        if not vals:
+            skipped += 1; continue
+        new_hard = round(statistics.mean(vals), 4)
+        old_hard, old_verdict = summ.get("hard_adherence"), summ.get("verdict")
+        new_verdict = _elastic.classify(summ.get("prompt_sigma"), summ.get("instruction_adherence"),
+                                        cutoffs, hard_adherence=new_hard)
+        summ["hard_adherence"] = new_hard
+        summ["hard_adherence_allbinary"] = old_hard
+        summ["verdict"], summ["cutoffs"] = new_verdict, cutoffs
+        rec["summary"] = summ
+        changes.append((run_id, model, old_hard, new_hard, old_verdict, new_verdict,
+                        json.dumps(rec), results_db.composite_of(rec)))
+
+    moved = [c for c in changes if c[4] != c[5]]
+    print(f"Battery F-elastic regate — hard meter scoped to {hard_ids}, "
+          f"hard_adherence_hi = {cutoffs['hard_adherence_hi']}", flush=True)
+    print(f"  {len(changes)} two-band row(s) re-derived · {skipped} skipped (pre-two-band) · "
+          f"{len(moved)} verdict change(s)\n", flush=True)
+    if changes:
+        print(f"  {'model':<44}{'hard was':>10}{'now':>8}   {'verdict':<18}", flush=True)
+        for run_id, model, ow, nw, ov, nv, *_ in sorted(changes, key=lambda c: -(c[3] or 0)):
+            flag = "  ← CHANGED" if ov != nv else ""
+            print(f"  {model[:43]:<44}{(ow if ow is not None else 0):>10.3f}{nw:>8.3f}   "
+                  f"{(ov or '?') + (' → ' + nv if ov != nv else ''):<18}{flag}", flush=True)
+
+    if dry_run:
+        print("\n  --dry-run: nothing written.", flush=True)
+        con.close()
+        return changes
+
+    with con:
+        for run_id, model, _ow, _nw, _ov, _nv, blob, comp in changes:
+            con.execute("UPDATE results SET metrics=?, composite=? "
+                        "WHERE run_id=? AND model=? AND battery='F-elastic'",
+                        (blob, comp, run_id, model))
+    con.close()
+    print(f"\n  → updated {len(changes)} DB row(s) in place (run_id/created_at preserved)", flush=True)
+    print("  next: python3 export.py", flush=True)
+    return changes
+
+
 def regate_coder(dry_run=False):
     """Re-apply the `coder` overlay from STORED Battery E results — no model calls.
 
@@ -2314,10 +2392,19 @@ def run_battery_f_elastic(model_name):
     prompt_sigma          = round(statistics.pstdev(core_comps), 4) if len(core_comps) > 1 else 0.0
     prompt_sigma_all      = round(statistics.pstdev(composites), 4) if len(composites) > 1 else 0.0
     instruction_adherence = _avg_over(core_rungs, "instruction_adherence")   # verdict driver (core)
-    hard_adherence        = _avg_over(hard_rungs, "instruction_adherence")   # verdict driver (hard)
+    # ⚠ Scoped to the constraints the hard band ADDS (see adherence.hard_band_ids). Averaging the
+    # rung's full binary set instead diluted the 3 discriminators to 3-of-7 with the saturated core
+    # constraints, and the hard band then changed zero verdicts across the 08-24 fleet.
+    hard_vals             = [v for v in (_elastic.hard_band_adherence(r, ladder) for r in hard_rungs)
+                             if v is not None]
+    hard_adherence        = round(statistics.mean(hard_vals), 4) if hard_vals else None
+    # carried for continuity with the 08-23/08-24 series, which published the diluted meter
+    hard_adherence_allbinary = _avg_over(hard_rungs, "instruction_adherence")
     length_adherence      = _avg_over(core_rungs, "length_adherence")        # standalone verbosity meter
     adherence             = _avg_over(core_rungs, "adherence")               # all-constraint mean (legacy)
-    cutoffs               = ladder["verdict_cutoffs"]
+    # Bars come from bench_utils, NOT the hashed ladder — grading policy must move without forcing a
+    # 1h44m re-measure. ladder.json's block is documentation; see F_ELASTIC_CUTOFFS.
+    cutoffs               = dict(F_ELASTIC_CUTOFFS)
     verdict               = _elastic.classify(prompt_sigma, instruction_adherence, cutoffs,
                                               hard_adherence=hard_adherence)
 
@@ -2330,6 +2417,7 @@ def run_battery_f_elastic(model_name):
                     "prompt_sigma_all": prompt_sigma_all,
                     "instruction_adherence": instruction_adherence,
                     "hard_adherence": hard_adherence,
+                    "hard_adherence_allbinary": hard_adherence_allbinary,
                     "length_adherence": length_adherence,
                     "adherence": instruction_adherence,   # co-equal alias: the pairing is prompt-σ + instruction-adherence
                     "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung},
@@ -2415,7 +2503,10 @@ def write_battery_f_summary(results, out_md: Path, fast_mode=False):
 
 if __name__ == "__main__":
     if _flag("--regate"):        # gate-policy change — re-apply from stored results, no model calls
-        regate_coder(dry_run=_flag("--dry-run"))
+        if battery_arg == "F-ELASTIC":
+            regate_f_elastic(dry_run=_flag("--dry-run"))
+        else:
+            regate_coder(dry_run=_flag("--dry-run"))
         sys.exit(0)
 
     TODAY  = date.today().isoformat()

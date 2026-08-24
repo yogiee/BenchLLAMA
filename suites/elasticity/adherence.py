@@ -146,6 +146,43 @@ def score_rung(rung, ladder, responses):
             "per_constraint": per_constraint}
 
 
+def hard_band_ids(ladder):
+    """Constraint ids the HARD rung ADDS over the core rungs, excluding the length class.
+
+    Derived from the ladder rather than hardcoded, so adding a hard constraint later needs no code
+    change. Today this returns ["no_first_person", "no_apology", "distinct_openers"].
+
+    ⚠ This scoping IS the 2026-08-24 fix. `hard_adherence` used to be the mean of every binary
+    constraint on the hard rung — including the four core ones the rung merely carries forward,
+    which are saturated (`no_exclamation` 1.000 field-wide, `no_lists` 0.963). The three real
+    discriminators held 3 of 7, so a model could fail all three and still clear the bar: at the
+    provisional 0.60 cutoff the hard band changed ZERO verdicts across 19 models. Scoping the meter
+    to what the band actually adds is the fix; raising a bar over a diluted meter is not.
+    """
+    defs = ladder["constraints"]
+    core = {c for r in ladder["rungs"] if r.get("band", "core") == "core" for c in r["constraints"]}
+    ids  = []
+    for r in ladder["rungs"]:
+        if r.get("band") != "hard":
+            continue
+        for c in r["constraints"]:
+            if c not in core and defs[c].get("class") != "length" and c not in ids:
+                ids.append(c)
+    return ids
+
+
+def hard_band_adherence(rung_score, ladder):
+    """Mean satisfaction over the hard-band-only constraints of one scored hard rung.
+
+    Returns None when the rung carries none of them (so a core rung, or a pre-hard-band result,
+    degrades to "no hard signal" rather than to a misleading zero).
+    """
+    ids = [c for c in hard_band_ids(ladder) if c in (rung_score.get("per_constraint") or {})]
+    if not ids:
+        return None
+    return round(statistics.mean(rung_score["per_constraint"][c] for c in ids), 4)
+
+
 def classify(prompt_sigma, instruction_adherence, cutoffs, hard_adherence=None):
     """Producer-side categorical verdict from DECLARED cutoffs, keyed on INSTRUCTION adherence
     (binary obey-or-ignore) — NOT the verbosity-correlated length cap. Keeps the disambiguation
@@ -256,6 +293,30 @@ if __name__ == "__main__":
     expect(s_fp["per_constraint"]["required_prefix"] == 1.0, "surface form still perfect")
     expect(s_fp["per_constraint"]["no_first_person"] == 0.0, "hard band catches first person")
     expect(s_fp["instruction_adherence"] < 1.0, "hard instr drops on first person")
+
+    # ── hard-band scoping (2026-08-24) ───────────────────────────────────────
+    # The meter must cover ONLY what the hard rung adds. When it averaged the whole binary set the
+    # 3 discriminators were 3-of-7 against 4 saturated core constraints, and the band moved zero
+    # verdicts across a 19-model fleet.
+    _hb = hard_band_ids(ladder)
+    expect(_hb == ["no_first_person", "no_apology", "distinct_openers"],
+           f"hard_band_ids → {_hb}")
+    expect("word_cap" not in _hb, "hard band must exclude the length class")
+    expect(not any(c in _hb for c in ("no_exclamation", "no_lists", "end_with_question",
+                                      "required_prefix")), "hard band must exclude core constraints")
+    # a model perfect on core and dead on the hard three must read ~0, not ~0.57
+    _diluted = {"per_constraint": {"word_cap": 1.0, "no_exclamation": 1.0, "no_lists": 1.0,
+                                   "end_with_question": 1.0, "required_prefix": 1.0,
+                                   "no_first_person": 0.0, "no_apology": 0.0,
+                                   "distinct_openers": 0.0}}
+    expect(hard_band_adherence(_diluted, ladder) == 0.0,
+           f"core-perfect / hard-dead must score 0.0 → {hard_band_adherence(_diluted, ladder)}")
+    expect(hard_band_adherence({"per_constraint": {"word_cap": 1.0}}, ladder) is None,
+           "a rung with no hard constraint yields None, never 0.0")
+    # and that model must be prompt-sensitive under the calibrated bar, not robust
+    expect(classify(0.01, 1.0, {"sigma_hi": 0.10, "adherence_hi": 0.80, "adherence_lo": 0.35,
+                                "hard_adherence_hi": 0.75}, hard_adherence=0.0) == "prompt-sensitive",
+           "core-perfect / hard-dead must not classify robust")
 
     # classify: the hard band can demote a core-perfect model
     cut = ladder["verdict_cutoffs"]

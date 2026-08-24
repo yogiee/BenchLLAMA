@@ -446,6 +446,7 @@ def latest_result(results_dir, prefix, fast, hours):
             best, best_m = f, m
     return best
 
+
 # ── Output-budget starvation guard (2026-08-24) ───────────────────────────────
 #
 # A model that emits a reasoning channel spends the SAME `num_predict` budget on its thinking as on
@@ -545,3 +546,45 @@ def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool 
               flush=True)
     return data2, wall2
 
+
+# ── Battery F-elastic verdict cutoffs (2026-08-24) ────────────────────────────
+#
+# These live HERE, not in suites/elasticity/ladder.json, for the same reason G_CORE_THRESHOLD does:
+# ladder.json is HASHED as a resume trigger, so a bar stored there forces a pointless 1h44m fleet
+# re-measure every time a threshold is re-tuned. A grading bar is policy, not test content — the
+# rollouts and the per-constraint hits are already on disk and would come back identical.
+# ladder.json still carries a `verdict_cutoffs` block; it is DOCUMENTATION, not authority.
+# Re-apply a change offline with `python3 aptitude.py --battery F-elastic --regate`.
+#
+# CORE cutoffs — UNCHANGED since the 2026-06-22 calibration (20 models x 3-run, cross-family).
+#   sigma_hi 0.10 / adherence_hi 0.80 / adherence_lo 0.35, keyed on instruction_adherence.
+#
+# HARD cutoff — 0.75, calibrated 2026-08-24 on 19 models x 3-run average, replacing the PROVISIONAL
+# 0.60 placeholder. At 0.60 the hard band changed ZERO verdicts: 18 of 19 models cleared it and the
+# one that did not (qwen2.5vl:3b) already failed the core band, so requiring both bands reproduced
+# the core-only verdict list exactly.
+#
+# ⚠ The bar was not the problem — the SCOPE was. `hard_adherence` was the mean of every binary
+# constraint on the hard rung, four of which are the saturated core ones (`no_exclamation` 1.000
+# field-wide, `no_lists` 0.963, `end_with_question` 0.873, `required_prefix` 0.754). The three real
+# discriminators carried 3 of 7. Scoping the meter to the constraints the hard band ADDS is the fix;
+# raising the bar over a diluted meter could not be. Same defect shape as the coder gate, where
+# E-hard was 15% of the composite.
+#
+# 0.75 sits in the natural gap between gpt-oss:120b-cloud 0.708 (run-sigma 0.000) and
+# minicpm-v4.6:1b 0.778 (run-sigma 0.020) — both ends of the gap are stable across three runs, which
+# is what a cutoff needs. Splits the fleet 14 pass / 5 fail.
+#
+# ⚠ Calibrated on 19 models, one short of the 20+ bar the core cutoffs met, and gemma-heavy (7 of
+# 19). Treat the hard verdict as provisional-but-anchored until the roster is back over 20.
+F_ELASTIC_CUTOFFS = {
+    "sigma_hi":          0.10,
+    "adherence_hi":      0.80,
+    "adherence_lo":      0.35,
+    "hard_adherence_hi": 0.75,
+    "keyed_on":          "instruction_adherence",
+    "_hard_scope":       "hard-band-only (constraints the hard rung ADDS over the core rungs)",
+    "_status":           "core CALIBRATED 2026-06-22 (20 models x 3-run); hard CALIBRATED 2026-08-24 "
+                         "(19 models x 3-run) — was PROVISIONAL 0.60 over a diluted meter that moved "
+                         "no verdicts. REQUIRES 3-run averaging.",
+}
