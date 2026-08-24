@@ -31,7 +31,8 @@ import sys
 import time
 import requests
 from pathlib import Path
-from bench_utils import cooldown, preflight, latest_result, sort_registry
+from bench_utils import (cooldown, preflight, latest_result, sort_registry,
+                         post_with_budget_retry)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -294,16 +295,20 @@ def chat(model, messages, max_tokens=None, tools=None, timeout=TIMEOUT):
         payload["options"]["num_predict"] = max_tokens
     if tools:
         payload["tools"] = tools
-    t0 = time.time()
-    r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=timeout)
-    if r.status_code == 400 and "think" in payload:
-        print(f"\n  ⚠  {model}: think parameter rejected (400) — retrying without it", flush=True)
-        payload.pop("think")
+    def _post(pl):
         t0 = time.time()
-        r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=timeout)
-    wall = time.time() - t0
-    r.raise_for_status()
-    return r.json(), wall
+        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=timeout)
+        if r.status_code == 400 and "think" in pl:
+            print(f"\n  ⚠  {model}: think parameter rejected (400) — retrying without it", flush=True)
+            pl = {k: v for k, v in pl.items() if k != "think"}
+            t0 = time.time()
+            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=timeout)
+        wall = time.time() - t0
+        r.raise_for_status()
+        return r.json(), wall
+
+    # Retry once with headroom if the model burned the whole budget thinking (bench_utils).
+    return post_with_budget_retry(payload, _post, label=model)
 
 
 def get_ram_gb(model_name):

@@ -36,7 +36,7 @@ import requests
 from pathlib import Path
 from datetime import date
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
-                         G_CORE_THRESHOLD, G_HARD_THRESHOLD)
+                         G_CORE_THRESHOLD, G_HARD_THRESHOLD, post_with_budget_retry)
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -175,15 +175,20 @@ def chat(model, messages, num_ctx, max_tokens=NUM_PREDICT):
         "options":  {"num_ctx": num_ctx, "num_predict": max_tokens},
         "think":    False,
     }
-    t0 = time.time()
-    r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
-    if r.status_code == 400 and "think" in payload:
-        payload.pop("think")
+    def _post(pl):
         t0 = time.time()
-        r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
-    wall = time.time() - t0
-    r.raise_for_status()
-    return r.json(), wall
+        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+        if r.status_code == 400 and "think" in pl:
+            pl = {k: v for k, v in pl.items() if k != "think"}
+            t0 = time.time()
+            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+        wall = time.time() - t0
+        r.raise_for_status()
+        return r.json(), wall
+
+    # An always-reasoning model spends this budget on thinking and returns empty content; retry
+    # once with headroom rather than grading the silence as a wrong answer. See bench_utils.
+    return post_with_budget_retry(payload, _post, label=model)
 
 def tps(data):
     ec = data.get("eval_count", 0); ed = data.get("eval_duration", 1)
@@ -413,12 +418,19 @@ def write_summary(results, out_md, fast_mode=False):
             f" | {sr.get('absent','?')} |"
         )
 
+    # ⚠ Bucket keys are ints in a freshly-summarized record but STRINGS in one carried forward
+    # from the DB (JSON round-trip). Look up both, or every resumed model renders as an empty
+    # row while the three that re-ran this pass render fine — the shape the 08-23 report had.
+    def _at(by, b):
+        v = by.get(b)
+        return by.get(str(b), "—") if v is None else v
+
     lines += ["", "## Accuracy × depth", "",
               "| Model | " + " | ".join(str(b) for b in meta["buckets"]) + " |",
               "|-------|" + "|".join("----:" for _ in meta["buckets"]) + "|"]
     for r in results:
         acc = r["summary"].get("accuracy_by_depth", {})
-        row = " | ".join(str(acc.get(b, "—")) for b in meta["buckets"])
+        row = " | ".join(str(_at(acc, b)) for b in meta["buckets"])
         lines.append(f"| `{r['model']}` | {row} |")
 
     lines += ["", "## Prefill tok/s × depth (speed collapse)", "",
@@ -426,7 +438,7 @@ def write_summary(results, out_md, fast_mode=False):
               "|-------|" + "|".join("----:" for _ in meta["buckets"]) + "|"]
     for r in results:
         pre = r["summary"].get("prefill_by_depth", {})
-        row = " | ".join(str(pre.get(b, "—")) for b in meta["buckets"])
+        row = " | ".join(str(_at(pre, b)) for b in meta["buckets"])
         lines.append(f"| `{r['model']}` | {row} |")
 
     out_md.write_text("\n".join(lines))

@@ -445,3 +445,103 @@ def latest_result(results_dir, prefix, fast, hours):
         if (time.time() - m) / 3600 < hours and m > best_m:
             best, best_m = f, m
     return best
+
+# ── Output-budget starvation guard (2026-08-24) ───────────────────────────────
+#
+# A model that emits a reasoning channel spends the SAME `num_predict` budget on its thinking as on
+# its answer. When the budget runs out mid-thought the reply comes back with `done_reason: "length"`
+# and an EMPTY `content` — which every grader in this repo scores as a wrong answer rather than as a
+# failed call.
+#
+# This is not hypothetical and it is not cosmetic. `gpt-oss:120b-cloud` **ignores `think: False`**
+# (verified 08-24: identical content with think false/true/omitted), so it always reasons. Battery G
+# allowed 320 tokens; the model needs 413. It returned `content: ""` at all six depths, scored 0/7
+# six times, and published as `0.000` — LAST of 19 in `rankings.long_context`. Re-measured at 1024 it
+# scores **7/7**, sweeping both bands. The worst-published long-context model in the fleet was
+# actually one of the best. Battery H lost 5 of 9 items the same way; `expense_split` lost its answer
+# to a 1800-token cap against an 8644-token need.
+#
+# Retrying at a larger budget is preferred over simply raising every cap: the caps exist to stop
+# runaway generation from wrecking wall-clock, and only the starved calls should pay for headroom.
+# The retry is RECORDED (never silent) so a reader can tell a re-budgeted score from a first-try one.
+
+# Factor 8, not 4. Measured need on 2026-08-24: Battery G 413 tokens against a 320 cap (4x is
+# plenty), but `expense_split` took 8644 against an 1800 cap — 4x reaches only 7200 and still fails,
+# burning a retry to record the same empty answer. num_predict is a CEILING, not a target: a model
+# that finishes early still stops early, so the factor costs nothing on calls that recover quickly.
+#
+# ⚠ The ceiling matters anyway because the retry grows `num_ctx` by the same amount, and a GGUF
+# model pre-allocates its full KV cache (Protocol Rule #1). BUDGET_RETRY_CAP bounds that blast
+# radius: worst case a local model is asked for ~12k extra context on the exception path only.
+BUDGET_RETRY_FACTOR = 8        # multiply num_predict by this on a starved call
+BUDGET_RETRY_CAP    = 12000    # absolute ceiling; expense_split needed 8644
+
+
+def starved_on_length(data: dict) -> bool:
+    """True when a reply terminated on the output cap having emitted no `content`.
+
+    The tell is `done_reason == "length"` together with empty content: the model was still going
+    when the budget ran out, and everything it produced went to a channel the grader never sees.
+    A short-but-present answer is NOT starvation — the model chose to stop.
+    """
+    if data.get("done_reason") != "length":
+        return False
+    return not (data.get("message", {}).get("content") or "").strip()
+
+
+def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool = False):
+    """POST `payload` via `post(payload) -> (data, wall)`, retrying ONCE if the reply was starved.
+
+    Returns `(data, wall)` from whichever attempt is authoritative. When a retry happens the
+    returned `data` carries `_budget_retry` describing it, so result writers can surface the fact:
+
+        {"reason": "empty_content_on_length", "num_predict": [320, 1280],
+         "num_ctx": [2560, 3520], "recovered": True}
+
+    ⚠ The retry grows `num_ctx` BY THE SAME AMOUNT as `num_predict`, and that is not optional.
+    A battery sizes its window for the prompt plus a SHORT answer — Battery G uses
+    `num_ctx = bucket + 1536`, which at bucket 1024 leaves ~1284 tokens of generation room once the
+    haystack is in. Raising `num_predict` past that is a no-op: the context window binds first, the
+    reply is truncated anyway, and `done_reason` still reads "length". Measured directly on
+    2026-08-24 — a retry at num_predict=1280 inside an unchanged num_ctx=2560 failed exactly as the
+    original 320 did. Growing both is what makes the retry mean anything.
+
+    `wall` is the AUTHORITATIVE attempt's own wall time, not the sum — it is used as a performance
+    number, and the honest cost of an answer from this model is the call that actually produced one.
+    """
+    data, wall = post(payload)
+    if not starved_on_length(data):
+        return data, wall
+
+    opts = payload.get("options") or {}
+    old_p = opts.get("num_predict")
+    if not old_p:                                # uncapped already — a retry cannot help
+        return data, wall
+    new_p = min(int(old_p) * BUDGET_RETRY_FACTOR, BUDGET_RETRY_CAP)
+    if new_p <= old_p:
+        data["_budget_retry"] = {"reason": "empty_content_on_length",
+                                 "num_predict": [old_p, old_p], "recovered": False,
+                                 "note": "already at BUDGET_RETRY_CAP"}
+        return data, wall
+
+    new_opts = {**opts, "num_predict": new_p}
+    old_c = opts.get("num_ctx")
+    if old_c:                                    # give the window the extra output room too
+        new_opts["num_ctx"] = int(old_c) + (new_p - int(old_p))
+
+    if not quiet:
+        print(f"    ⚠  {label or payload.get('model','?')}: empty content at num_predict={old_p} "
+              f"(done_reason=length) — retrying at {new_p}"
+              + (f", num_ctx {old_c}→{new_opts['num_ctx']}" if old_c else ""), flush=True)
+
+    data2, wall2 = post({**payload, "options": new_opts})
+    recovered = bool((data2.get("message", {}).get("content") or "").strip())
+    data2["_budget_retry"] = {"reason": "empty_content_on_length",
+                              "num_predict": [old_p, new_p],
+                              "num_ctx": [old_c, new_opts.get("num_ctx")] if old_c else None,
+                              "recovered": recovered}
+    if not quiet and not recovered:
+        print(f"    ⚠  {label or payload.get('model','?')}: STILL empty at {new_p} — recording as failed call",
+              flush=True)
+    return data2, wall2
+
