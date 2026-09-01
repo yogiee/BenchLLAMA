@@ -110,8 +110,23 @@ Both are already-known shapes; both recurred, which is the point.
 
 ## 9. Open, unresolved
 
-- `longctx.py` (Battery G) calls `plan_single_pass` without an arm, taking the `direct` default,
-  while G demonstrably stores think-arm rows. Same defect as §8's report bug but **in a runner**,
-  so it may cause real spurious re-runs. Not investigated.
-- Battery H coverage is thin: `ornith-1.5:9b` and `deepseek-r1:14b` never ran it, and it is the axis
-  that decides whether a long-context model can be trusted to read without inventing.
+- Battery H coverage is thin: `ornith-1.5:9b` never ran it, and it is the axis that decides whether
+  a long-context model can be trusted to read without inventing.
+- Three F-elastic rows on a superseded grading standard (§7) — still published, still unmarked.
+
+### Correction to an earlier draft of this note
+
+A previous version claimed `longctx.py` took the `direct` default and might cause real spurious
+re-runs. **That was wrong.** `longctx.py:649` passes `arm=ARM_REQ` and line 71 sets
+`requested_arm(default="auto")` — the runner was always correct. The error came from grepping for
+string literals (`arm="auto"`), which does not match a variable.
+
+The real defect was narrower and lived entirely in the report: `_REPORT_ARM` covered B/C/D/E/F/
+F-elastic but **omitted G and confab**, both of which run at `auto`. Battery G was therefore
+reported as **17 to run when the true number was 4** — the same magnitude of over-report as Battery
+E. Fixed 2026-09-01; all 14 batteries now cross-check against their runners.
+
+**The transferable point survives, strengthened:** a preview path must execute the same resolution
+as the runner, and a hand-maintained map of "what the runner does" drifts the moment a runner
+changes. `_REPORT_ARM` now carries the per-runner source of truth in a comment, but the durable fix
+is for runners to *export* their arm rather than have the report restate it.

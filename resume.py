@@ -235,7 +235,14 @@ def _eligible(battery, reg):
 # average_e_runs.py passes arm="auto". Reporting those at "direct" reads think-arm-only rows as
 # absent and prints `new-model` for a model measured hours earlier (seen 2026-09-01 on
 # granite4.2:3b and ornith-1.5:9b, both of which had fresh think-arm E rows).
-_REPORT_ARM = {"B": "auto", "C": "auto", "D": "auto", "E": "auto", "F": "auto", "F-elastic": "auto"}
+# MUST track the runners. Source of truth, per runner's `arm=` into resume:
+#   aptitude.py:61   ARM_REQ = "direct" if battery=="A" else requested_arm(default="auto")
+#   average_e_runs   arm="auto"                    longctx.py:71   requested_arm(default="auto")
+#   confab.py        requested_arm(default="auto") runner.py       requested_arm(default="direct")
+#   ctx_ladder / vision / embedding — no arm, so the "direct" default below is correct.
+# Anything absent here is reported at "direct"; add a battery the moment its runner moves to auto.
+_REPORT_ARM = {"B": "auto", "C": "auto", "D": "auto", "E": "auto", "F": "auto",
+               "F-elastic": "auto", "G": "auto", "confab": "auto"}
 
 
 def report(batteries=None, host="http://localhost:11434", check_runtime=False) -> str:
