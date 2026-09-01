@@ -4,10 +4,12 @@ Imported by runner.py, ctx_ladder.py, and aptitude.py.
 """
 
 import hashlib
+import json
 import os
 import platform
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -76,6 +78,7 @@ _DATASET_FILES = {
     "confab_items":      "suites/confab/items.json",
     "prompt_worker":     "prompts/worker_default.md",
     "prompt_router":     "prompts/router_default.md",
+    "think_probe":       "suites/think/probe.json",   # think_probe.py item set (provenance only — see BATTERY_DATASETS)
 }
 
 # ── Content-addressed resume: test-identity per battery (see docs/resume-spec.md) ──
@@ -83,16 +86,18 @@ _DATASET_FILES = {
 # in CODE (a change dataset hashes can't see, e.g. a new weight, a two-band split, a scorer rewrite).
 # A bump re-runs that battery for every model next run. Do NOT bump for cosmetic edits.
 BATTERY_REVISION = {
-    "standard": 1, "ladder": 1,
-    "A": 1, "B": 1, "C": 1, "D": 1,
-    "E": 2,           # two-band E-hard (2026-07-02)
-    "F": 1,
-    "F-elastic": 1,
-    "G": 2,           # two-band G-hard: decoys + superseded/aggregate/absent; gated clean_depth (2026-08-21)
+    # v3 think-aware protocol (docs/think-spec.md, 2026-08-28): every completion battery now runs at
+    # the model's think arm / lever-aware budget instead of a blanket think=False → full re-measure.
+    "standard": 2, "ladder": 1,
+    "A": 2, "B": 2, "C": 2, "D": 2,
+    "E": 3,           # two-band E-hard (2026-07-02); v3 arms (2026-08-28)
+    "F": 2,
+    "F-elastic": 2,
+    "G": 3,           # two-band G-hard (2026-08-21); v3 arms (2026-08-28)
     "vision": 2,      # two-band V-hard (2026-07-05)
     "embedding": 2,   # length-stratified re-tune (2026-06-13)
     "image": 1,
-    "confab": 1,      # Battery H — honesty/confabulation (2026-07-07)
+    "confab": 2,      # Battery H — honesty/confabulation (2026-07-07); v3 arms (2026-08-28)
 }
 
 # ── Battery G — grading bars (see longctx.py) ─────────────────────────────────
@@ -131,6 +136,193 @@ BATTERY_DATASETS = {
     "image": [],
     "confab": ["confab_items"],
 }
+
+
+# ── Think-aware protocol v3 (docs/think-spec.md, 2026-08-28) ──────────────────────────────
+# Protocol Rule #2 ("think=False everywhere") rested on the output-budget starvation bug fixed on
+# 2026-08-24, not on a model property: a hybrid-reasoning model spends the whole num_predict in the
+# `thinking` channel and the grader sees empty content. Measured 2026-08-28: think:false makes
+# granite4.2:3b/8b and qwen3.5:4b-mlx FAIL bat_ball (the fleet passes 22/22); granite's "low" fixes
+# it in 76–98 tokens while its full think burns 4096 tokens and never answers; qwen3.5 needs 1857
+# tokens and its levels are a no-op. The lever therefore has to be chosen PER MODEL, and the budget
+# sized for it — that is what a `think_profile` (written by think_probe.py into models.json) does.
+#
+#   arm   direct — the no-thinking class (or, for always-on thinkers, the cheapest bounded class)
+#         think — the model's operating point: the cheapest BOUNDED thinking class that scores best
+#   lever the literal `think` value sent: False | "low" | "medium" | "high" | True | (omitted)
+#
+# Every writer calls apply_think(payload, model, arm) instead of hard-coding "think": False, and
+# stamps arm_stamp(model, arm) onto its result so the DB row / export say which arm was measured.
+# A model with NO profile gets the legacy behaviour (think=False; a 400 is stripped by the caller).
+THINK_OMIT = object()                       # sentinel: send no `think` key at all (the "absent" lever)
+THINK_LEVERS = ("absent", "false", "low", "medium", "high", "true")
+THINK_ARMS = ("direct", "think")
+THINK_PROBE_NUM_PREDICT = 4096              # the probe measures demand; it does not impose a budget
+THINK_ALLOWANCE_K, THINK_ALLOWANCE_MIN, THINK_ALLOWANCE_MAX = 4, 1024, 8192    # ×2/512 under-shot: gemma4:e4b-mlx expense_split needed ~1.5k think tokens vs a 294-token probe max (smoke 2026-08-28)
+# ⚠ INVARIANT: THINK_ALLOWANCE_MAX < BUDGET_RETRY_CAP. The allowance is the EXPECTED need; the ×8
+# retry is the safety net for when the probe under-estimated. A net BELOW the allowance is not a net:
+# post_with_budget_retry computes new_p = min(old_p×8, CAP) and bails when new_p <= old_p, returning
+# the starved reply — and that branch PRINTS NOTHING, so the call renders as a bare `gate:empty`
+# indistinguishable from a model that simply declined to answer. The ceiling was 16384 vs a 12000 cap
+# from 2026-08-28 until 2026-08-30, which silently denied the retry to exactly two models:
+# deepseek-r1:8b (probe max 4770 → clamped, BOTH arms → every battery) and bonsai-27b:1bit (think arm).
+# Measured cost: deepseek-r1:8b lost 3 of 4 Battery-E E-hard tasks to unretried starvation at ~750 s
+# each (E-hard 0.208 → coder_eligible False) while the retry was recovering 82% of the calls it caught
+# fleet-wide (34 fires / 28 rescued, run 2026-08-29). 8192 still clears the largest thinking observed
+# on a REAL task by ~1.7× (standard-suite maxima: deepcoder:1.5b 4525, deepseek-r1:8b 4206,
+# deepcoder:14b 3642) — the probe items are tiny, which is what K=4 extrapolates from — and the retry
+# to 12000 remains available above it. Raising this ceiling REQUIRES raising BUDGET_RETRY_CAP with it.
+
+_LEVER_VALUES = {"false": False, "true": True, "low": "low", "medium": "medium", "high": "high"}
+_PROFILE_CACHE: dict = {"mtime": None, "data": {}}
+
+
+def lever_value(name):
+    """Lever NAME (as stored in a profile) → the literal `think` value to send; 'absent' → THINK_OMIT."""
+    return _LEVER_VALUES.get(str(name), THINK_OMIT)
+
+
+def lever_name(value) -> str:
+    """Inverse of lever_value — for stamping/printing."""
+    if value is THINK_OMIT or value is None:
+        return "absent"
+    if value is False:
+        return "false"
+    if value is True:
+        return "true"
+    return str(value)
+
+
+def think_profiles(path=None) -> dict:
+    """{model: think_profile} from models.json — mtime-cached so the hot chat() path stays cheap.
+    Models without a profile are absent from the map (→ legacy think=False behaviour)."""
+    p = Path(path) if path else _REPO / "models.json"
+    try:
+        mt = p.stat().st_mtime
+        if _PROFILE_CACHE["mtime"] != mt:
+            reg = json.loads(p.read_text())
+            _PROFILE_CACHE["data"] = {m["name"]: m["think_profile"] for m in reg
+                                      if isinstance(m, dict) and m.get("think_profile")}
+            _PROFILE_CACHE["mtime"] = mt
+    except Exception:
+        pass
+    return _PROFILE_CACHE["data"]
+
+
+def think_profile(model: str):
+    return think_profiles().get(model)
+
+
+def requested_arm(default: str = "auto", argv=None) -> str:
+    """Which arm this INVOCATION measures: `--arm direct|think|auto` (argv) > env BENCH_ARM > default.
+      direct — every model at its direct (no-thinking) arm (the standard suite's first pass; ctx ladder; Battery A)
+      think — every model that HAS an operating point at its think arm; the rest are skipped
+      auto  — each model at its operating point if it has one, else fast (the batteries)"""
+    argv = sys.argv if argv is None else argv
+    if "--arm" in argv:
+        i = argv.index("--arm")
+        if i + 1 < len(argv) and argv[i + 1] in THINK_ARMS + ("auto",):
+            return argv[i + 1]
+    env = (os.environ.get("BENCH_ARM") or "").strip().lower()
+    return env if env in THINK_ARMS + ("auto",) else default
+
+
+def resolve_arm(model: str, requested: str = "auto"):
+    """The arm `model` is measured at for `requested` (see requested_arm). None = skip this model
+    (a `think` pass on a model with no operating point)."""
+    prof = think_profile(model) or {}
+    has_op = bool(prof.get("operating_lever"))
+    if requested == "direct":
+        return "direct"
+    if requested == "think":
+        return "think" if has_op else None
+    return "think" if has_op else "direct"
+
+
+def think_lever(model: str, arm: str):
+    """Literal `think` value for (model, arm). No profile → False (legacy protocol)."""
+    prof = think_profile(model)
+    if not prof:
+        return False
+    if arm == "think" and prof.get("operating_lever"):
+        return lever_value(prof["operating_lever"])
+    return lever_value(prof.get("direct_lever") or "false")
+
+
+def think_class(model: str, arm: str):
+    prof = think_profile(model)
+    if not prof:
+        return None
+    return prof.get("operating_point") if (arm == "think" and prof.get("operating_lever")) else prof.get("direct_class")
+
+
+def think_allowance(model: str, arm: str) -> int:
+    """Extra output tokens to grant on top of a test's own max_tokens so the thinking trace fits:
+    clamp(K × probe think_tokens_max, MIN, MAX). 0 for a no-thinking class or an unprofiled model.
+    The reactive ×8 retry (post_with_budget_retry) stays as the backstop; it firing on a profiled
+    arm means the probe under-estimated, which is worth seeing in `_budget_retry`."""
+    prof = think_profile(model)
+    if not prof:
+        return 0
+    stats = (prof.get("class_stats") or {}).get(think_class(model, arm) or "", {})
+    tk = stats.get("think_tokens_max") or 0
+    if not tk:
+        return 0
+    return int(min(max(THINK_ALLOWANCE_K * tk, THINK_ALLOWANCE_MIN), THINK_ALLOWANCE_MAX))
+
+
+def apply_think(payload: dict, model: str, arm: str) -> dict:
+    """Set `think` and grow options.num_predict / options.num_ctx by the arm's allowance. Mutates
+    and returns `payload`. Growing num_ctx is not optional — the window binds before num_predict
+    does (see post_with_budget_retry). Call AFTER the test's own options are in place."""
+    lever = think_lever(model, arm)
+    if lever is THINK_OMIT:
+        payload.pop("think", None)
+    else:
+        payload["think"] = lever
+    allow = think_allowance(model, arm)
+    if allow:
+        opts = payload.setdefault("options", {})
+        if opts.get("num_predict"):
+            opts["num_predict"] = int(opts["num_predict"]) + allow
+        if opts.get("num_ctx"):
+            opts["num_ctx"] = int(opts["num_ctx"]) + allow
+    return payload
+
+
+def arm_stamp(model: str, arm: str) -> dict:
+    """Fields every result dict carries so the DB row / export say what was measured."""
+    return {"arm": arm, "think_lever": lever_name(think_lever(model, arm)),
+            "think_class": think_class(model, arm), "think_allowance": think_allowance(model, arm)}
+
+
+def budget_timeout(payload: dict, base: int) -> int:
+    """HTTP read timeout scaled to the GRANTED output budget. A fixed 480s killed legitimate think-arm
+    replies (deepseek-r1:8b cylinder: 308s @4k ctx, 451s @8k, timed out @16k — 2026-08-29 v3 run): a
+    model given 10k+ tokens of room at 10-30 t/s can honestly need 10-25 min. Floor at `base`, then
+    allow the whole budget at a conservative 6 t/s + 120s prefill/load headroom. This bounds hangs
+    without executing a starvation of our own making."""
+    np = int((payload.get("options") or {}).get("num_predict") or 0)
+    if np <= 0:
+        return base
+    return max(base, int(np / 6) + 120)
+
+
+def reply_stats(data: dict) -> dict:
+    """Per-call observability for the think arm: how much went to the trace vs the answer."""
+    msg = data.get("message") or {}
+    return {"thinking_chars": len(msg.get("thinking") or ""),
+            "content_chars": len(msg.get("content") or ""),
+            "eval_count": data.get("eval_count")}
+
+
+def think_profiles_fingerprint(models=None) -> dict:
+    """Provenance / resume determinant: {model: {operating_lever, direct_lever}}. A changed operating
+    point means the test changed for that model's think arm (resume.py re-runs it). The budget
+    allowance is deliberately NOT part of this — it is headroom, not test identity."""
+    want = set(models) if models else None
+    return {name: {"operating_lever": p.get("operating_lever"), "direct_lever": p.get("direct_lever")}
+            for name, p in think_profiles().items() if (want is None or name in want)}
 
 
 def _sh(*argv) -> str | None:
@@ -233,6 +425,7 @@ def env_fingerprint(host: str = "http://localhost:11434", models=None) -> dict:
         "benchllama_commit": _benchllama_commit(),
         "datasets":          _dataset_hashes(),
         "battery_revisions": _live_battery_revisions(),  # content-addressed resume: test-code identity
+        "think_profiles":    think_profiles_fingerprint(models),  # v3: per-model operating point (docs/think-spec.md)
         "model_digests":     _model_digests(host, set(models) if models else None),
         "os":                osd,
         "hardware":          hw,
@@ -490,7 +683,28 @@ def starved_on_length(data: dict) -> bool:
     return not (data.get("message", {}).get("content") or "").strip()
 
 
-def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool = False):
+def truncated_on_length(data: dict) -> bool:
+    """True when a reply hit the output cap with content ALREADY emitted — the harness cut it off,
+    the model did not choose to stop.
+
+    Distinct from `starved_on_length`, which requires EMPTY content. Retrying a truncated reply is
+    NOT the laundering that rule forbids: laundering is re-rolling a COMPLETE answer that scored
+    badly, and `done_reason == "length"` is positive evidence the reply was never complete. The
+    two must stay separate because some tests cap output ON PURPOSE (Battery C5 measures the
+    num_predict ceiling), so this is opt-in per call site, never global.
+
+    Found 2026-09-01: Battery E granted every problem max_tokens=1024, but E5/E-hard emit
+    2.4k-3.4k chars of code. granite4.2:8b's `low` lever spent the budget reasoning and returned
+    19 chars ("test_normal_less_lo") — scored as a wrong answer, not a starved call, because the
+    content was non-empty. Six models were affected on the 08-31 run.
+    """
+    if data.get("done_reason") != "length":
+        return False
+    return bool((data.get("message", {}).get("content") or "").strip())
+
+
+def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool = False,
+                           retry_on_truncation: bool = False):
     """POST `payload` via `post(payload) -> (data, wall)`, retrying ONCE if the reply was starved.
 
     Returns `(data, wall)` from whichever attempt is authoritative. When a retry happens the
@@ -511,8 +725,11 @@ def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool 
     number, and the honest cost of an answer from this model is the call that actually produced one.
     """
     data, wall = post(payload)
-    if not starved_on_length(data):
+    _truncated = retry_on_truncation and truncated_on_length(data)
+    if not (starved_on_length(data) or _truncated):
         return data, wall
+    _why = "truncated_content_on_length" if _truncated else "empty_content_on_length"
+    _what = "truncated content" if _truncated else "empty content"
 
     opts = payload.get("options") or {}
     old_p = opts.get("num_predict")
@@ -520,9 +737,16 @@ def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool 
         return data, wall
     new_p = min(int(old_p) * BUDGET_RETRY_FACTOR, BUDGET_RETRY_CAP)
     if new_p <= old_p:
-        data["_budget_retry"] = {"reason": "empty_content_on_length",
+        # The net is below the allowance — see the INVARIANT note at THINK_ALLOWANCE_MAX. This must
+        # never be silent: an unretried starvation is scored as a wrong answer, and a bare `gate:empty`
+        # in the log is indistinguishable from a model that simply declined to answer.
+        data["_budget_retry"] = {"reason": _why,
                                  "num_predict": [old_p, old_p], "recovered": False,
                                  "note": "already at BUDGET_RETRY_CAP"}
+        if not quiet:
+            print(f"    ⚠  {label or payload.get('model','?')}: {_what} at num_predict={old_p} "
+                  f"(done_reason=length) — NO RETRY POSSIBLE, already at BUDGET_RETRY_CAP={BUDGET_RETRY_CAP}. "
+                  f"Recording as a failed call; THINK_ALLOWANCE_MAX must stay below the cap.", flush=True)
         return data, wall
 
     new_opts = {**opts, "num_predict": new_p}
@@ -531,18 +755,22 @@ def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool 
         new_opts["num_ctx"] = int(old_c) + (new_p - int(old_p))
 
     if not quiet:
-        print(f"    ⚠  {label or payload.get('model','?')}: empty content at num_predict={old_p} "
+        print(f"    ⚠  {label or payload.get('model','?')}: {_what} at num_predict={old_p} "
               f"(done_reason=length) — retrying at {new_p}"
               + (f", num_ctx {old_c}→{new_opts['num_ctx']}" if old_c else ""), flush=True)
 
     data2, wall2 = post({**payload, "options": new_opts})
-    recovered = bool((data2.get("message", {}).get("content") or "").strip())
-    data2["_budget_retry"] = {"reason": "empty_content_on_length",
+    # For a truncated call "recovered" must mean the reply COMPLETED, not merely that it is
+    # non-empty — the original was non-empty too. Anything still ending on the cap is still cut.
+    recovered = (not truncated_on_length(data2) if _truncated
+                 else bool((data2.get("message", {}).get("content") or "").strip()))
+    data2["_budget_retry"] = {"reason": _why,
                               "num_predict": [old_p, new_p],
                               "num_ctx": [old_c, new_opts.get("num_ctx")] if old_c else None,
                               "recovered": recovered}
     if not quiet and not recovered:
-        print(f"    ⚠  {label or payload.get('model','?')}: STILL empty at {new_p} — recording as failed call",
+        print(f"    ⚠  {label or payload.get('model','?')}: STILL {'truncated' if _truncated else 'empty'} "
+              f"at {new_p} — recording as failed call",
               flush=True)
     return data2, wall2
 

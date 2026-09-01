@@ -27,7 +27,7 @@ MODELS_FILE = REPO / "models.json"
 PAUSE_SECS  = 10        # between pipeline phases
 MAX_LOG     = 4000      # capped in-memory log buffer (for late-joining web clients)
 
-COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen", "confab", "export"}
+COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen", "confab", "export", "probe"}
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
@@ -110,8 +110,14 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
     x   = extra
     role_in_extra = _arg(extra, "--role")
 
+    # v3 (docs/think-spec.md): the think probe writes each model's lever profile; the standard suite runs a
+    # direct pass (speed lane, role gate) AND a think pass (models with an operating point).
+    probe = ("Think Probe", _cmd(REPO/"think_probe.py"), None)
+    if cmd == "probe":
+        return [("Think Probe", _cmd(REPO/"think_probe.py", *x), None)]
     if cmd == "standard":
-        return [("Standard Suite", _cmd(REPO/"runner.py", *x), role_in_extra)]
+        return [probe, ("Standard Suite", _cmd(REPO/"runner.py", *x), role_in_extra),
+                ("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x), role_in_extra)]
     if cmd == "ladder":
         return [("ctx Ladder", _cmd(REPO/"ctx_ladder.py", *x), role_in_extra)]
     if cmd == "aptitude":
@@ -141,6 +147,7 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image")]
     if cmd == "batteries":
         return [
+            probe,
             (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
             (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x),                    "worker"),
             (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x),  "worker"),
@@ -156,9 +163,12 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         # Both are stripped from x so they aren't forwarded to the other phase subprocesses.
         with_elastic  = "--with-elastic" in x
         with_imagegen = "--with-imagegen" in x
-        x = [a for a in x if a not in ("--with-elastic", "--with-imagegen")]
+        with_confab   = "--with-confab" in x       # Battery H (judge = confab.JUDGE_PRIMARY; ~5–12 min fleet-wide)
+        x = [a for a in x if a not in ("--with-elastic", "--with-imagegen", "--with-confab")]
         phases = [
+            probe,
             ("Standard Suite", _cmd(REPO/"runner.py", *x),                                              None),
+            ("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x),                None),
             ("ctx Ladder",     _cmd(REPO/"ctx_ladder.py", *x),                                          None),
             (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),              "router"),
             (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x),              "worker"),
@@ -167,6 +177,7 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
             (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x),                        "cap:completion"),
             (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),      "cap:completion"),
             ("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x),                            "cap:completion"),
+            *([("Honesty (Battery H)", _cmd(REPO/"confab.py", *x), "cap:completion")] if with_confab else []),
             ("Vision (Battery V)",      _cmd(REPO/"vision.py", *x),                              "cap:vision"),
             ("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x),                           "cap:embedding"),
         ]
@@ -184,8 +195,10 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
 # with Honesty (H) after G and F-elastic last among benchmarks (= `--with-elastic`
 # append semantics). `update` first / `export` last so a maintenance unit can ride
 # along with a benchmark selection and still land in the sane spot.
-UNIT_ORDER = ["update", "standard", "ladder", "A", "B", "C", "D", "E", "F",
+UNIT_ORDER = ["update", "probe", "standard", "ladder", "A", "B", "C", "D", "E", "F",
               "longctx", "confab", "vision", "embedding", "F-elastic", "imagegen", "export"]
+# units whose measurement depends on a model's think profile → the probe rides along automatically
+_NEEDS_PROBE = {"standard", "A", "B", "C", "D", "E", "F", "longctx", "confab", "F-elastic"}
 
 def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
     """Phase list for an arbitrary unit selection, in canonical order.
@@ -198,27 +211,46 @@ def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
     apt = REPO / "aptitude.py"
     x   = list(extra or [])
     ux  = lambda u: list((unit_extra or {}).get(u, []))
+
+    def avg(u):
+        """Label suffix that matches the pass count ACTUALLY requested for a multipass battery.
+        The phase label is persisted to phase_timings, so a hardcoded ' · 3-run avg' on a --runs 1
+        selection writes a permanently misleading record of how the score was produced."""
+        e = ux(u)
+        if "--runs" in e:
+            n = e[e.index("--runs") + 1]
+            return " · single pass" if n == "1" else f" · {n}-run avg"
+        return _AVG3
+
     P = {
         "update":    ("Update Registry", _cmd(REPO/"update_registry.py", *ux("update")), None),
-        "standard":  ("Standard Suite",  _cmd(REPO/"runner.py", *x, *ux("standard")), None),
+        "probe":     ("Think Probe",     _cmd(REPO/"think_probe.py", *ux("probe")), None),
+        "standard":  [("Standard Suite",  _cmd(REPO/"runner.py", *x, *ux("standard")), None),
+                      ("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x, *ux("standard")), None)],
         "ladder":    ("ctx Ladder",      _cmd(REPO/"ctx_ladder.py", *x, *ux("ladder")), None),
         "A": (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x, *ux("A")), "router"),
         "B": (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x, *ux("B")), "worker"),
         "C": (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x, *ux("C")), "worker"),
         "D": (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x, *ux("D")), "worker"),
-        "E": (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x, *ux("E")), "cap:completion"),
-        "F": (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x, *ux("F")), "cap:completion"),
+        "E": (BATTERY_LABELS["E"] + avg("E"), _cmd(REPO/"average_e_runs.py", *x, *ux("E")), "cap:completion"),
+        "F": (BATTERY_LABELS["F"] + avg("F"), _cmd(REPO/"average_e_runs.py", "--battery", "F", *x, *ux("F")), "cap:completion"),
         "longctx":   ("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x, *ux("longctx")), "cap:completion"),
         "confab":    ("Honesty (Battery H)",      _cmd(REPO/"confab.py", *x, *ux("confab")), "cap:completion"),
         "vision":    ("Vision (Battery V)",       _cmd(REPO/"vision.py", *x, *ux("vision")), "cap:vision"),
         "embedding": ("Embedding (Battery EMB)",  _cmd(REPO/"embedding.py", *x, *ux("embedding")), "cap:embedding"),
-        "F-elastic": (BATTERY_LABELS["F-ELASTIC"] + _AVG3,
+        "F-elastic": (BATTERY_LABELS["F-ELASTIC"] + avg("F-elastic"),
                       _cmd(REPO/"average_e_runs.py", "--battery", "F-elastic", *x, *ux("F-elastic")), "cap:completion"),
         "imagegen":  ("Image Gen (Battery I)",    _cmd(REPO/"imagegen.py", *x, *ux("imagegen")), "cap:image"),
         "export":    ("Export Rankings",          _cmd(REPO/"export.py", *ux("export")), None),
     }
     want = set(units)
-    return [P[u] for u in UNIT_ORDER if u in want]
+    if want & _NEEDS_PROBE:
+        want.add("probe")            # no-op when every thinking-capable model already has a fresh profile
+    out = []
+    for u in UNIT_ORDER:
+        if u in want:
+            out.extend(P[u] if isinstance(P[u], list) else [P[u]])
+    return out
 
 # ── Orchestrator ────────────────────────────────────────────────────────────────
 
@@ -427,7 +459,18 @@ class Orchestrator:
     def _parse_line(self, line: str) -> None:
         m = re.search(r"averaging pass (\d+)/(\d+)", line)
         if m:
-            self.state.pass_label = f"pass {m.group(1)}/{m.group(2)}"
+            n_pass = int(m.group(1))
+            self.state.pass_label = f"pass {n_pass}/{m.group(2)}"
+            if n_pass > 1:
+                # A multipass battery (E/F/F-elastic) re-tests the WHOLE roster every pass, but only
+                # the model named on the current `MODEL:` line gets re-lit — so every other card kept
+                # the `done` it earned last pass and the roster read "31 of 32 done" while pass 3 had
+                # actually run 12 of 32. A 7 h phase looked one model from finishing (2026-08-31).
+                # Mirrors _set_active_for_phase, except `skip` is PRESERVED: a resume-skipped model is
+                # skipped in every pass, so resurrecting it to `pending` would be a second lie.
+                for ms in self.state.models:
+                    if ms.active and ms.status in ("done", "error", "running"):
+                        ms.status = "pending"
             return
         m = re.search(r"MODEL:\s+(\S+)", line)
         if m:

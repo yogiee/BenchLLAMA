@@ -23,6 +23,8 @@ capability, NOT a role gate. `utility` specialists (embedding/vision/OCR) are sk
   python3 longctx.py --force                    # ignore the 24h resume window
   python3 longctx.py --rescore                 # re-derive stored summaries after a grading-bar change
   python3 longctx.py --rescore --dry-run       # ...preview the clean_depth moves, write nothing
+  python3 longctx.py --regrade                 # re-GRADE stored replies after a grader change (free)
+  python3 longctx.py --regrade --dry-run       # ...preview it
   python3 longctx.py --ollama http://host:11434
 
 Deep (32768) bucket: run `python3 suites/longctx/build.py --deep` first to add it to the dataset.
@@ -36,7 +38,8 @@ import requests
 from pathlib import Path
 from datetime import date
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
-                         G_CORE_THRESHOLD, G_HARD_THRESHOLD, post_with_budget_retry)
+                         G_CORE_THRESHOLD, G_HARD_THRESHOLD, post_with_budget_retry,
+                         apply_think, arm_stamp, requested_arm, resolve_arm, budget_timeout)
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -64,9 +67,20 @@ capable_only  = _flag("--capable-only")
 ollama_host   = _arg("--ollama", "http://localhost:11434")
 role_filter   = _arg("--role")
 model_args    = [a for a in sys.argv[1:] if not a.startswith("--")
-                 and a not in (ollama_host, role_filter)]
+                 and a not in (ollama_host, role_filter, _arg("--arm"))]
+ARM_REQ       = requested_arm(default="auto")   # v3: each model at its operating point (docs/think-spec.md)
 
 TIMEOUT     = 600
+# Sanity ceiling for a prefill reading. Ollama's MLX runner on 0.33.2 reports prompt_eval_duration
+# as ~0 for some models at depths >= 16k, so prompt_eval_count/duration explodes: qwen3.5:4b-mlx
+# logged 645,690 tok/s at 32k (2026-08-31), and prefill_collapse came out 1131.4 against a fleet
+# range of 0.39-0.69. 4 of 6 MLX models were affected, and NOT always visibly — gemma4:12b-mlx's
+# collapse read a plausible 0.663 while being computed from a bogus 173,817 tok/s middle depth.
+# Every legitimate reading in project history (13 G runs, 06-27 -> 08-23) sits at 741-4,806 tok/s,
+# so 20000 leaves ~4x headroom over anything real and ~9x clearance under the smallest bogus value.
+# A reading above it is dropped to None — EXCLUDED like a timed-out depth, never zeroed — so the
+# metric reads "not measurable" instead of publishing a fabricated number.
+PREFILL_TPS_CEILING = 20000
 COOLDOWN    = 0 if fast_mode else 300
 NUM_PREDICT = 320
 CTX_MARGIN  = 1536   # num_ctx = bucket + margin → holds our own prompt + the short answer
@@ -78,11 +92,19 @@ _ABSENT_MARKERS = ("not stated", "not listed", "not mentioned", "not specified",
                    "not provided", "not in the text", "no code", "not found", "unknown", "n/a",
                    "does not appear", "doesn't appear", "isn't stated", "is not present", "absent")
 
-def _answer_lines(response):
+def _answer_lines(response, expect=None):
     """Map numbered answer index -> that line's text. The prompt demands `N. answer` on its own
     line; several hard sub-tasks (absent / superseded) can only be graded on the SCOPED answer,
     because a whole-response substring scan would match the stale value or a decoy code that the
-    model correctly used for a DIFFERENT question."""
+    model correctly used for a DIFFERENT question.
+
+    ⚠ Positional fallback (2026-09-01): an UNNUMBERED but correctly-ordered list is still scoped —
+    one line per question — so it keeps the anti-decoy property that makes numbered parsing
+    necessary in the first place. Without it, dropping the numbering was graded as a confabulation:
+    minicpm-v4.5:8b answered "NOT STATED" correctly at 2048/4096/8192 and scored `absent` 0.333
+    instead of 0.833, which then depressed its hard band and its published `clean_depth`. Applied
+    ONLY when the line count matches the question count exactly; any preamble line makes the count
+    disagree and it falls through to the previous behaviour, so this can never widen a match."""
     out = {}
     for line in response.splitlines():
         m = re.match(r"\s*\**\s*(\d+)\s*[.):\-]\s*(.*)", line)
@@ -90,6 +112,11 @@ def _answer_lines(response):
             idx = int(m.group(1))
             if idx not in out:
                 out[idx] = m.group(2).strip()
+    if out or not expect:
+        return out
+    lines = [l.strip().strip("*-• \t") for l in response.splitlines() if l.strip()]
+    if len(lines) == expect:
+        return {i + 1: l for i, l in enumerate(lines)}
     return out
 
 
@@ -100,7 +127,7 @@ def grade(response, key, qidx=None):
     scoping are marked missed instead, with `parse_failed` recorded so it is visible rather than
     silent."""
     qidx = qidx or {}
-    ans  = _answer_lines(response)
+    ans  = _answer_lines(response, expect=(len(qidx) or None))
     lo   = response.lower()
 
     def scoped(task):
@@ -173,15 +200,15 @@ def chat(model, messages, num_ctx, max_tokens=NUM_PREDICT):
         "messages": messages,
         "stream":   False,
         "options":  {"num_ctx": num_ctx, "num_predict": max_tokens},
-        "think":    False,
     }
+    apply_think(payload, model, resolve_arm(model, ARM_REQ) or "direct")   # v3: lever + allowance
     def _post(pl):
         t0 = time.time()
-        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
         if r.status_code == 400 and "think" in pl:
             pl = {k: v for k, v in pl.items() if k != "think"}
             t0 = time.time()
-            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
         wall = time.time() - t0
         r.raise_for_status()
         return r.json(), wall
@@ -263,6 +290,7 @@ def run_longctx(model_name, role, disk_gb, items):
         time.sleep(2)
 
     return {"model": model_name, "role": role, "disk_gb": disk_gb,
+            **arm_stamp(model_name, resolve_arm(model_name, ARM_REQ) or "direct"),
             "depths": depths, "summary": summarize(depths)}
 
 # ── Summary (export-friendly) ─────────────────────────────────────────────────
@@ -280,7 +308,8 @@ def summarize(depths):
     acc_by   = {b: graded[b]["accuracy"]    for b in buckets}
     core_by  = {b: graded[b].get("core_accuracy") for b in buckets}
     hard_by  = {b: graded[b].get("hard_accuracy") for b in buckets}
-    pre_by   = {b: graded[b]["prefill_tps"] for b in buckets}
+    _pre_ok  = lambda v: v if (v is not None and v <= PREFILL_TPS_CEILING) else None
+    pre_by   = {b: _pre_ok(graded[b]["prefill_tps"]) for b in buckets}
     dec_by   = {b: graded[b]["decode_tps"]  for b in buckets}
     wall_by  = {b: graded[b]["wall_s"]      for b in buckets}
     tok_by   = {b: graded[b]["prompt_tokens"] for b in buckets}
@@ -446,7 +475,32 @@ def write_summary(results, out_md, fast_mode=False):
 
 # ── Rescore (grading-policy change, no model calls) ───────────────────────────
 
-def rescore(dry_run=False):
+def _regrade_depths(depths):
+    """Re-run grade() over the STORED per-depth replies, in place. Possible only because each depth
+    persists its raw `response`; the answer key / question index come back from the dataset, which
+    is deterministic and hash-pinned in runs.env. Use after a GRADER change (as opposed to a bar
+    change, which `rescore` alone handles by re-deriving from the stored hits).
+
+    Returns the number of depths whose hits actually moved. Skips any depth with no stored reply or
+    no matching dataset bucket rather than inventing a score for it."""
+    ds = {str(i["bucket"]): i for i in json.loads(DATASET.read_text())["items"]}
+    moved = 0
+    for bucket, dep in depths.items():
+        item = ds.get(str(bucket))
+        if not item or not isinstance(dep, dict) or dep.get("response") is None:
+            continue
+        before = dict(dep.get("hits") or {})
+        fresh  = grade(dep["response"], item["answer_key"], item["question_index"])
+        for k in ("hits", "found", "max", "core_accuracy", "hard_accuracy", "accuracy",
+                  "parse_failed"):
+            if k in fresh:
+                dep[k] = fresh[k]
+        if before != fresh.get("hits"):
+            moved += 1
+    return moved
+
+
+def rescore(dry_run=False, regrade=False):
     """Re-derive every stored two-band summary from the PERSISTED per-depth hits.
 
     A grading bar is not test content: the prompts, the haystack and the model replies are already
@@ -476,6 +530,8 @@ def rescore(dry_run=False):
         if not graded or not V2_KEYS.issubset(set(graded[0]["hits"])):
             skipped += 1; continue            # v1 row — not re-gradable on a two-band bar
         old = rec.get("summary") or {}
+        if regrade:
+            _regrade_depths(depths)
         new = summarize(depths)
         rec["summary"] = new
         changes.append((run_id, model, created, old.get("clean_depth"), new.get("clean_depth"),
@@ -536,8 +592,8 @@ if __name__ == "__main__":
     TODAY  = date.today().isoformat()
     suffix = "_fast" if fast_mode else ""
 
-    if _flag("--rescore"):                       # grading-policy change — no model calls, no cooldown
-        rescore(dry_run=_flag("--dry-run"))
+    if _flag("--rescore") or _flag("--regrade"):  # grading change — no model calls, no cooldown
+        rescore(dry_run=_flag("--dry-run"), regrade=_flag("--regrade"))
         sys.exit(0)
 
     if not DATASET.exists():
@@ -576,7 +632,7 @@ if __name__ == "__main__":
 
     flag = " [FAST MODE]" if fast_mode else ""
     print(f"BenchLLAMA Battery G — long-context retrieval{flag} — {TODAY}", flush=True)
-    print(f"ollama={ollama_host} | think=False | {len(MODELS)} model(s) | "
+    print(f"ollama={ollama_host} | arm={ARM_REQ} | {len(MODELS)} model(s) | "
           f"buckets={[it['bucket'] for it in items]}", flush=True)
 
     OUT_JSON = RESULTS_DIR / f"longctx_{TODAY}{suffix}.json"
@@ -590,7 +646,7 @@ if __name__ == "__main__":
     cloud = {m["name"] for m in registry if m.get("cloud")}
     run_names, all_results, why = resume.plan_single_pass(
         "G", eligible, host=ollama_host, cloud=cloud, force=force,
-        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv, arm=ARM_REQ)
     all_results = list(all_results)
     completed = set(eligible) - set(run_names)
     print("  " + resume.format_report("G", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)

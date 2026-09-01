@@ -46,11 +46,12 @@ CREATE TABLE IF NOT EXISTS results (
     run_id     TEXT NOT NULL,
     model      TEXT NOT NULL,
     battery    TEXT NOT NULL,      -- one of BATTERIES
+    arm        TEXT NOT NULL DEFAULT 'direct',  -- v3 think-aware protocol: direct | think (docs/think-spec.md)
     composite  REAL,               -- nullable headline metric (for fast sort/trend)
     metrics    TEXT,               -- JSON: the model's full per-battery result dict
     per_test   TEXT,               -- JSON: optional per-test detail
     created_at TEXT NOT NULL,      -- when this row was written
-    PRIMARY KEY (run_id, model, battery)
+    PRIMARY KEY (run_id, model, battery, arm)
 );
 -- Per-phase wall-clock for an orchestrated pipeline (Standard, ctx Ladder, A-G, Vision, Embedding).
 -- cooldowns live INSIDE a phase so they're counted in elapsed_s; the 10s inter-phase pause is not.
@@ -81,6 +82,42 @@ def _migrate(c) -> None:
     for col, decl in _RUNS_ADDED:
         if col not in have:
             c.execute(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
+    # v3 (2026-08-28): `arm` joins the results primary key. SQLite cannot alter a PK, so a pre-v3 table
+    # is rebuilt once; every existing row was measured under the old blanket think=False → arm='direct'.
+    rcols = {r["name"] for r in c.execute("PRAGMA table_info(results)").fetchall()}
+    if rcols and "arm" not in rcols:
+        c.executescript("""
+        CREATE TABLE results_v3 (
+            run_id TEXT NOT NULL, model TEXT NOT NULL, battery TEXT NOT NULL,
+            arm TEXT NOT NULL DEFAULT 'direct',
+            composite REAL, metrics TEXT, per_test TEXT, created_at TEXT NOT NULL,
+            PRIMARY KEY (run_id, model, battery, arm));
+        INSERT INTO results_v3(run_id,model,battery,arm,composite,metrics,per_test,created_at)
+            SELECT run_id,model,battery,'direct',composite,metrics,per_test,created_at FROM results;
+        DROP TABLE results;
+        ALTER TABLE results_v3 RENAME TO results;
+        CREATE INDEX IF NOT EXISTS idx_results_model_battery ON results(model, battery);
+        CREATE INDEX IF NOT EXISTS idx_results_battery       ON results(battery);
+        """)
+    # 2026-08-29: the no-thinking arm was renamed fast → direct (`fast` collided with --fast mode). Rows and
+    # the column default written under the old name are migrated once.
+    dflt = next((r["dflt_value"] for r in c.execute("PRAGMA table_info(results)").fetchall() if r["name"] == "arm"), None)
+    if dflt and "fast" in str(dflt):
+        c.executescript("""
+        CREATE TABLE results_v3b (
+            run_id TEXT NOT NULL, model TEXT NOT NULL, battery TEXT NOT NULL,
+            arm TEXT NOT NULL DEFAULT 'direct',
+            composite REAL, metrics TEXT, per_test TEXT, created_at TEXT NOT NULL,
+            PRIMARY KEY (run_id, model, battery, arm));
+        INSERT INTO results_v3b(run_id,model,battery,arm,composite,metrics,per_test,created_at)
+            SELECT run_id,model,battery,CASE WHEN arm='fast' THEN 'direct' ELSE arm END,composite,metrics,per_test,created_at FROM results;
+        DROP TABLE results;
+        ALTER TABLE results_v3b RENAME TO results;
+        CREATE INDEX IF NOT EXISTS idx_results_model_battery ON results(model, battery);
+        CREATE INDEX IF NOT EXISTS idx_results_battery       ON results(battery);
+        """)
+    else:
+        c.execute("UPDATE results SET arm='direct' WHERE arm='fast'")
 
 
 def _now() -> str:
@@ -112,46 +149,59 @@ def start_run(run_id: str, flags: dict | None = None, host: str | None = None, p
 
 
 def record(run_id: str, model: str, battery: str, composite=None,
-           metrics=None, per_test=None, path: Path = DB_PATH) -> None:
-    """UPSERT one model's result for a battery. Overwrites only this (run_id, model, battery)
+           metrics=None, per_test=None, path: Path = DB_PATH, arm: str = "direct") -> None:
+    """UPSERT one model's result for a battery. Overwrites only this (run_id, model, battery, arm)
     row — the anti-clobber core. `metrics` is the model's full result dict (stored as JSON)."""
     start_run(run_id, path=path)  # ensure FK parent exists even if start_run wasn't called first
     with _conn(path) as c:
         c.execute(
-            "INSERT INTO results(run_id,model,battery,composite,metrics,per_test,created_at) "
-            "VALUES(?,?,?,?,?,?,?) "
-            "ON CONFLICT(run_id,model,battery) DO UPDATE SET "
+            "INSERT INTO results(run_id,model,battery,arm,composite,metrics,per_test,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(run_id,model,battery,arm) DO UPDATE SET "
             "  composite=excluded.composite, metrics=excluded.metrics, "
             "  per_test=excluded.per_test, created_at=excluded.created_at",
-            (run_id, model, battery, composite,
+            (run_id, model, battery, arm or "direct", composite,
              json.dumps(metrics) if metrics is not None else None,
              json.dumps(per_test) if per_test is not None else None, _now()))
 
 
-def latest(battery: str, path: Path = DB_PATH) -> dict:
+def _arm_clause(arm):
+    """`arm` filter for the per-model readers: None = any arm (latest row wins, whatever arm it was
+    measured at — right for the batteries, which hold ONE arm per model); 'direct'/'think' = that arm
+    only (the standard suite holds both, so export/resume must ask for one explicitly)."""
+    return ("", ()) if not arm else (" AND r.arm=?", (arm,))
+
+
+def latest(battery: str, path: Path = DB_PATH, arm: str | None = None) -> dict:
     """{model: metrics_dict} — the most recent result PER MODEL for this battery, across all runs.
-    A partial re-run never drops other models: each model resolves to its own latest run."""
+    A partial re-run never drops other models: each model resolves to its own latest run.
+    `arm` — see _arm_clause (v3 think-aware protocol)."""
+    cl, cp = _arm_clause(arm)
     with _conn(path) as c:
         rows = c.execute(
-            "SELECT r.model, r.metrics, r.composite FROM results r "
+            "SELECT r.model, r.metrics, r.composite, r.arm FROM results r "
             "JOIN runs ru ON ru.run_id=r.run_id "
-            "WHERE r.battery=? ORDER BY ru.started_at ASC", (battery,)).fetchall()
+            f"WHERE r.battery=?{cl} ORDER BY ru.started_at ASC", (battery, *cp)).fetchall()
     out: dict = {}
     for row in rows:  # ascending → the last write per model wins = latest (ISO timestamps sort right)
-        out[row["model"]] = json.loads(row["metrics"]) if row["metrics"] else {"composite": row["composite"]}
+        rec = json.loads(row["metrics"]) if row["metrics"] else {"composite": row["composite"]}
+        if isinstance(rec, dict) and "arm" not in rec:
+            rec["arm"] = row["arm"]          # pre-v3 rows carry no stamp — surface the column
+        out[row["model"]] = rec
     return out
 
 
-def latest_env_by_model(battery: str, path: Path = DB_PATH) -> dict:
+def latest_env_by_model(battery: str, path: Path = DB_PATH, arm: str | None = None) -> dict:
     """{model: run_env_dict} — the provenance fingerprint (runs.env) of the run that produced each
     model's LATEST result for this battery. Powers content-addressed resume (resume.py): the env a
     model was scored under, to diff against the current env. `{}` for a model whose run has no env
-    (pre-provenance) — resume treats that as unknown → re-run."""
+    (pre-provenance) — resume treats that as unknown → re-run. `arm` — see _arm_clause."""
+    cl, cp = _arm_clause(arm)
     with _conn(path) as c:
         rows = c.execute(
             "SELECT r.model, ru.env FROM results r "
             "JOIN runs ru ON ru.run_id=r.run_id "
-            "WHERE r.battery=? ORDER BY ru.started_at ASC", (battery,)).fetchall()
+            f"WHERE r.battery=?{cl} ORDER BY ru.started_at ASC", (battery, *cp)).fetchall()
     out: dict = {}
     for row in rows:  # ascending → last write per model wins = latest
         try:
@@ -351,11 +401,12 @@ def record_all(battery: str, results: list, run_id: str | None = None,
                       (rid, started, socket.gethostname(), "{}"))
             for rec in recs:
                 c.execute(
-                    "INSERT INTO results(run_id,model,battery,composite,metrics,per_test,created_at) "
-                    "VALUES(?,?,?,?,?,?,?) ON CONFLICT(run_id,model,battery) DO UPDATE SET "
+                    "INSERT INTO results(run_id,model,battery,arm,composite,metrics,per_test,created_at) "
+                    "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(run_id,model,battery,arm) DO UPDATE SET "
                     "  composite=excluded.composite, metrics=excluded.metrics, "
                     "  per_test=excluded.per_test, created_at=excluded.created_at",
-                    (rid, rec["model"], battery, composite_of(rec), json.dumps(rec), None, now))
+                    (rid, rec["model"], battery, rec.get("arm") or "direct",   # v3: writers stamp arm_stamp()
+                     composite_of(rec), json.dumps(rec), None, now))
                 n += 1
         ensure_env(rid, [r["model"] for r in recs], path=path)   # Guard 2: never leave a run env-less
     except Exception:

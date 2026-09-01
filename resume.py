@@ -62,11 +62,25 @@ def _test_changed(battery: str, prev_env: dict, cur_env: dict) -> str | None:
     return None
 
 
+def _think_point_changed(model: str, prev_env: dict, cur_env: dict, arm: str) -> str | None:
+    """v3 (docs/think-spec.md): the lever a model is measured at is part of the test's identity for
+    that arm. direct arm → its direct_lever; think arm → operating_lever; auto (batteries) → either."""
+    keys = {"direct": ("direct_lever",), "think": ("operating_lever",),
+            "auto": ("operating_lever", "direct_lever")}.get(arm, ())
+    cur = (cur_env.get("think_profiles") or {}).get(model) or {}
+    prev = (prev_env.get("think_profiles") or {}).get(model) or {}
+    for k in keys:
+        if cur.get(k) != prev.get(k):
+            return f"think-point {k} {prev.get(k) or '—'}→{cur.get(k) or '—'}"
+    return None
+
+
 def should_run(battery: str, model: str, cur_env: dict, prev_env: dict | None, *,
                is_cloud: bool = False, scored: bool = True,
-               force: bool = False, check_runtime: bool = False) -> tuple[bool, str]:
+               force: bool = False, check_runtime: bool = False, arm: str = "direct") -> tuple[bool, str]:
     """(run?, reason) for one (model, battery). `prev_env` = runs.env of the run that last scored this
-    model for this battery (None/{} if none). `scored` = does the model have ANY prior result here."""
+    model for this battery (None/{} if none). `scored` = does the model have ANY prior result here.
+    `arm` = direct | think | auto — which think arm this invocation measures (v3)."""
     if force:
         return True, "forced"
     if not scored:
@@ -88,6 +102,11 @@ def should_run(battery: str, model: str, cur_env: dict, prev_env: dict | None, *
     if tc:
         return True, tc
 
+    # 3. think arm (v3) — the model's lever for this arm moved (probe re-ran, or it gained a think arm)
+    tp = _think_point_changed(model, prev_env, cur_env, arm)
+    if tp:
+        return True, tp
+
     # runtime — OPT-IN only (--check-runtime); major.minor gated (patch ignored)
     if check_runtime and runtime_material(prev_env.get("ollama_version"), cur_env.get("ollama_version")):
         return True, f"ollama {prev_env.get('ollama_version')}→{cur_env.get('ollama_version')}"
@@ -99,13 +118,14 @@ def targets(battery: str, universe: list[str], cur_env: dict, *,
             scored_env: dict | None = None, scored_models: set | None = None,
             cloud: set | None = None, force: bool = False,
             explicit_models: list[str] | None = None,
-            check_runtime: bool = False) -> tuple[list, list, dict]:
+            check_runtime: bool = False, arm: str = "direct") -> tuple[list, list, dict]:
     """Split `universe` into (to_run, skipped, reasons) for a battery.
 
-      scored_env     = {model: prev_env}  from results_db.latest_env_by_model(battery)
-      scored_models  = set of models with ANY prior result here (results_db.latest(battery).keys())
+      scored_env     = {model: prev_env}  from results_db.latest_env_by_model(battery, arm=…)
+      scored_models  = set of models with ANY prior result here (results_db.latest(battery, arm=…).keys())
       cloud          = set of cloud model names (digest trigger suppressed)
       explicit_models= --models: run exactly these, ignore resume
+      arm            = direct | think | auto (v3) — see should_run
     """
     if explicit_models:
         return list(explicit_models), [], {m: "explicit" for m in explicit_models}
@@ -116,7 +136,7 @@ def targets(battery: str, universe: list[str], cur_env: dict, *,
     for m in universe:
         run, why = should_run(battery, m, cur_env, scored_env.get(m),
                               is_cloud=(m in cloud), scored=(m in scored_models),
-                              force=force, check_runtime=check_runtime)
+                              force=force, check_runtime=check_runtime, arm=arm)
         reasons[m] = why
         (to_run if run else skipped).append(m)
     return to_run, skipped, reasons
@@ -124,22 +144,27 @@ def targets(battery: str, universe: list[str], cur_env: dict, *,
 
 def resolve(battery: str, universe: list[str], *, host: str = "http://localhost:11434",
             cur_env: dict | None = None, cloud: set | None = None, force: bool = False,
-            explicit_models: list[str] | None = None, check_runtime: bool = False) -> tuple[list, list, dict]:
+            explicit_models: list[str] | None = None, check_runtime: bool = False,
+            arm: str = "direct") -> tuple[list, list, dict]:
     """Convenience wrapper: pulls the per-model prior env + scored set from the DB and computes targets.
-    `cur_env` may be passed to avoid re-fingerprinting (the orchestrator captures one per run)."""
+    `cur_env` may be passed to avoid re-fingerprinting (the orchestrator captures one per run).
+    `arm` (v3): 'direct'/'think' read only that arm's rows (the standard suite holds both); 'auto'
+    reads whichever arm the battery last stored per model."""
     from bench_utils import env_fingerprint
     import results_db
     cur_env = cur_env or env_fingerprint(host=host, models=universe)
-    scored_env = results_db.latest_env_by_model(battery)
-    scored_models = set(results_db.latest(battery).keys())
+    db_arm = None if arm == "auto" else arm
+    scored_env = results_db.latest_env_by_model(battery, arm=db_arm)
+    scored_models = set(results_db.latest(battery, arm=db_arm).keys())
     return targets(battery, universe, cur_env, scored_env=scored_env, scored_models=scored_models,
                    cloud=cloud or set(), force=force, explicit_models=explicit_models,
-                   check_runtime=check_runtime)
+                   check_runtime=check_runtime, arm=arm)
 
 
 def plan_single_pass(battery: str, eligible: list[str], *, host: str = "http://localhost:11434",
                      cur_env: dict | None = None, cloud: set | None = None, force: bool = False,
-                     explicit_models: list[str] | None = None, check_runtime: bool = False):
+                     explicit_models: list[str] | None = None, check_runtime: bool = False,
+                     arm: str = "direct"):
     """For the single-pass batteries (standard/ladder/A–D/G/V/EMB). `eligible` = ALL registry models this
     battery runs (NOT filtered by --models). Returns (run_names, carry_forward, reasons):
       run_names     — models to actually benchmark this invocation
@@ -150,12 +175,12 @@ def plan_single_pass(battery: str, eligible: list[str], *, host: str = "http://l
     import results_db
     run_names, skipped, reasons = resolve(battery, eligible, host=host, cur_env=cur_env, cloud=cloud or set(),
                                           force=force, explicit_models=explicit_models,
-                                          check_runtime=check_runtime)
+                                          check_runtime=check_runtime, arm=arm)
     # --force = "fresh overwrite" → NO carry-forward (matches legacy --force; also keeps the averager's
     # per-pass output — it calls with --force --models — to exactly its targets, not the whole fleet).
     if force:
         return run_names, [], reasons
-    db_prev = results_db.latest(battery)
+    db_prev = results_db.latest(battery, arm=(None if arm == "auto" else arm))
     run_set = set(run_names)
     carry = [db_prev[m] for m in eligible if m in db_prev and m not in run_set]
     return run_names, carry, reasons
@@ -205,13 +230,21 @@ def _eligible(battery, reg):
     return names
 
 
+# The arm each battery's RUNNER actually resolves with — the report must mirror the runner or it
+# lies. aptitude.py:61 uses `auto` for B/C/D/E/F/F-elastic and `direct` only for A;
+# average_e_runs.py passes arm="auto". Reporting those at "direct" reads think-arm-only rows as
+# absent and prints `new-model` for a model measured hours earlier (seen 2026-09-01 on
+# granite4.2:3b and ornith-1.5:9b, both of which had fresh think-arm E rows).
+_REPORT_ARM = {"B": "auto", "C": "auto", "D": "auto", "E": "auto", "F": "auto", "F-elastic": "auto"}
+
+
 def report(batteries=None, host="http://localhost:11434", check_runtime=False) -> str:
     import json as _json
     from pathlib import Path as _Path
     from bench_utils import env_fingerprint
     reg = _json.loads((_Path(__file__).parent / "models.json").read_text())
     cloud = {m["name"] for m in reg if m.get("cloud")}
-    order = ["standard", "ladder", "A", "B", "C", "D", "E", "F", "F-elastic", "G", "vision", "embedding", "image"]
+    order = ["standard", "ladder", "A", "B", "C", "D", "E", "F", "F-elastic", "G", "confab", "vision", "embedding", "image"]
     bats = batteries or order
     cur = env_fingerprint(host=host)
     out = [f"Resume report (ollama {cur.get('ollama_version')} · benchllama {cur.get('benchllama_commit')}"
@@ -220,7 +253,8 @@ def report(batteries=None, host="http://localhost:11434", check_runtime=False) -
         elig = _eligible(b, reg)
         if not elig:
             continue
-        tr, sk, why = resolve(b, elig, cur_env=cur, cloud=cloud, check_runtime=check_runtime)
+        tr, sk, why = resolve(b, elig, cur_env=cur, cloud=cloud, check_runtime=check_runtime,
+                              arm=_REPORT_ARM.get(b, "direct"))
         out.append(format_report(b, tr, sk, why))
     return "\n".join(out)
 

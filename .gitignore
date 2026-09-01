@@ -17,3 +17,9 @@ results/*.db
 results/imagegen_images/*
 !results/imagegen_images/.gitkeep
 !results/imagegen_images/README.md
+
+# backups/snapshots written beside per-run outputs (DB copies, models.json snapshots)
+results/*.out
+results/*.bak-*
+results/*.bak
+results/discarded/

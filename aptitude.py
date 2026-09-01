@@ -28,7 +28,8 @@ import requests
 from pathlib import Path
 from datetime import date
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
-                         post_with_budget_retry, F_ELASTIC_CUTOFFS)
+                         post_with_budget_retry, F_ELASTIC_CUTOFFS,
+                         apply_think, arm_stamp, reply_stats, requested_arm, resolve_arm, budget_timeout)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -55,13 +56,19 @@ fast_mode          = _flag("--fast")
 force              = _flag("--force")
 capable_only       = _flag("--capable-only")   # Battery C/D: skip models that failed calculate
 battery_arg        = _arg("--battery", "B").upper()
+# v3 (docs/think-spec.md): Battery A is the router SPEED lane → direct arm; every other battery measures
+# each model at its operating point (`auto`: think arm if the probe found one, else fast).
+ARM_REQ            = "direct" if battery_arg == "A" else requested_arm(default="auto")
 ollama_host        = _arg("--ollama", "http://localhost:11434")
 worker_prompt_path = _arg("--system-prompt")
 
 model_args = []
 if "--models" in sys.argv:
     idx = sys.argv.index("--models")
-    model_args = [a for a in sys.argv[idx + 1:] if not a.startswith("--")]
+    for a in sys.argv[idx + 1:]:
+        if a.startswith("--"):
+            break
+        model_args.append(a)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -105,7 +112,8 @@ def _filter_tool_capable(models):
     Used by --capable-only for Battery C and D to skip personality-only workers.
     Falls back to the full list if no benchmark data is available.
     """
-    benchmarks = sorted(RESULTS_DIR.glob("benchmark_*.json"), key=lambda p: p.stat().st_mtime)
+    benchmarks = sorted((p for p in RESULTS_DIR.glob("benchmark_*.json") if "_think" not in p.name),   # fast-arm file
+                        key=lambda p: p.stat().st_mtime)
     if not benchmarks:
         print("  --capable-only: no benchmark JSON found — running all models", flush=True)
         return models
@@ -222,32 +230,38 @@ PROMPT_WEIGHT_TEST = "Who are you, and what do you actually enjoy doing?"
 
 # ── Ollama helpers ────────────────────────────────────────────────────────────
 
-def chat(model, messages, max_tokens=600, think=False, tools=None):
+def chat(model, messages, max_tokens=600, think=None, tools=None, retry_on_truncation=False):
+    """think=None (default) → the model's arm for this invocation (v3: lever + budget allowance).
+    An explicit bool/level pins the lever with NO allowance — diagnostics only, never for scoring."""
     payload = {
         "model":    model,
         "messages": messages,
         "stream":   False,
         "options":  {"num_ctx": NUM_CTX},
-        "think":    think,
     }
     if max_tokens:
         payload["options"]["num_predict"] = max_tokens
     if tools:
         payload["tools"] = tools
+    if think is None:
+        apply_think(payload, model, resolve_arm(model, ARM_REQ) or "direct")
+    else:
+        payload["think"] = think
     def _post(pl):
         t0 = time.time()
-        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
         if r.status_code == 400 and "think" in pl:
             print(f"\n  ⚠  {model}: think parameter rejected (400) — retrying without it", flush=True)
             pl = {k: v for k, v in pl.items() if k != "think"}
             t0 = time.time()
-            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
         wall = time.time() - t0
         r.raise_for_status()
         return r.json(), wall
 
     # Retry once with headroom if the model burned the whole budget thinking (bench_utils).
-    return post_with_budget_retry(payload, _post, label=model)
+    return post_with_budget_retry(payload, _post, label=model,
+                                  retry_on_truncation=retry_on_truncation)
 
 def tps(data):
     ec = data.get("eval_count", 0)
@@ -380,20 +394,18 @@ def run_battery_b(model_name):
         print(f"    [{label:<8}] {ptok:4d} prompt-words  {m['words']}w reply  [{', '.join(sigs) or 'none'}]", flush=True)
         print(f"      → {text[:120].replace(chr(10), ' ')}", flush=True)
 
-    # B5 — Think toggle
-    print("\n  [B5] Think toggle (overwhelmed, think=off vs on)...", flush=True)
-    for think_val in [False, True]:
-        data, wall = chat(model_name,
-                          sys_full + [{"role": "user", "content": OVERWHELMED_PROMPT}],
-                          max_tokens=800, think=think_val)
-        text = data.get("message", {}).get("content", "")
-        key = f"b5_think_{'on' if think_val else 'off'}"
-        m = metrics(text, wall, tps(data))
-        m["response"] = text
-        result["tests"][key] = m
-        sigs = [k for k, v in m["signals"].items() if v]
-        print(f"    [think={'on ' if think_val else 'off'}] {m['words']}w  wall={wall:.1f}s  [{', '.join(sigs) or 'none'}]", flush=True)
-        print(f"      → {text[:120].replace(chr(10), ' ')}", flush=True)
+    # B5 — Think arm (v3): the overwhelmed prompt at the model's measured arm. The old off/on toggle was
+    # budget-confounded (docs/think-spec.md); the direct/think delta now comes from the standard suite.
+    print("\n  [B5] Think arm (overwhelmed at the measured arm)...", flush=True)
+    data, wall = chat(model_name, sys_full + [{"role": "user", "content": OVERWHELMED_PROMPT}], max_tokens=800)
+    text = data.get("message", {}).get("content", "")
+    m = metrics(text, wall, tps(data))
+    m["response"] = text
+    m.update(reply_stats(data))
+    result["tests"]["b5_think_arm"] = m
+    sigs = [k for k, v in m["signals"].items() if v]
+    print(f"    {m['words']}w  wall={wall:.1f}s  thinking_chars={m['thinking_chars']}  [{', '.join(sigs) or 'none'}]", flush=True)
+    print(f"      → {text[:120].replace(chr(10), ' ')}", flush=True)
 
     return result
 
@@ -443,19 +455,15 @@ def write_battery_b_summary(results, out_md: Path, fast_mode=False):
         lines.append(row)
     lines.append("")
 
-    lines += ["### B5 — Think Toggle", ""]
+    lines += ["### B5 — Think arm (overwhelmed at the measured arm)", ""]
     hdr3 = "| | " + " | ".join(f"`{r['model']}`" for r in results) + " |"
     sep3 = "|-|" + "|".join(["---"] * len(results)) + "|"
     lines += [hdr3, sep3]
-    for think_val in [False, True]:
-        key = f"b5_think_{'on' if think_val else 'off'}"
-        row = f"| think={'on' if think_val else 'off'} | "
-        row += " | ".join(
-            f"{r['tests'].get(key, {}).get('words', '—')}w "
-            f"({r['tests'].get(key, {}).get('wall_s', '—')}s)"
-            for r in results
-        ) + " |"
-        lines.append(row)
+    lines.append("| arm | " + " | ".join(f"{r.get('arm','direct')}/{r.get('think_lever','false')}" for r in results) + " |")
+    lines.append("| reply | " + " | ".join(
+        f"{r['tests'].get('b5_think_arm', {}).get('words', '—')}w "
+        f"({r['tests'].get('b5_think_arm', {}).get('wall_s', '—')}s · think {r['tests'].get('b5_think_arm', {}).get('thinking_chars', '—')}c)"
+        for r in results) + " |")
     lines.append("")
 
     for r in results:
@@ -497,14 +505,13 @@ def write_battery_b_summary(results, out_md: Path, fast_mode=False):
                 "", t.get("response", "—"), "",
             ]
 
-        lines += ["### B5 — Think Toggle", ""]
-        for think_val in [False, True]:
-            key = f"b5_think_{'on' if think_val else 'off'}"
-            t = r["tests"].get(key, {})
-            lines += [
-                f"**think={'on' if think_val else 'off'}** ({t.get('words','?')}w · wall={t.get('wall_s','?')}s · tps={t.get('tps','?')} · signals: {_sig_str(t)})",
-                "", t.get("response", "—"), "",
-            ]
+        lines += ["### B5 — Think arm", ""]
+        t = r["tests"].get("b5_think_arm", {})
+        lines += [
+            f"**{r.get('arm','direct')}/{r.get('think_lever','false')}** ({t.get('words','?')}w · wall={t.get('wall_s','?')}s · "
+            f"tps={t.get('tps','?')} · thinking_chars={t.get('thinking_chars','—')} · signals: {_sig_str(t)})",
+            "", t.get("response", "—"), "",
+        ]
 
     out_md.write_text("\n".join(lines))
     print(f"MD → {out_md}", flush=True)
@@ -920,17 +927,20 @@ def _think_diagnosis(raw_api: dict) -> str:
         return "api_error"
 
 
-def _chat_ctx(model, messages, ctx, max_tokens, think=False):
+def _chat_ctx(model, messages, ctx, max_tokens, think=None):
     """Like chat() but with a custom num_ctx override."""
     payload = {
         "model":    model,
         "messages": messages,
         "stream":   False,
         "options":  {"num_ctx": ctx, "num_predict": max_tokens},
-        "think":    think,
     }
+    if think is None:
+        apply_think(payload, model, resolve_arm(model, ARM_REQ) or "direct")
+    else:
+        payload["think"] = think
     t0   = time.time()
-    r    = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
+    r    = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=budget_timeout(payload, TIMEOUT))
     wall = time.time() - t0
     r.raise_for_status()
     return r.json(), wall
@@ -946,31 +956,22 @@ def run_battery_c(model_name):
     print(f"BATTERY C: {model_name}", flush=True)
     print("=" * 60, flush=True)
 
-    # C1 — jpeg_signals: think=False vs think=True, capture diagnosis
-    print("\n  [C1] jpeg_signals (think=off vs think=on)...", flush=True)
-    c1_results = {}
-    for think_val in [False, True]:
-        data, wall = chat(model_name, sys_full + [{"role": "user", "content": JPEG_PROMPT}],
-                          max_tokens=1500, think=think_val)
-        text  = data.get("message", {}).get("content", "")
-        cov   = _jpeg_coverage(text)
-        diag  = _think_diagnosis(data) if think_val else "think_off"
-        t     = tps(data)
-        key   = "think_on" if think_val else "think_off"
-        c1_results[key] = {
-            "score": cov["score"], "max": cov["max"], "pass": cov["pass"],
-            "signals": cov["signals"], "words": word_count(text),
-            "wall_s": round(wall, 1), "tps": t, "think_diagnosis": diag,
-            "response": text,
-        }
-        sigs_hit = [k for k, v in cov["signals"].items() if v]
-        print(
-            f"    [think={key[-2:]}]  {cov['score']}/{cov['max']} signals  "
-            f"{word_count(text)}w  diag={diag}",
-            flush=True,
-        )
-        for s in sigs_hit:
-            print(f"      ✓ {s}", flush=True)
+    # C1 — jpeg_signals at the measured arm (v3). The off/on toggle was budget-confounded
+    # (docs/think-spec.md) — the think delta is the standard suite's job now. ⚠ jpeg has a ±2 noise floor.
+    print("\n  [C1] jpeg_signals (at the measured arm)...", flush=True)
+    data, wall = chat(model_name, sys_full + [{"role": "user", "content": JPEG_PROMPT}], max_tokens=1500)
+    text  = data.get("message", {}).get("content", "")
+    cov   = _jpeg_coverage(text)
+    diag  = _think_diagnosis(data) if (data.get("message") or {}).get("thinking") else "think_off"
+    c1_results = {
+        "score": cov["score"], "max": cov["max"], "pass": cov["pass"],
+        "signals": cov["signals"], "words": word_count(text),
+        "wall_s": round(wall, 1), "tps": tps(data), "think_diagnosis": diag,
+        "response": text, **reply_stats(data),
+    }
+    print(f"    {cov['score']}/{cov['max']} signals  {word_count(text)}w  diag={diag}", flush=True)
+    for s in [k for k, v in cov["signals"].items() if v]:
+        print(f"      ✓ {s}", flush=True)
     result["tests"]["c1_jpeg_signals"] = c1_results
 
     # C2 — rag_deep: extended RAG vs fine-tuning with 5 examples per approach
@@ -1049,28 +1050,6 @@ def run_battery_c(model_name):
               flush=True)
     result["tests"]["c5_num_predict"] = c5_results
 
-    # C6 — think_coverage: JPEG think=True with the lean prompt (vs full prompt in C1)
-    print("\n  [C6] think_coverage (JPEG, think=on, lean prompt)...", flush=True)
-    sys_lean = [{"role": "system", "content": PROMPT_WORKER_LEAN}]
-    data, wall = chat(model_name, sys_lean + [{"role": "user", "content": JPEG_PROMPT}],
-                      max_tokens=1500, think=True)
-    text = data.get("message", {}).get("content", "")
-    cov  = _jpeg_coverage(text)
-    diag = _think_diagnosis(data)
-    result["tests"]["c6_think_coverage"] = {
-        "score": cov["score"], "max": cov["max"], "pass": cov["pass"],
-        "signals": cov["signals"], "words": word_count(text),
-        "wall_s": round(wall, 1), "tps": tps(data), "think_diagnosis": diag,
-        "response": text,
-    }
-    c1_think = result["tests"]["c1_jpeg_signals"].get("think_on", {})
-    delta    = cov["score"] - c1_think.get("score", 0)
-    print(
-        f"    {cov['score']}/{cov['max']} signals  {word_count(text)}w  "
-        f"diag={diag}  Δ vs full-prompt-think={delta:+d}",
-        flush=True,
-    )
-
     return result
 
 
@@ -1084,18 +1063,15 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
         f"`num_ctx={NUM_CTX}` (baseline) | worker prompt", "", "---", "",
     ]
 
-    lines += ["## C1 — JPEG signals: think=off vs think=on", ""]
-    hdr = "| Model | off score | on score | delta | think diagnosis |"
-    sep = "|-------|-----------|----------|-------|-----------------|"
+    lines += ["## C1 — JPEG signals (at the measured arm; ±2 noise floor)", ""]
+    hdr = "| Model | arm | score | words | think diagnosis |"
+    sep = "|-------|-----|-------|-------|-----------------|"
     lines += [hdr, sep]
     for r in results:
-        c1    = r["tests"].get("c1_jpeg_signals", {})
-        off   = c1.get("think_off", {})
-        on    = c1.get("think_on",  {})
-        delta = (on.get("score", 0) or 0) - (off.get("score", 0) or 0)
+        c1 = r["tests"].get("c1_jpeg_signals", {})
         lines.append(
-            f"| `{r['model']}` | {off.get('score','?')}/7 | {on.get('score','?')}/7 "
-            f"| {delta:+d} | {on.get('think_diagnosis','—')} |"
+            f"| `{r['model']}` | {r.get('arm','direct')}/{r.get('think_lever','false')} | {c1.get('score','?')}/7 "
+            f"| {c1.get('words','?')}w | {c1.get('think_diagnosis','—')} |"
         )
     lines.append("")
 
@@ -1127,35 +1103,19 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
         )
     lines.append("")
 
-    lines += ["## C6 — think_coverage (JPEG, lean prompt)", ""]
-    hdr6 = "| Model | score | diagnosis | Δ vs full-think |"
-    sep6 = "|-------|-------|-----------|-----------------|"
-    lines += [hdr6, sep6]
-    for r in results:
-        c6   = r["tests"].get("c6_think_coverage", {})
-        c1on = r["tests"].get("c1_jpeg_signals", {}).get("think_on", {})
-        delta = (c6.get("score", 0) or 0) - (c1on.get("score", 0) or 0)
-        lines.append(
-            f"| `{r['model']}` | {c6.get('score','?')}/7 "
-            f"| {c6.get('think_diagnosis','—')} | {delta:+d} |"
-        )
-    lines.append("")
-
     for r in results:
         lines += ["---", "", f"## `{r['model']}`", ""]
 
-        lines += ["### C1 — JPEG signals (think off / on)", ""]
-        c1 = r["tests"].get("c1_jpeg_signals", {})
-        for key in ["think_off", "think_on"]:
-            d = c1.get(key, {})
-            lines += [
-                f"**{key}** — {d.get('score','?')}/7 signals  "
-                f"{d.get('words','?')}w  wall={d.get('wall_s','?')}s  "
-                f"tps={d.get('tps','?')}  diagnosis={d.get('think_diagnosis','—')}",
-            ]
-            for sig, hit in (d.get("signals") or {}).items():
-                lines.append(f"  - {'✓' if hit else '✗'} {sig}")
-            lines += ["", d.get("response", "—"), ""]
+        lines += ["### C1 — JPEG signals (at the measured arm)", ""]
+        d = r["tests"].get("c1_jpeg_signals", {})
+        lines += [
+            f"**{r.get('arm','direct')}/{r.get('think_lever','false')}** — {d.get('score','?')}/7 signals  "
+            f"{d.get('words','?')}w  wall={d.get('wall_s','?')}s  "
+            f"tps={d.get('tps','?')}  diagnosis={d.get('think_diagnosis','—')}  thinking_chars={d.get('thinking_chars','—')}",
+        ]
+        for sig, hit in (d.get("signals") or {}).items():
+            lines.append(f"  - {'✓' if hit else '✗'} {sig}")
+        lines += ["", d.get("response", "—"), ""]
 
         c2 = r["tests"].get("c2_rag_deep", {})
         lines += [
@@ -1196,15 +1156,6 @@ def write_battery_c_summary(results, out_md: Path, fast_mode=False):
             )
         lines.append("")
 
-        c6   = r["tests"].get("c6_think_coverage", {})
-        c1on = r["tests"].get("c1_jpeg_signals", {}).get("think_on", {})
-        delta = (c6.get("score", 0) or 0) - (c1on.get("score", 0) or 0)
-        lines += [
-            "### C6 — think_coverage (lean prompt)", "",
-            f"({c6.get('score','?')}/7 signals · {c6.get('words','?')}w · "
-            f"diagnosis={c6.get('think_diagnosis','—')} · Δ={delta:+d} vs full-prompt-think)",
-            "", c6.get("response", "—"), "",
-        ]
 
     out_md.write_text("\n".join(lines))
     print(f"MD → {out_md}", flush=True)
@@ -1313,7 +1264,7 @@ def _exec_tool(name, args, error_mode=False, error_on=None):
     return {"error": f"Unknown tool: {name}"}
 
 
-def _tool_loop(model_name, messages, tools, max_steps=6, think=False,
+def _tool_loop(model_name, messages, tools, max_steps=6, think=None,
                error_mode=False, error_on=None):
     """Multi-turn tool-calling loop.
 
@@ -1472,31 +1423,6 @@ def run_battery_d(model_name):
     print(f"    grade={grade4b}  lookup_ok={lookup_got4b}  calc_tried={calc_tried4b}  invents={invents_total4b}", flush=True)
     print(f"    → {text4b[:120].replace(chr(10), ' ')}", flush=True)
 
-    # D5 — think_tools: chain_3 with think=False vs think=True.
-    # Uses _think_diagnosis() on the actual final API response (not a step-count approximation).
-    print("\n  [D5] think_tools (chain_3 with think=off vs think=on)...", flush=True)
-    d5_results = {}
-    for think_val in [False, True]:
-        text5, calls5, steps5, wall5, last_raw5 = _tool_loop(
-            model_name,
-            sys_std + [{"role": "user", "content": CHAIN_3_PROMPT}],
-            tools=TOOL_DEFS_D, think=think_val,
-        )
-        tool_seq5 = [c["tool"] for c in calls5]
-        final_ok5 = "43.9" in text5 or "43.91" in text5
-        diag5     = _think_diagnosis(last_raw5) if think_val else "think_off"
-        key = "think_on" if think_val else "think_off"
-        d5_results[key] = {
-            "tool_sequence": tool_seq5, "steps": steps5,
-            "final_answer_ok": final_ok5, "wall_s": round(wall5, 1),
-            "think_diagnosis": diag5,
-            "calls": calls5, "response": text5,
-        }
-        mark = "✓" if final_ok5 else "✗"
-        print(f"    [think={key[-2:]}] {mark}  seq={tool_seq5}  steps={steps5}  "
-              f"wall={round(wall5,1)}s  diag={diag5}", flush=True)
-    result["tests"]["d5_think_tools"] = d5_results
-
     # D6 — parallel_tools: two independent calculations in one request
     print("\n  [D6] parallel_tools (two calcs in one turn)...", flush=True)
     text6, calls6, steps6, wall6, _ = _tool_loop(
@@ -1617,24 +1543,6 @@ def write_battery_d_summary(results, out_md: Path, fast_mode=False):
         )
     lines.append("")
 
-    # D5 think_tools table (with think_diagnosis column)
-    lines += ["## D5 — think_tools (chain_3 with think on/off)", ""]
-    hdr5 = "| Model | off final | on final | off steps | on steps | think diag (on) |"
-    sep5 = "|-------|-----------|----------|-----------|----------|-----------------|"
-    lines += [hdr5, sep5]
-    for r in results:
-        d5  = r["tests"].get("d5_think_tools", {})
-        off = d5.get("think_off", {})
-        on  = d5.get("think_on",  {})
-        lines.append(
-            f"| `{r['model']}` "
-            f"| {'✓' if off.get('final_answer_ok') else '✗'} "
-            f"| {'✓' if on.get('final_answer_ok') else '✗'} "
-            f"| {off.get('steps','?')} | {on.get('steps','?')} "
-            f"| {on.get('think_diagnosis','—')} |"
-        )
-    lines.append("")
-
     # D7 voice breakdown
     lines += ["## D7 — personality_tool (score / voice signals)", ""]
     hdr7 = "| Model | Score | lookup | calc | answer | voice | voice signals |"
@@ -1708,17 +1616,6 @@ def write_battery_d_summary(results, out_md: Path, fast_mode=False):
             f"calc_tried={d4b.get('calc_attempted','?')}  invents={d4b.get('invents_total','?')}",
             "", d4b.get("response", "—"), "",
         ]
-
-        lines += ["### D5 — think_tools", ""]
-        d5 = r["tests"].get("d5_think_tools", {})
-        for k in ["think_off", "think_on"]:
-            d = d5.get(k, {})
-            lines += [
-                f"**{k}** — seq={d.get('tool_sequence','?')}  "
-                f"steps={d.get('steps','?')}  final={d.get('final_answer_ok','?')}  "
-                f"wall={d.get('wall_s','?')}s  diag={d.get('think_diagnosis','—')}",
-                "", d.get("response", "—"), "",
-            ]
 
         d6 = r["tests"].get("d6_parallel", {})
         lines += [
@@ -1855,8 +1752,11 @@ def run_battery_e(model_name):
         cat, pid = p["category"], p["id"]
         tag = f"{cat}/{p['lang']}" if cat == "E3" else cat
         print(f"\n  [{pid}] ({tag})...", flush=True)
+        # retry_on_truncation: E5/E-hard emit 2.4k-3.4k chars of code against this 1024 budget, so a
+        # think lever can burn it before the code starts and return a 19-char fragment. Opt-in here
+        # only — C5 caps output ON PURPOSE to measure the num_predict ceiling (2026-09-01).
         data, wall = chat(model_name, sys_std + [{"role": "user", "content": p["prompt"]}],
-                          max_tokens=1024)
+                          max_tokens=1024, retry_on_truncation=True)
         resp = data.get("message", {}).get("content", "")
         if cat == "E5":
             detail = _grade_tests(resp, p)
@@ -1868,6 +1768,12 @@ def run_battery_e(model_name):
             detail = _grade_codegen(resp, p)
         detail["category"] = cat
         detail["wall_s"]   = round(wall, 1)
+        # Carry the budget-retry telemetry into the result. Without it a starved call is
+        # indistinguishable from a wrong answer after the fact: the 08-31 run stored `gate:empty`
+        # with no record of whether the retry fired, so the defect could only be found by hand
+        # (2026-09-01).
+        if data.get("_budget_retry"):
+            detail["_budget_retry"] = data["_budget_retry"]
         result["tests"][pid] = detail
         # graceful-skip (runtime/libs missing) → score None, excluded from the mean
         if detail.get("score") is not None:
@@ -2157,7 +2063,7 @@ def write_battery_e_summary(results, out_md: Path, fast_mode=False):
     lines = [
         f"# Aptitude Battery E — Coding{flag}", "",
         "Models: " + ", ".join("`" + r["model"] + "`" for r in results),
-        f"`num_ctx={NUM_CTX}` | `think=False` | execution-graded (structural gate → sandboxed run)", "",
+        f"`num_ctx={NUM_CTX}` | arm=per-model (v3, docs/think-spec.md) | execution-graded (structural gate → sandboxed run)", "",
         "Composite = weighted mean — E1 gen `.12` · E2 debug `.22` · E3 multi-lang `.18` · "
         "E5 tests `.18` · E7 constraints `.15` · E9 markup `.15` · E-hard `.18` (4-task "
         "discriminator band; also gates `coder`).",
@@ -2442,7 +2348,7 @@ def write_battery_f_elastic_summary(results, out_md: Path, fast_mode=False):
         "(no-exclamation / no-lists / end-with-question / required-prefix) **drives the verdict**; "
         "`len` = the word-cap (a standalone verbosity meter) does **not**, so wordiness can't "
         "masquerade as prompt-insensitivity.",
-        f"`num_ctx={NUM_CTX}` | `think=False` | single-pass | rungs = "
+        f"`num_ctx={NUM_CTX}` | arm=per-model (v3, docs/think-spec.md) | single-pass | rungs = "
         + " → ".join(f"{r['id']}({len(r['constraints'])})" for r in rungs), "",
         f"**Declared verdict cutoffs** (keyed on `instruction_adherence`; {c.get('_status','')}): "
         f"`robust` = σ < {c['sigma_hi']} AND instr ≥ {c['adherence_hi']}; "
@@ -2482,7 +2388,7 @@ def write_battery_f_summary(results, out_md: Path, fast_mode=False):
         f"# Aptitude Battery F — Conversational Consistency{flag}", "",
         "Multi-turn (8-turn live rollout) · deterministic core (F1 persona_hold · F2 "
         "pressure_resistance · F3 voice_stability · F4 callback_fidelity · F5 coherence_recovery).",
-        f"`num_ctx={NUM_CTX}` | `think=False` | single-pass (multipass-averaged in the suite).", "",
+        f"`num_ctx={NUM_CTX}` | arm=per-model (v3, docs/think-spec.md) | single-pass (multipass-averaged in the suite).", "",
         "| Model | Composite | F1 | F2 | F3 | F4 | F5 | stance? |",
         "|-------|-----------|----|----|----|----|----|:-------:|",
     ]
@@ -2560,7 +2466,7 @@ if __name__ == "__main__":
     cloud = {m["name"] for m in _reg if m.get("cloud")}
     run_names, all_results, why = resume.plan_single_pass(
         _rk, eligible, host=ollama_host, cloud=cloud, force=force,
-        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv, arm=ARM_REQ)
     all_results = list(all_results)
     completed = set(eligible) - set(run_names)
     print("  " + resume.format_report(_rk, run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
@@ -2580,6 +2486,7 @@ if __name__ == "__main__":
         print(f"MODEL: {model_name}  ({disk_gb:.1f} GB disk)  battery={battery_arg}", flush=True)
         try:
             r = runner(model_name)
+            r.update(arm_stamp(model_name, resolve_arm(model_name, ARM_REQ) or "direct"))   # v3
         except Exception as e:
             print(f"\n  ✗ {model_name} FAILED: {e} — skipping\n", flush=True)
             r = {"model": model_name, "disk_gb": disk_gb, "error": str(e), "tests": {}}

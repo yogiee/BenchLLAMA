@@ -36,6 +36,7 @@ import numpy as np
 from collections import defaultdict
 from pathlib import Path
 from datetime import date
+from bench_utils import apply_think as _apply_think   # v3 think-aware protocol
 from bench_utils import cooldown, latest_result, sort_registry
 
 REPO        = Path(__file__).parent
@@ -101,8 +102,8 @@ def chat_image(model, prompt, image_b64, max_tokens):
         ],
         "stream": False,
         "options": {"num_ctx": NUM_CTX, "num_predict": max_tokens},
-        "think": False,
     }
+    _apply_think(payload, model, "direct")   # v3: direct arm (a vision-capable thinker still gets its allowance)
     t0 = time.time()
     r = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
     if r.status_code == 400 and "think" in payload:

@@ -77,6 +77,7 @@ def _build_extra(payload: dict) -> list:
     return extra
 
 
+_MULTIPASS = ("E", "F", "F-elastic")   # batteries average_e_runs.py drives; only these accept --runs
 _NAME_RE = re.compile(r"^[\w./:-]+$")   # model names in payloads → subprocess argv (no shell, but keep tight)
 
 
@@ -104,14 +105,23 @@ def _units_phases(payload: dict):
         common += ["--models", *models]
     p = payload.get("params") or {}
     unit_extra = {}
-    if p.get("runs") is not None:
-        try:
-            runs = max(1, min(9, int(p["runs"])))
-        except (TypeError, ValueError):
-            return None, "bad runs value"
-        if runs != 3:                                   # 3 = the averager's default
-            for u in ("E", "F", "F-elastic"):
-                unit_extra[u] = ["--runs", str(runs)]
+    runs_p = p.get("runs")
+    if runs_p is not None:
+        # `runs` is either a scalar (applies to every multipass battery — the original contract) or
+        # a {unit: n} mapping. The mapping exists because the multipass batteries do NOT cost the
+        # same: at v3 operating points a 3-pass Battery E is ~29 h while a 3-pass F is ~2.9 h, so a
+        # run may reasonably want a single-pass E beside a full 3-pass F rather than degrading both.
+        spec = dict(runs_p) if isinstance(runs_p, dict) else {u: runs_p for u in _MULTIPASS}
+        bad = [u for u in spec if u not in _MULTIPASS]
+        if bad:
+            return None, f"runs: not a multipass battery: {', '.join(map(str, bad))}"
+        for u, n in spec.items():
+            try:
+                n = max(1, min(9, int(n)))
+            except (TypeError, ValueError):
+                return None, "bad runs value"
+            if n != 3:                                  # 3 = the averager's default
+                unit_extra[u] = ["--runs", str(n)]
     confab = []
     if p.get("grade") in ("llm", "signal"):
         confab += ["--grade", p["grade"]]
@@ -260,9 +270,12 @@ async def _model_detail(request):
     the structured per-battery numbers come from rankings.json client-side; this serves the
     'actual prompt + response that produced the score' for the standard suite."""
     name = request.match_info["name"]
+    # v3 think-aware protocol: the standard suite writes one file per arm (benchmark_<date>.json = direct,
+    # benchmark_<date>_think.json = think). Default to the direct arm; `?arm=think` serves the other.
+    want_think = request.query.get("arm", "direct") == "think"
     files = sorted(
         [p for p in RESULTS.glob("benchmark_*.json")
-         if "_fast" not in p.name and p.name[10:11].isdigit()],
+         if "_fast" not in p.name and p.name[10:11].isdigit() and (("_think" in p.name) == want_think)],
         key=lambda p: p.stat().st_mtime, reverse=True)
     fallback = None  # newest record found, even if it errored with no tests
     for f in files:

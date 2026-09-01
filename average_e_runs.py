@@ -51,7 +51,12 @@ def _arg(name, default=None):
 def _models_arg():
     if "--models" in sys.argv:
         i = sys.argv.index("--models")
-        return [a for a in sys.argv[i + 1:] if not a.startswith("--")]
+        out = []
+        for a in sys.argv[i + 1:]:
+            if a.startswith("--"):
+                break
+            out.append(a)
+        return out
     return []
 
 
@@ -63,6 +68,12 @@ def _completion_models():
         return [m["name"] for m in reg if "completion" in (m.get("capabilities") or [])]
     except Exception:
         return []
+
+
+def _arm_of(recs):
+    """v3: carry the arm stamp of the per-run records onto the averaged record (all passes share it)."""
+    r0 = recs[0] if recs else {}
+    return {k: r0.get(k) for k in ("arm", "think_lever", "think_class", "think_allowance") if k in r0}
 
 
 def _resume_targets(explicit_models, force, bat):
@@ -77,7 +88,7 @@ def _resume_targets(explicit_models, force, bat):
     tr, sk, why = resume.resolve("F-elastic" if bat == "F-ELASTIC" else bat, universe,
                                  cloud=cloud, force=force,
                                  explicit_models=explicit_models or None,
-                                 check_runtime="--check-runtime" in sys.argv)
+                                 check_runtime="--check-runtime" in sys.argv, arm="auto")   # v3
     if explicit_models:
         line = f"explicit --models ({len(tr)})"
     elif force:
@@ -96,9 +107,21 @@ exec(compile(_src, "aptitude.py", "exec"), _G)
 
 BAT = _arg("--battery", "E").upper()
 PREFIX = {"E": "aptitude_e", "F": "aptitude_f", "F-ELASTIC": "aptitude_f_elastic"}.get(BAT, "aptitude_f")
-FAST = BAT in ("E", "F-ELASTIC")          # E + F-elastic grade CORRECTNESS (not tok/s) → no cool-down; F keeps it
+# E + F-elastic grade CORRECTNESS (not tok/s) → no cool-down by default; F keeps it.
+# --cooldown forces the thermal wait back on. Worth it when the cohort is long-running: throttling
+# does not change which token a model picks, but it does stretch wall-clock, and a long call (or the
+# 8x truncation retry stacked on top) can then hit the HTTP read timeout and be scored as a failure
+# — manufacturing the very artifact a re-run is meant to remove (2026-09-01).
+FAST = (BAT in ("E", "F-ELASTIC")) and "--cooldown" not in sys.argv
 WEIGHTS = _G["E_WEIGHTS"] if BAT == "E" else _G["F_WEIGHTS"]
 CMIN, BAND, GMIN = _G["E_CODER_COMPOSITE_MIN"], _G["E_CODER_COMPOSITE_BAND"], _G["E_CODER_GENERATE_MIN"]
+# ⚠ The E-hard floor is part of the coder gate too (re-tuned 2026-08-22). It MUST be pulled here and
+# applied in _average_e: the averager writes the CANONICAL row, so a gate it does not implement is a
+# gate that does not exist. Omitting it silently reverted the 08-22 re-tune on the very next run —
+# `aptitude.py --battery E --regate` re-stamped 08-20/08-21 correctly, then the 08-23 averaged run
+# overwrote them with composite-only eligibility (found 2026-08-31: 28/32 tagged vs 20/32 documented,
+# incl. qwen2.5vl:3b at E-hard 0.042). Keep in lockstep with aptitude.py:1799.
+HMIN, HBAND = _G["E_CODER_HARD_MIN"], _G["E_CODER_HARD_BAND"]
 
 
 def run_passes(n, model_args):
@@ -160,13 +183,14 @@ def _average_e(run_files):
         cm = {c: round(sum(v) / len(v), 4) for c, v in cs.items()}
         present = {c: w for c, w in WEIGHTS.items() if c in cm}
         comp = round(sum(cm[c] * w for c, w in present.items()) / (sum(present.values()) or 1), 4)
-        # two-band: `comp` (incl E-hard) is BOTH the ranking composite AND the coder gate — as of
-        # 2026-07-02 the E-hard band grew from 1 → 4 averaged tasks (variance smoothed), so failing
-        # the hard tier now legitimately blocks the `coder` role instead of being excused. `comp_core`
-        # (E-core only) is still emitted as a diagnostic (shows the E-hard delta), not the gate.
+        # two-band. ⚠ SUPERSEDED 2026-08-22: `comp` alone is NO LONGER the coder gate. E-hard is only
+        # ~15% of the composite, so a model solving 4% of the hard band still cleared a composite bar —
+        # a WEIGHTING problem a higher bar cannot fix. The gate is now composite ≥ CMIN *AND*
+        # E-hard ≥ HMIN, and `coders` ranks on E-hard. `comp_core` (E-core only) stays a diagnostic.
         core = {c: w for c, w in present.items() if c != "E-hard"}
         comp_core = round(sum(cm[c] * w for c, w in core.items()) / (sum(core.values()) or 1), 4)
         gen, dbg = cm.get("E1", 0.0), cm.get("E2", 0.0)
+        hard = cm.get("E-hard", 0.0)
         spread, cat_std = {}, {}
         for c in cm:
             pr = [rec["summary"]["category_means"].get(c) for rec in recs
@@ -174,11 +198,13 @@ def _average_e(run_files):
             spread[c] = round(max(pr) - min(pr), 3) if len(pr) > 1 else 0.0
             cat_std[c] = round(statistics.pstdev(pr), 3) if len(pr) > 1 else 0.0
         comp_runs = [rec["summary"]["composite"] for rec in recs]
-        out.append({"model": name, "battery": "E", "runs": len(recs), "tests": tests, "summary": {
+        out.append({"model": name, "battery": "E", **_arm_of(recs), "runs": len(recs), "tests": tests, "summary": {
             "category_means": cm, "composite": comp, "composite_core": comp_core,
             "generate_basic": gen, "debug_fix": dbg,
-            "coder_eligible": (comp >= CMIN and dbg > 0 and gen >= GMIN),
-            "threshold": {"composite_min": CMIN, "composite_band": BAND, "generate_min": GMIN, "debug_fix_gt": 0},
+            "hard_band": hard,
+            "coder_eligible": (comp >= CMIN and dbg > 0 and gen >= GMIN and hard >= HMIN),
+            "threshold": {"composite_min": CMIN, "composite_band": BAND, "generate_min": GMIN, "debug_fix_gt": 0,
+                          "hard_min": HMIN, "hard_band": HBAND},
             "n_runs": len(recs),
             "composite_stdev": round(statistics.pstdev(comp_runs), 3) if len(comp_runs) > 1 else 0.0,
             "composite_spread": round(max(comp_runs) - min(comp_runs), 3) if len(comp_runs) > 1 else 0.0,
@@ -202,7 +228,7 @@ def _average_f(run_files):
                    if len(recs) > 1 else 0.0 for k in keys}
         comp_runs = [rec["summary"]["composite"] for rec in recs]
         stance_hits = sum(1 for rec in recs if rec["summary"].get("stance_detected"))
-        out.append({"model": name, "battery": "F", "runs": len(recs), "summary": {
+        out.append({"model": name, "battery": "F", **_arm_of(recs), "runs": len(recs), "summary": {
             "dims": dims, "composite": comp, "n_runs": len(recs),
             "composite_stdev": round(statistics.pstdev(comp_runs), 3) if len(comp_runs) > 1 else 0.0,
             "composite_spread": round(max(comp_runs) - min(comp_runs), 3) if len(comp_runs) > 1 else 0.0,
@@ -255,7 +281,7 @@ def _average_f_elastic(run_files):
         ladh = _m(core, "length_adherence")
         verdict = elastic.classify(prompt_sigma, iadh, cutoffs, hard_adherence=hadh)
         run_verdicts = [rec["summary"]["verdict"] for rec in recs]
-        out.append({"model": name, "battery": "F-elastic", "runs": len(recs), "summary": {
+        out.append({"model": name, "battery": "F-elastic", **_arm_of(recs), "runs": len(recs), "summary": {
             "prompt_sigma": prompt_sigma, "instruction_adherence": iadh, "length_adherence": ladh,
             "prompt_sigma_all": pstd(composites), "hard_adherence": hadh,
             "hard_adherence_stdev": pstd([rec["summary"]["hard_adherence"] for rec in recs

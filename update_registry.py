@@ -224,6 +224,17 @@ if __name__ == "__main__":
             print(f"  + {name:<32}  {info['disk_gb']:>5} GB  role={role:<9} [{caps}]")
         print()
 
+    # v3 think-aware protocol (docs/think-spec.md): a thinking-capable completion model is measured at a
+    # per-model lever that think_probe.py has to discover first. The orchestrator's "Think Probe" phase
+    # runs it automatically; this is just the heads-up. (think_profile is preserved across syncs.)
+    need_probe = [e["name"] for e in proposed if e.get("role") in ("worker", "router")
+                  and "thinking" in (e.get("capabilities") or []) and not e.get("think_profile")]
+    if need_probe:
+        print("Need a think probe (no think_profile yet — `python3 think_probe.py`, or it runs with the next benchmark):")
+        for name in need_probe:
+            print(f"  ? {name}")
+        print()
+
     if updated:
         print("Refreshed (disk size or capabilities):")
         for name in updated:

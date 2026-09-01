@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "note": "think_probe.py item set. Deliberately tiny: one exact-match reasoning item, one 1-word brevity item, one tool call, one executable code task. Each is scored per lever at a ROOMY budget (num_predict 4096, starved items escalated to 8192/16384) so the probe measures think-token DEMAND and lever equivalence, not a budget. SAMPLING IS DELIBERATELY NOT PINNED: the harness sends no sampling parameters, so every battery runs at the model's Modelfile temperature \u2014 the probe must measure under the same conditions. Probing at temperature 0 (v1 of this file) made qwen3.5:4b-mlx and granite4.2:3b loop past 16k tokens on bat_ball (the greedy-decoding 'endless repetition' Qwen/OpenAI document) and mis-classified them as unbounded. Editing this file changes its provenance hash and marks every stored think_profile stale.",
+  "options": {
+    "seed": 42,
+    "num_ctx": 16384,
+    "num_predict": 4096
+  },
+  "items": [
+    {
+      "id": "bat_ball",
+      "kind": "reasoning",
+      "prompt": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer with just the number.",
+      "check": "bat_ball"
+    },
+    {
+      "id": "classify_1word",
+      "kind": "brevity",
+      "system": "You are a concise assistant. Reply with a single word.",
+      "prompt": "Classify this request as CODE, CHAT, or RESEARCH: 'write me a bash loop'",
+      "check": "one_word:CODE"
+    },
+    {
+      "id": "calculate",
+      "kind": "tool",
+      "prompt": "Use the calculate tool to compute 17*23.",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "calculate",
+            "description": "Evaluate an arithmetic expression",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "expression": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "expression"
+              ]
+            }
+          }
+        }
+      ],
+      "check": "tool_call:17,23"
+    },
+    {
+      "id": "tiny_code",
+      "kind": "code",
+      "prompt": "Write a Python function `is_palindrome(s: str) -> bool` that ignores case and non-alphanumeric characters. Return only the code in a ```python block.",
+      "check": "code:is_palindrome"
+    }
+  ]
+}

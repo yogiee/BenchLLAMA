@@ -11,7 +11,7 @@ Design spec: suites/suite-design.md
   Tool Use (1)          : calculate
 
 Protocol invariants:
-  num_ctx=16384 | think=False | 5-min cool-down between models
+  num_ctx=16384 | think = per-model arm (v3, docs/think-spec.md; --arm direct|think) | 5-min cool-down between models
   Worker prompt: prompts/worker_default.md (override: --system-prompt PATH)
   Router prompt: prompts/router_default.md (override: --system-prompt-router PATH)
   --fast flag skips cool-down (development only; results labeled informal)
@@ -32,7 +32,8 @@ import time
 import requests
 from pathlib import Path
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
-                         post_with_budget_retry)
+                         post_with_budget_retry, apply_think, arm_stamp, reply_stats, requested_arm, resolve_arm,
+                         budget_timeout)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,12 @@ router_prompt_path = _arg("--system-prompt-router")
 
 # positional args are model names
 model_args = [a for a in sys.argv[1:] if not a.startswith("--")
-              and a not in (worker_prompt_path, router_prompt_path, ollama_host)]
+              and a not in (worker_prompt_path, router_prompt_path, ollama_host, _arg("--arm"))]
+
+# v3 think-aware protocol (docs/think-spec.md): which arm THIS invocation measures.
+#   direct (default) every model at its no-thinking class → the speed lane; only this arm can promote a router
+#   think           every model with an operating point, at that lever + a lever-sized budget; the rest skip
+ARM_REQ = requested_arm(default="direct")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -283,26 +289,26 @@ TOOL_DEF = {
 
 # ── Ollama helpers ────────────────────────────────────────────────────────────
 
-def chat(model, messages, max_tokens=None, tools=None, timeout=TIMEOUT):
+def chat(model, messages, max_tokens=None, tools=None, timeout=TIMEOUT, arm="direct"):
     payload = {
         "model":    model,
         "messages": messages,
         "stream":   False,
         "options":  {"num_ctx": NUM_CTX},
-        "think":    False,
     }
     if max_tokens:
         payload["options"]["num_predict"] = max_tokens
     if tools:
         payload["tools"] = tools
+    apply_think(payload, model, arm)      # v3: lever + budget allowance for this model's arm
     def _post(pl):
         t0 = time.time()
-        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=timeout)
+        r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, timeout))
         if r.status_code == 400 and "think" in pl:
             print(f"\n  ⚠  {model}: think parameter rejected (400) — retrying without it", flush=True)
             pl = {k: v for k, v in pl.items() if k != "think"}
             t0 = time.time()
-            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=timeout)
+            r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, timeout))
         wall = time.time() - t0
         r.raise_for_status()
         return r.json(), wall
@@ -364,7 +370,7 @@ def chk(r, tid):
 
 # ── Per-model runner ──────────────────────────────────────────────────────────
 
-def run_model(model_name, disk_gb=0.0, role="worker"):
+def run_model(model_name, disk_gb=0.0, role="worker", arm="direct"):
     sys_prompt = PROMPT_ROUTER if role == "router" else PROMPT_WORKER
     sys_msgs   = [{"role": "system", "content": sys_prompt}]
 
@@ -378,12 +384,13 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
         "role":    role,
         "tests":   {},
         "errors":  [],
+        **arm_stamp(model_name, arm),   # v3: arm / think_lever / think_class / think_allowance
     }
 
     print("  [warmup] loading...", flush=True)
     try:
         data, _ = chat(model_name, sys_msgs + [{"role": "user", "content": "Ready."}],
-                       max_tokens=50)
+                       max_tokens=50, arm=arm)
         result["load_s"]     = load_s(data)
         result["warmup_tps"] = tps(data)
         time.sleep(1)
@@ -406,7 +413,7 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
             data, wall = chat(
                 model_name,
                 sys_msgs + [{"role": "user", "content": test["prompt"]}],
-                max_tokens=max_tokens,
+                max_tokens=max_tokens, arm=arm,
             )
             response = data.get("message", {}).get("content", "")
             t  = tps(data)
@@ -430,6 +437,7 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
 
             entry = {"prompt": test["prompt"], "response": response,
                      "tps": t, "prefill_tps": pf, "wall_s": round(wall, 1), "correct": correct}
+            entry.update(reply_stats(data))      # v3: thinking_chars / content_chars / eval_count
             if check_detail:
                 entry["check_detail"] = check_detail
             result["tests"][tid] = entry
@@ -453,7 +461,7 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
             model_name,
             sys_msgs + [{"role": "user", "content": CALC_PROMPT}],
             max_tokens=400,
-            tools=[TOOL_DEF],
+            tools=[TOOL_DEF], arm=arm,
         )
         msg_out    = data.get("message", {})
         tool_calls = msg_out.get("tool_calls", [])
@@ -474,6 +482,7 @@ def run_model(model_name, disk_gb=0.0, role="worker"):
             "prompt": CALC_PROMPT,
             "called": called, "correct_args": correct_args, "tool_calls": tool_calls,
             "tps": t, "prefill_tps": pf, "wall_s": round(wall, 1), "correct": called and correct_args,
+            **reply_stats(data),
         }
         print(f"called={called}  correct_args={correct_args}  tps={t}  wall={wall:.1f}s", flush=True)
     except Exception as e:
@@ -501,7 +510,7 @@ def write_summary(results, out_md: Path, fast_mode: bool = False):
     lines = [
         f"# Benchmark Results — {out_md.stem}{flag}",
         "",
-        f"`num_ctx={NUM_CTX}` | `think=False` | role-aware system prompt",
+        f"`num_ctx={NUM_CTX}` | arm={ARM_REQ} (v3 think-aware, docs/think-spec.md) | role-aware system prompt",
         "",
         "## Performance",
         "",
@@ -653,7 +662,7 @@ if __name__ == "__main__":
     from datetime import date
 
     TODAY  = date.today().isoformat()
-    suffix = "_fast" if fast_mode else ""
+    suffix = ("_fast" if fast_mode else "") + ("_think" if ARM_REQ == "think" else "")
     OUT_JSON = RESULTS_DIR / f"benchmark_{TODAY}{suffix}.json"
     OUT_MD   = RESULTS_DIR / f"benchmark_{TODAY}{suffix}.md"
 
@@ -673,12 +682,17 @@ if __name__ == "__main__":
             if m not in have:
                 MODELS.append((m, reg_map.get(m, {}).get("disk_gb", 0.0), reg_map.get(m, {}).get("role", "worker")))
 
+    # v3: a `think` pass only covers models with an operating point (think_probe.py → models.json)
+    _no_arm = [n for n, *_ in MODELS if resolve_arm(n, ARM_REQ) is None]
+    if _no_arm:
+        print(f"  arm={ARM_REQ}: {len(_no_arm)} model(s) have no think arm — skipped: {_no_arm}", flush=True)
+        MODELS = [m for m in MODELS if m[0] not in _no_arm]
     preflight(MODELS, ollama_host)
     cd   = 0 if fast_mode else COOLDOWN
     flag = " [FAST MODE — informal results]" if fast_mode else ""
 
     print(f"BenchLLAMA standard suite v2{flag} — {TODAY}", flush=True)
-    print(f"ollama={ollama_host} | num_ctx={NUM_CTX} | think=False | {len(MODELS)} models | cooldown={cd}s", flush=True)
+    print(f"ollama={ollama_host} | num_ctx={NUM_CTX} | arm={ARM_REQ} | {len(MODELS)} models | cooldown={cd}s", flush=True)
     print(f"Output: {OUT_JSON}", flush=True)
 
     # ── Content-addressed resume (docs/resume-spec.md) ────────────────────────
@@ -690,7 +704,7 @@ if __name__ == "__main__":
     eligible = [n for n, *_ in MODELS]
     run_names, all_results, why = resume.plan_single_pass(
         "standard", eligible, host=ollama_host, cloud=cloud_names, force=force,
-        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv, arm=ARM_REQ)
     all_results = list(all_results)
     completed = set(eligible) - set(run_names)
     print("  " + resume.format_report("standard", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
@@ -705,8 +719,10 @@ if __name__ == "__main__":
             cooldown(cd, label=f"after previous model")
         first_run = False
         _ws(model_name, "running")
-        r = run_model(model_name, disk_gb, role)
-        _maybe_promote(model_name, _role_gate(r, model_name in cloud_names), registry_path)
+        arm = resolve_arm(model_name, ARM_REQ) or "direct"
+        r = run_model(model_name, disk_gb, role, arm=arm)
+        if arm == "direct":   # the router lane is a SPEED lane — only the direct arm may promote
+            _maybe_promote(model_name, _role_gate(r, model_name in cloud_names), registry_path)
         all_results.append(r)
         OUT_JSON.write_text(json.dumps(all_results, indent=2))
         try:

@@ -30,6 +30,7 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
+from bench_utils import apply_think as _apply_think, budget_timeout as _budget_timeout   # v3 think-aware protocol
 from bench_utils import cooldown, preflight, latest_result, sort_registry
 
 REPO        = Path(__file__).parent
@@ -56,7 +57,7 @@ force       = _flag("--force")
 ollama_host = _arg("--ollama", "http://localhost:11434")
 role_filter = _arg("--role")
 model_args  = [a for a in sys.argv[1:] if not a.startswith("--")
-               and a not in (ollama_host, role_filter)]
+               and a not in (ollama_host, role_filter, _arg("--arm"))]
 
 TIMEOUT  = 480
 COOLDOWN = 0 if fast_mode else 300
@@ -112,17 +113,17 @@ def chat(model, messages, num_ctx, max_tokens=None):
         "messages": messages,
         "stream":   False,
         "options":  {"num_ctx": num_ctx},
-        "think":    False,
     }
     if max_tokens:
         payload["options"]["num_predict"] = max_tokens
+    _apply_think(payload, model, "direct")   # v3: the ladder is a speed characterisation → direct arm (allowance for always-on thinkers)
     t0 = time.time()
-    r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
+    r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=_budget_timeout(payload, TIMEOUT))
     if r.status_code == 400 and "think" in payload:
         print(f"\n  ⚠  {model}: think parameter rejected (400) — retrying without it", flush=True)
         payload.pop("think")
         t0 = time.time()
-        r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=TIMEOUT)
+        r  = requests.post(f"{ollama_host}/api/chat", json=payload, timeout=_budget_timeout(payload, TIMEOUT))
     wall = time.time() - t0
     r.raise_for_status()
     return r.json(), wall

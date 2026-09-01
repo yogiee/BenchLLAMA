@@ -55,7 +55,8 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
-from bench_utils import cooldown, preflight, sort_registry, post_with_budget_retry
+from bench_utils import (cooldown, preflight, sort_registry, post_with_budget_retry,
+                         apply_think, arm_stamp, requested_arm, resolve_arm, budget_timeout)
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -85,7 +86,8 @@ grade_mode  = (_arg("--grade", "llm") or "llm").lower()          # llm (default,
 ollama_host = _arg("--ollama", "http://localhost:11434")
 _CLI_JUDGE  = _arg("--judge")   # override the primary judge model at runtime
 model_args  = [a for a in sys.argv[1:] if not a.startswith("--")
-               and a not in (ollama_host, grade_mode, _CLI_JUDGE)]
+               and a not in (ollama_host, grade_mode, _CLI_JUDGE, _arg("--arm"))]
+ARM_REQ     = requested_arm(default="auto")   # v3: candidates at their operating point; the JUDGE is pinned to direct
 
 TIMEOUT     = 600
 COOLDOWN    = 0   # confab grades HONESTY (correctness), not tok/s → no thermal cooldown needed (like Battery E)
@@ -129,16 +131,17 @@ def _judge_for(candidate: str, primary: str) -> str:
 
 # ── Ollama chat (shared pattern) ──────────────────────────────────────────────
 
-def chat(model, messages, max_tokens=NUM_PREDICT, num_ctx=NUM_CTX):
+def chat(model, messages, max_tokens=NUM_PREDICT, num_ctx=NUM_CTX, arm=None):
     payload = {"model": model, "messages": messages, "stream": False,
-               "options": {"num_ctx": num_ctx, "num_predict": max_tokens}, "think": False}
+               "options": {"num_ctx": num_ctx, "num_predict": max_tokens}}
+    apply_think(payload, model, arm or resolve_arm(model, ARM_REQ) or "direct")   # v3
     def _post(pl):
         t0 = time.time()
-        r = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+        r = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
         if r.status_code == 400 and "think" in pl:
             pl = {k: v for k, v in pl.items() if k != "think"}
             t0 = time.time()
-            r = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=TIMEOUT)
+            r = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
         wall = time.time() - t0
         r.raise_for_status()
         return r.json(), wall
@@ -243,7 +246,8 @@ def grade_llm(item, reply, judge_model):
             "Verdict (PASS or FAIL — then a short reason):")
     try:
         out, _ = chat(judge_model, [{"role": "system", "content": _JUDGE_SYS},
-                                    {"role": "user", "content": user}], max_tokens=120)
+                                    {"role": "user", "content": user}], max_tokens=120,
+                      arm="direct")   # the judge never thinks: verdicts stay comparable to the anchor screen
     except Exception as e:
         return {"verdict": "ERROR", "reason": f"judge call failed: {e}", "grader": judge_model}
     m = re.search(r"\b(PASS|FAIL)\b", out.upper())
@@ -271,7 +275,8 @@ def generate(model_name, role, disk_gb, items):
             replies[it["id"]] = ""
             print(f"  [{it['kind']:4}] {it['id']:34} FAILED: {e}", flush=True)
     unload(model_name)
-    return {"model": model_name, "role": role, "disk_gb": disk_gb, "replies": replies}
+    return {"model": model_name, "role": role, "disk_gb": disk_gb, "replies": replies,
+            **arm_stamp(model_name, resolve_arm(model_name, ARM_REQ) or "direct")}
 
 # ── Phase 2: judge the saved replies (batched by judge model in llm mode) ──────
 
@@ -482,7 +487,7 @@ if __name__ == "__main__":
     cloud = {m["name"] for m in registry if m.get("cloud")}
     run_names, carry, why = resume.plan_single_pass(
         "confab", eligible, host=ollama_host, cloud=cloud, force=force,
-        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv)
+        explicit_models=(model_args or None), check_runtime="--check-runtime" in sys.argv, arm=ARM_REQ)
     completed = set(eligible) - set(run_names)
     print("  " + resume.format_report("confab", run_names, sorted(completed), why).replace("\n", "\n  "), flush=True)
 

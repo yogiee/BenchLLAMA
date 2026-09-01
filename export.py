@@ -36,7 +36,9 @@ PUBLISH = Path.home() / ".config" / "ollama-consumers" / "benchllama-rankings.js
 
 SCHEMA = 1
 HOST_PROFILE = "M1 Max 32GB"
-PROTOCOL = {"num_ctx": 16384, "think": False}
+PROTOCOL = {"num_ctx": 16384, "protocol_version": 3,
+            "think": "per-model arm — see models[*].think (docs/think-spec.md); standard = direct arm, "
+                     "standard_think = think arm, batteries at the operating point"}
 
 
 def _latest(prefix):
@@ -59,7 +61,7 @@ _PREFIX_BATTERY = {
 }
 
 
-def _load(prefix):
+def _load(prefix, arm=None):
     """Latest per-model result for a battery. Prefers the SQLite store (results_db.latest = each
     model's most-recent result across all runs, so a partial/midnight re-run never drops models);
     falls back to the dated JSON file if the DB is empty/unavailable (transition safety)."""
@@ -67,9 +69,9 @@ def _load(prefix):
     if bat:
         try:
             import results_db
-            data = results_db.latest(bat)
+            data = results_db.latest(bat, arm=arm)
             if data:
-                return data, f"db:{bat}"
+                return data, f"db:{bat}" + (f"@{arm}" if arm else "")
         except Exception:
             pass
     f = _latest(prefix)
@@ -132,7 +134,8 @@ def _routing_summary(rec):
 
 def build():
     registry = json.load((REPO / "models.json").open())
-    std, std_f = _load("benchmark")
+    std, std_f = _load("benchmark", arm="direct")
+    std_t, std_t_f = _load("benchmark", arm="think")   # v3: the think arm, when a model has one
     coding, cod_f = _load("aptitude_e")
     cons, cons_f = _load("aptitude_f")
     elastic, ela_f = _load("aptitude_f_elastic")
@@ -174,6 +177,22 @@ def build():
             m["wall_s"] = None if is_cloud else s.get("avg_wall_s")
             m["ram_gb"] = None if is_cloud else s.get("ram_gb")
             m["standard"] = _standard_summary(s)
+        # v3 think-aware protocol: what the probe found, which arm the batteries ran at, and the
+        # standard suite's think arm beside the fast one (docs/think-spec.md).
+        tp = entry.get("think_profile") or {}
+        if tp:
+            m["think"] = {k: tp.get(k) for k in ("operating_point", "operating_lever", "direct_lever", "off_supported",
+                                                  "default_thinks", "always_on", "think_unbounded", "probed_at")}
+            m["think"]["battery_arm"] = "think" if tp.get("operating_lever") else "direct"
+        st = std_t.get(name)
+        if st:
+            m["standard_think"] = _standard_summary(st)
+            m["standard_think"].update({"tps": None if is_cloud else st.get("avg_tps"),
+                                        "wall_s": None if is_cloud else st.get("avg_wall_s"),
+                                        "think_lever": st.get("think_lever")})
+        # the standard-suite view the batteries were measured under → what the worker key ranks on
+        m["standard_operating"] = (m.get("standard_think") if (m.get("think") or {}).get("battery_arm") == "think"
+                                   and m.get("standard_think") else m.get("standard"))
         c = coding.get(name)
         if c and c.get("summary"):
             cs = c["summary"]
@@ -345,7 +364,8 @@ def build():
         deliberately NOT primary: it can only reorder WITHIN a capability tier, never set one, and
         F backstops it.
         """
-        st = m.get("standard")
+        # v3: rank on the standard-suite view the batteries were measured under (the operating arm)
+        st = m.get("standard_operating") or m.get("standard")
         if not st:
             return None
         tier = st["reasoning"] + st["instr"] + (1 if st["tool"] else 0)
