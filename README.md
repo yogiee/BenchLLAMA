@@ -67,11 +67,14 @@ pip install requests aiohttp beautifulsoup4 html5lib tinycss2
 
 ### Unattended full run
 
-For a whole-fleet run you leave going (e.g. overnight), wrap it in `caffeinate` so macOS
+Check first whether something already holds the machine awake — `pmset -g assertions | grep
+PreventUserIdleSystemSleep` (a `1` means Amphetamine or similar has it, and `caffeinate` is
+redundant). Otherwise, for a whole-fleet run you leave going (e.g. overnight), wrap it in
+`caffeinate -ims` (idle-system + disk + AC; **not** `-d`/`-u`, which pin the display on) so macOS
 doesn't sleep and kill it, and chain `export.py` to publish rankings when it finishes:
 
 ```bash
-caffeinate -dimsu bash -c '
+caffeinate -ims bash -c '
   ./bench.sh all --with-elastic --with-imagegen --console --force &&
   python3 export.py
 ' 2>&1 | tee results/overnight_$(date +%F).log

@@ -11,6 +11,10 @@ llama3.2:3b · fluxassistant · minicpm5:1b · minicpm-v4.6:1b · ornith:9b · o
 qwen2.5vl:3b · qwen3-vl:4b · qwen3.5:{4b,9b}-mlx · qwen3.8:27b-mlx · deepseek-r1:{8b,14b} ·
 deepcoder:{1.5b,14b} · bonsai-27b (two uploads).
 
+**Added 2026-09-02** (candidates, not yet on the roster): **lfm2.5:8b** and **lfm2:24b** — researched ahead of onboarding
+after its 2026-06-03 v1 drop was found to predate Battery D, the budget-retry and v3. Local verification
+still pending; every Ollama-specific claim below is marked *unverified*.
+
 ---
 
 ## 1. Cross-cutting facts (Ollama mechanics, verified)
@@ -59,6 +63,8 @@ measured output floors so the answer is not starved.
 | deepcoder:1.5b / 14b | qwen2 (R1-distil ft) · GGUF | 0.6 / 0.95 | 0.6 / 0.95, max_tokens ≥64k, no system prompt | always thinks (byte-identical across levers — measured) | no tool training; cap is template-derived; never emits tool_calls (measured) | ≥4096 (1.5b answers ~1.1k), ≥8192 E-hard | exclude from tool batteries |
 | bonsai-27b (codecraftersllc) | **Qwen3.6-27B** Q1_0 · GGUF | 0.6 / 0.95 / k20 / num_ctx 32768 | PrismML 0.7/0.95/20/min_p 0 | Go qwen3.5 renderer → levels ≡ true | vision+tools+thinking | think ≥6144 (token-hungry, up to 14× more tokens) | 89.5% of FP16 avg; tool-calling 80→66, IF 78.5→65.7, vision 72.6→59.6; 25 t/s (1-bit cuts memory, not compute) |
 | bonsai-27b (oamazonasgabriel 1bit-8gbGPU) | same · Jinja template | 0.7 / 0.8 / repeat 1.05 | same | Jinja `enable_thinking` — honoured? *unverified* | no vision cap | same | different upload, different sampling |
+| **lfm2.5:8b** *(MEASURED 2026-09-02)* | **LFM2.5-8B-A1B** — 8B / ~1.5B-active MoE on the LFM2 **hybrid conv+attention** backbone · GGUF, 5.2 GB, 128K | **temp 0.2 · top_k 80 · repeat_penalty 1.05** — verified via `ollama show --parameters`; **matches Liquid's recommendation exactly** (this tag needs no sampling correction) | Liquid: 0.2 / top_k 80 / rp 1.05, same for both modes; no top_p or min_p given | `false` = genuinely off · `absent`/`low`/`medium`/`high`/`true` all collapse to one thinking class (≤262 think-tok). `direct_lever: false`, `operating_lever: low`. ⚠ **thinking text lands in `content`, NOT the `thinking` field, even at `think:false`** — so `thinking_chars` under-reports and a tight budget is spent on prose | **Pythonic** list between `<\|tool_call_start\|>`/`<\|tool_call_end\|>` — **Ollama HAS an lfm2 renderer and parses it into proper `tool_calls` (verified)**. ⚠ **But emission is ~20% reliable**: 2/12 (harness defaults) and 3/12 (explicit vendor sampling) with a system prompt + tools attached | think ≥8192; vendor says leave `num_predict` unset | **Tool emission — not parsing — is the blocker.** Battery D `chain_3` gets 1 step where a working model gets 3; `calculate` ✗ on both arms. Sampling is NOT the cause (2/12 vs 3/12 is noise). Also: G composite **0.438**, clean-**1024**, early-needle recall 0.000 — on a 128K-advertised model |
+| **lfm2:24b** *(candidate)* | **LFM2-24B-A2B** — 24B / **2B-active** MoE, same hybrid backbone · GGUF, 14 GB, **32K only** | *unknown* | Liquid (family): 0.2 / top_k 80 / repeat 1.05 *(unconfirmed for this size)* | **no `thinking` cap** — Ollama lists text only | **no `tools` cap** — Ollama lists text only | ≥2048 | **NOT a fleet-anchor candidate: no tools, no thinking, and 32K vs lfm2.5's 128K.** The higher version number is the *less* capable tag for our purposes — do not conflate |
 
 ## 3. What the harness sends vs. what is recommended — the gaps
 
@@ -97,6 +103,25 @@ measured output floors so the answer is not starved.
    fail by design — that is a real property, not a bug.
 7. Already safe by construction: every harness call sends a system prompt (Ministral's hidden Le Chat
    prompt never triggers); the harness never sends `format` (Ministral/Qwen `format`-vs-tools bugs).
+
+8. **Self-gated thinking breaks the probe's grouping assumption** (new 2026-09-02, LFM2.5).
+   `think_probe.py` classes levers by *identical output* over 4 tiny items. A model that decides
+   **per prompt** whether to think can return non-thinking output at every lever on easy items,
+   collapsing all six classes into one and producing a `direct_lever` / `operating_lever` pair that
+   describes nothing. LFM2.5 is the first roster candidate to document this explicitly ("simple prompts
+   may skip reasoning entirely — this is expected behavior, not an error"), but it is a general shape,
+   not an LFM quirk. The probe set needs at least one item hard enough to *force* the reasoning block
+   before lever classes are meaningful for such a model. **Tell:** every class identical with
+   `thinking_chars` 0 throughout — read that as "probe inconclusive", not "model has no think lever".
+   ⚠ **CORRECTION 2026-09-02 — this did NOT happen on LFM2.5, and the prediction was wrong.** The probe
+   separated its levers cleanly: `false` genuinely disables thinking and is the ONLY class that fails
+   `classify_1word`, while every other lever thinks (≤262 tokens) and passes 4/4. Self-gated thinking is
+   still a real hazard for a probe that groups by output identity, but LFM2.5 is not an instance of it —
+   the tiny items were hard enough. Keep the watch, drop the worked example.
+9. **Vendors that say "do not cap output" cannot be honoured.** Liquid tells operators to leave
+   `max_tokens` unset so the reasoning block is not truncated mid-stream; the harness always sends
+   `num_predict`. The v3 allowance plus the ×8 budget retry is the mitigation, and this is precisely the
+   family where the retry earns its keep.
 
 ## 4. Family notes (condensed)
 
@@ -166,6 +191,54 @@ max_tokens ≥ 64k, no tool training. 14b bakes no temperature.
 tool-calling/IF/vision drop 14–16 points and it needs up to 14× more tokens with reasoning on;
 recommended 0.7/0.95/20/min_p 0; needs Ollama ≥ 0.32.5. Our two uploads differ in template and sampling.
 
+**⚠ Liquid: two distinct Ollama tags, and the bigger number is the weaker one for our lanes.**
+`lfm2:24b` = **LFM2-24B-A2B** (24B / 2B active, 14 GB, **32K**, Ollama lists **text only — no tools, no
+thinking**). `lfm2.5:8b` = **LFM2.5-8B-A1B** (8B / ~1.5B active, 5.2 GB, **128K**, **tools + thinking**).
+`lfm2.5` is *not* a point release of `lfm2` in the way the names imply — it is the smaller, more capable
+tag, and the only one of the two that can enter the tool batteries at all. Same disambiguation shape as
+`devstral:24b` (Devstral 1) vs `devstral-small-2:24b` in §3.2. Both are MoE, so both are useful data
+points for the MoE-vs-dense throughput question, but only 2.5 is an anchor candidate.
+
+**Liquid AI / LFM2.5** *(MEASURED 2026-09-02, full suite + F-elastic + H, 46m32s)* — a **hybrid
+conv + attention** backbone, not a transformer stack. Ollama's `lfm2.5:8b` is **LFM2.5-8B-A1B**: 8B total,
+~1.5B active MoE, 128K context, 5.2 GB. **The tag bakes Liquid's exact recommendation** (temp 0.2 /
+top_k 80 / repeat_penalty 1.05, verified) — one of the few roster tags needing no sampling correction,
+so it is NOT an instance of the §3.1 uncontrolled-sampling gap. All experts stay resident (Liquid sizes
+BF16 at ~17 GB): the MoE buys decode cost, not footprint — and it delivers, at **145.3 t/s direct**, the
+fastest local model on the roster.
+
+**What it is good at (measured):** honesty and instruction-following. Battery **H 0.667, profile
+`discerning`** (fake 0.667 / real 0.667) — the best *local* honesty on the roster and 4th overall;
+F-elastic **robust and stable** (instruction-adherence 0.99, prompt-σ 0.036); Battery F 0.871.
+
+**What kills it: tool-call EMISSION, not parsing.** ⚠ The pre-measurement entry flagged the Pythonic
+format as the #1 risk. **That was wrong** — Ollama ships an lfm2 renderer and turns
+`<|tool_call_start|>`-wrapped Pythonic calls into proper `tool_calls`; verified directly. The real defect
+is that the model usually does not emit one at all: **2/12 at harness defaults, 3/12 with explicit vendor
+sampling** (system prompt + tools attached, identical prompt). Indistinguishable rates, so sampling is not
+the cause. `calculate` ✗ on BOTH arms; Battery D `chain_3` returns 1 step where a working model returns 3.
+Not tunable — treat "native function calling for agentic workflows" as unsupported at these odds.
+
+**Other measured weaknesses:** Battery G composite **0.438**, clean depth **1024**, early-needle recall
+**0.000**, multihop 0.167 — on a model advertising 128K context, the second-worst long-context result on
+the roster. Battery E 0.812 but **E-hard 0.253** → no `coder`. Thinking text lands in `content` rather
+than the `thinking` field even at `think:false`, so `thinking_chars` under-reports for this family.
+
+**Think levers separate cleanly** (contra the §3.8 worry): `false` is genuinely off and is the only class
+that fails `classify_1word`; `absent`/`low`/`medium`/`high`/`true` collapse into one class at ≤262 think
+tokens. `direct_lever: false`, `operating_lever: low`.
+
+**VERDICT: the 2026-06-03 "failed all tool calls" drop was CORRECT, and re-testing it was still worth
+doing.** The old verdict was reached under a protocol now known to be broken, so it was untrustworthy
+evidence for a true conclusion — the re-test converted a guess into a measurement, and produced a usable
+honesty datapoint besides. Both hypotheses in the pre-measurement entry (budget starvation; unparsed
+Pythonic calls) were falsified. Keep the model only if a use case wants a fast, honest, prompt-adherent
+local chat model with **no tool use**; it is not a fleet-anchor candidate.
+
+⚠ A dedicated **LFM2.5-1.2B-Thinking** (<1 GB) exists and is unmeasured. Community uploads
+(`hadad/LFM2.5-1.2B`, `maternion/lfm2.5`, `oamazonasgabriel/lfm2-1.2b-tool`) ship their own templates and
+sampling — benchmark the official library tag, not a mirror. ⚠ `lfm2:24b` remains a different, weaker tag
+for our lanes (no tools, no thinking, 32K) — see the disambiguation above.
 ## 5. Ollama 0.32.x–0.33.x entries that matter here
 
 0.32.1 Gemma 4 tool calling + multi-turn reasoning; MLX recurrent cache leak fixed · 0.32.3 GLM tool
@@ -196,3 +269,8 @@ deepseek-ai/DeepSeek-R1, DeepSeek-R1-0528; agentica-org/DeepCoder-14B-Preview, D
 prismml.com Bonsai-27B, prism-ml/Bonsai-27B-gguf. Guides/community: unsloth.ai docs (gemma-4, gpt-oss,
 granite-4.1, ministral-3, deepseek-r1, qwen3.5); localbench.substack.com; kaitchup.substack.com;
 adityakarnam.com (MLX determinism); antekapetanovic.com; famstack.dev; zolotukhin.ai; docs.together.ai.
+Liquid AI (added 2026-09-02): docs.liquid.ai/lfm/models/lfm25-8b-a1b; liquid.ai/blog/lfm2-5-1-2b-thinking-on-device-reasoning-under-1gb;
+recipes.vllm.ai/LiquidAI/LFM2.5-8B-A1B; docs.vllm.ai/en/latest/api/vllm/tool_parsers/lfm2_tool_parser;
+ollama.com/library/lfm2.5; ollama.com/library/lfm2. ⚠ huggingface.co/LiquidAI/LFM2.5-8B returns 401 to unauthenticated fetches —
+the sampling/thinking/tool facts above come from Liquid's own docs and the vLLM recipe, NOT the HF card;
+re-check the card directly when onboarding.
