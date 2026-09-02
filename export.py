@@ -26,6 +26,8 @@ import re
 from pathlib import Path
 from datetime import datetime, timezone
 
+from bench_utils import H_PROFILE_CUTOFFS
+
 REPO = Path(__file__).parent
 RESULTS = REPO / "results"
 OUT = REPO / "rankings" / "rankings.json"
@@ -308,19 +310,25 @@ def build():
         h = honesty.get(name)
         if h and h.get("summary"):
             hs = h["summary"]
-            # honesty (Battery H) is a per-model SUB-BLOCK (like consistency / prompt_elasticity), NOT a
-            # ranking list: BenchLLAMA emits the measured numbers, the consumer applies its own policy.
-            # ⚠ Read fake_clean_rate and real_clean_rate TOGETHER — high+high = discerning-honest;
-            # high-fake + LOW-real = pathological denier (aces fakes by refusing everything); low-fake =
-            # confabulator. Deliberately NOT folded into any quality composite (honesty is orthogonal).
+            # honesty (Battery H) — sub-block PLUS a ranking list as of 2026-09-02.
+            # ⚠ `confab_score` is carried for series continuity but MUST NOT be ranked on: it conflates
+            # a pathological denier (aces the fakes by refusing everything, real controls included) with
+            # an honest model, and on the 09-02 fleet that put two models with real_clean 0.000 in the
+            # top nine. `honesty_balanced` = HARMONIC mean of the two bands, so it collapses when either
+            # does; `honesty_profile` names the type. Rank on balanced, read the profile.
+            # Still deliberately NOT folded into any quality composite — honesty is orthogonal, and the
+            # deploy/veto decision stays the consumer's.
             m["honesty"] = {
                 "confab_score": hs.get("composite"),
+                "honesty_balanced": hs.get("honesty_balanced"),
+                "honesty_profile": hs.get("honesty_profile"),
                 "fabrication_rate": hs.get("fabrication_rate"),
                 "fake_clean_rate": hs.get("fake_clean_rate"),
                 "real_clean_rate": hs.get("real_clean_rate"),
                 "n_items": hs.get("n_items"),
                 "judge": hs.get("judge", []),
                 "by_category": hs.get("by_category", {}),
+                "_cutoffs": dict(H_PROFILE_CUTOFFS),
             }
         models.append(m)
 
@@ -413,6 +421,11 @@ def build():
         "routers": ranked(routers, router_key),
         "workers": ranked(workers, worker_quality),
         "coders": ranked(completion, coder_key),
+        # honesty: rank on the balanced (harmonic) axis, never confab_score — see the sub-block note.
+        # Tiebreak on real_clean so that among equals the more discerning model sorts first.
+        "honesty": ranked(completion, lambda m: ((h["honesty_balanced"], h.get("real_clean_rate") or 0.0)
+                                                 if (h := (m.get("honesty") or {})).get("honesty_balanced")
+                                                 is not None else None)),
         "vision": ranked(has_vis, lambda m: (m.get("vision") or {}).get("composite")),
         # fast-OCR is speed-ranked → require a real tps (excludes cloud / un-timed models)
         "vision_fast_ocr": ranked(has_vis, lambda m: ((vis_ocr(m), m["tps"])
