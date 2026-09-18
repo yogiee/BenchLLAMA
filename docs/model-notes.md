@@ -182,8 +182,12 @@ non-think 0.7/0.8/20/presence 1.5 (the "reasoning tasks" non-think preset contra
 recommended. Ollama's qwen3.5 renderer prefills an empty think block for `false` and never reads the
 level. Qwen3.8: `reasoning_effort` xhigh (default) / medium / low, `preserve_thinking` always on in
 Ollama, non-leading system messages normalized 0.32.15; users report medium ≈33% faster than xhigh.
-MTP: 0.32.6 auto speculative decoding on MLX for Qwen3.5; our matched-quant test: MTP +30–40% decode,
-quality a wash. Static YaRN taxes short prompts — don't enable it for a 16k harness.
+MTP: since 0.32.6 the MLX runner speculates automatically from an inline MTP head (no off switch —
+`draft_num_predict` only reaches llama-server), but **no library qwen3.5 tag ships the head**: the HF
+checkpoints carry 15 `mtp.*` tensors and Ollama's packaging drops them, so qwen3.5:4b/9b-mlx never
+speculate. qwen3.8:27b-mlx does ship it — probed 2026-09-18: engages, ≈+5–30% decode on M1 Max (code >
+prose). The 08-22 matched-quant GGUF test (qwen3.8 MTP tag vs plain): +30–40% decode, quality a wash.
+Static YaRN taxes short prompts — don't enable it for a 16k harness.
 
 **Qwen-VL** — qwen2.5vl:3b: near-greedy baked; llama.cpp compat path (clip limits 8–4096 image tokens);
 pre-scale documents to ~1000–1200 px; ask for a bbox list rather than "how many". qwen3-vl bare tag uses
@@ -249,7 +253,8 @@ for our lanes (no tools, no thinking, 32K) — see the disambiguation above.
 
 0.32.1 Gemma 4 tool calling + multi-turn reasoning; MLX recurrent cache leak fixed · 0.32.3 GLM tool
 calls dropped at end fixed · 0.32.4 Qwen3 MoE decode fix · 0.32.5 NVFP4 Metal quality fix · 0.32.6
-Qwen3.5 MTP speculative decoding on MLX; `/v1` `finish_reason: length` on truncation; image-gen removed ·
+Qwen3.5 MTP speculative decoding on MLX (engine only — library qwen3.5 tags lack the head, §4); `/v1`
+`finish_reason: length` on truncation; image-gen removed ·
 **0.32.10 `repeat_penalty` default 1.1 → 1.0**; NVFP4 prefill +7–8% · 0.32.12 Qwen3.8 27B (+mlx) ·
 0.32.13 Qwen3.8 developer instructions · 0.32.14 qwen renderer tolerates non-leading system · 0.32.15
 Qwen3.8 system-message normalization; metadata cache halves TTFT · 0.33.0 prefill restore points; MLX
