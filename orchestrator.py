@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
 
-from bench_utils import sort_registry
+from bench_utils import sort_registry, IMAGEGEN_AVAILABLE, IMAGEGEN_UNAVAILABLE_MSG
 
 REPO        = Path(__file__).parent
 MODELS_FILE = REPO / "models.json"
@@ -167,6 +167,8 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
     if cmd == "confab":
         return [("Honesty (Battery H)", _cmd(REPO/"confab.py", *x), "cap:completion")]
     if cmd == "imagegen":
+        if not IMAGEGEN_AVAILABLE:           # callers check first and print the message; this is the backstop
+            return []
         return [("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image")]
     if cmd == "batteries":
         return [
@@ -207,7 +209,10 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         if with_elastic:
             phases.append((BATTERY_LABELS["F-ELASTIC"] + _AVG3,
                            _cmd(REPO/"average_e_runs.py", "--battery", "F-elastic", *x), "cap:completion"))
-        if with_imagegen:
+        if with_imagegen and not IMAGEGEN_AVAILABLE:
+            # an unattended `all` must not die at the end over its one unavailable opt-in — say so, drop it
+            print(f"⚠ --with-imagegen ignored: {IMAGEGEN_UNAVAILABLE_MSG}", flush=True)
+        elif with_imagegen:
             phases.append(("Image Gen (Battery I)", _cmd(REPO/"imagegen.py", *x), "cap:image"))
         return phases
     return []
@@ -268,6 +273,8 @@ def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
         "export":    ("Export Rankings",          _cmd(REPO/"export.py", *ux("export")), None),
     }
     want = set(units)
+    if not IMAGEGEN_AVAILABLE:
+        want.discard("imagegen")     # webserver rejects it with the message first; this is the backstop
     if want & _NEEDS_PROBE:
         want.add("probe")            # no-op when every thinking-capable model already has a fresh profile
     out = []
@@ -596,6 +603,8 @@ if __name__ == "__main__":
         print(f"Usage: python3 orchestrator.py <{' | '.join(sorted(COMMANDS))}> [flags]")
         print("       python3 orchestrator.py --timings [run_id]   # per-phase wall-clock of a past run")
         sys.exit(0 if not cmd else 1)
+    if cmd == "imagegen" and not IMAGEGEN_AVAILABLE:
+        sys.exit(IMAGEGEN_UNAVAILABLE_MSG)
     phases = build_phases(cmd, [a for a in raw if a != cmd])
     if not phases:
         sys.exit(f"Unknown command: {cmd}")

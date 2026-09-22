@@ -90,6 +90,8 @@ def _units_phases(payload: dict):
     units = payload.get("units") or []
     if not isinstance(units, list) or not units:
         return None, "no units selected"
+    if "imagegen" in units and not O.IMAGEGEN_AVAILABLE:
+        return None, O.IMAGEGEN_UNAVAILABLE_MSG
     unknown = [u for u in units if u not in O.UNIT_ORDER]
     if unknown:
         return None, f"unknown units: {', '.join(map(str, unknown))}"
@@ -158,6 +160,8 @@ def start_phases(app, phases: list, sort: str = "size"):
 
 def start_run(app, cmd: str, extra: list, sort: str = "size"):
     """Single-command launcher (CLI boot path + legacy /api/start payloads)."""
+    if cmd == "imagegen" and not O.IMAGEGEN_AVAILABLE:
+        return False, O.IMAGEGEN_UNAVAILABLE_MSG
     phases = O.build_phases(cmd, extra)
     if not phases:
         return False, f"unknown command: {cmd}"
@@ -422,6 +426,8 @@ def main():
     port = int(O._arg(raw, "--port") or DEFAULT_PORT)
 
     allow_control = "--allow-control" in raw
+    if cmd == "imagegen" and not O.IMAGEGEN_AVAILABLE:
+        sys.exit(O.IMAGEGEN_UNAVAILABLE_MSG)     # fail at the terminal, not silently inside the browser
 
     app = web.Application()
     app["rt"] = {"orch": None, "task": None}   # mutable run holder (set pre-startup; contents mutated live)

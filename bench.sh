@@ -3,9 +3,10 @@
 #   ./bench.sh [command] [flags]            → web UI (default). No command → browser selection screen.
 #   ./bench.sh [command] [flags] --console  → plain-text terminal (headless / SSH / quick glance).
 #
-# Commands: probe · standard · ladder · aptitude · batteries · all · vision · embedding · longctx · imagegen · confab · update · export
+# Commands: probe · standard · ladder · aptitude · batteries · all · vision · embedding · longctx · confab · update · export
+#   (imagegen is DISABLED — Ollama 0.32.6 removed image generation; see bench_utils.IMAGEGEN_AVAILABLE)
 #   probe = v3 think probe (think_profile per thinking-capable model; auto-runs first in standard/batteries/all)
-#   all flags: --with-elastic (append F-elastic) · --with-confab (append Battery H) · --with-imagegen (append Battery I) — one unattended run does everything
+#   all flags: --with-elastic (append F-elastic) · --with-confab (append Battery H) — one unattended run does everything
 # Web: binds 0.0.0.0 by default (reachable on the LAN for monitoring from phone/iPad).
 #   Control (Start/Stop) is allowed from the host machine only; LAN clients are read-only.
 #   --allow-control  → let LAN clients control too   ·   --host 127.0.0.1 → localhost-only   ·   --port N

@@ -46,7 +46,7 @@ from pathlib import Path
 
 import requests
 
-from bench_utils import cooldown, latest_result, sort_registry
+from bench_utils import cooldown, latest_result, sort_registry, IMAGEGEN_AVAILABLE, IMAGEGEN_UNAVAILABLE_MSG
 
 REPO        = Path(__file__).parent
 RESULTS_DIR = REPO / "results"
@@ -479,6 +479,8 @@ def write_summary(results, out_md, fast_mode):
 # ── Entrypoint ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if not IMAGEGEN_AVAILABLE:          # Ollama 0.32.6 removed image generation — see bench_utils
+        sys.exit(IMAGEGEN_UNAVAILABLE_MSG)
     TODAY    = date.today().isoformat()
     suffix   = "_fast" if fast_mode else ""
     OUT_JSON = RESULTS_DIR / f"imagegen_{TODAY}{suffix}.json"

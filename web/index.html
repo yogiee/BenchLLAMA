@@ -394,7 +394,7 @@
     <button data-tab="monitor" aria-pressed="true">Monitor</button>
     <button data-tab="rankings" aria-pressed="false">Rankings</button>
     <button data-tab="files" aria-pressed="false">Files</button>
-    <button data-tab="review" aria-pressed="false">Image Review</button>
+    <button data-tab="review" aria-pressed="false" id="tabReview" hidden>Image Review</button>
   </nav>
   <main>
     <section id="view-monitor" class="view mt-left">
@@ -768,6 +768,10 @@ let DONE_ACK  = false;      // user dismissed the finished run (or it was mainte
 
 const APT_DEFAULT = ["B", "A", "C", "D", "E", "F"];                        // F-elastic = conscious opt-in
 const ALL_PRESET  = ["standard", "ladder", "aptitude", "vision", "embedding", "longctx"];  // NOT confab/imagegen
+// Battery I is hidden while Ollama has no image generation (removed in 0.32.6). Mirrors
+// bench_utils.IMAGEGEN_AVAILABLE — flip both to re-enable; this one restores the card + Image Review tab.
+const IMAGEGEN_AVAILABLE = false;
+if(IMAGEGEN_AVAILABLE) document.getElementById("tabReview").hidden = false;
 const SUITES = [
   {id:"all",       name:"ALL (Full Pipeline)", desc:"everything below — opt-ins (H, F-elastic) stay a conscious choice"},
   {sep:true},
@@ -778,8 +782,10 @@ const SUITES = [
   {id:"embedding", name:"Embedding (EMB)",     desc:"short + long-doc retrieval quality"},
   {id:"longctx",   name:"Long-Context (G)",    desc:"filled-window needles + speed-collapse"},
   {id:"confab",    name:"Honesty (H)",         desc:"confabulation probe · LLM judge", expand:"judge", flag:"opt-in"},
+  ...(IMAGEGEN_AVAILABLE ? [
   {sep:true},
   {id:"imagegen",  name:"Image Gen (I)",       desc:"perf + adherence · reference-only", flag:"solo · slow", exclusive:true},
+  ] : []),
 ];
 const BATTERIES = [
   {id:"B", label:"B — worker chat"},
