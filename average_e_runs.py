@@ -246,7 +246,10 @@ def _average_f_elastic(run_files):
     runs, models = _load_runs(run_files)
     elastic = _G["_elastic"]
     ladder  = elastic.load_ladder()
-    cutoffs = ladder["verdict_cutoffs"]
+    # Bars from bench_utils (via aptitude's namespace), NOT the hashed ladder — ladder.json's
+    # verdict_cutoffs block is stale-by-design documentation (hard bar 0.60 vs the calibrated 0.75).
+    # Reading it here silently reverted the 08-24 calibration on every averaged row (found 09-23).
+    cutoffs = dict(_G["F_ELASTIC_CUTOFFS"])
     klass   = lambda c: ladder["constraints"][c].get("class")
     mean    = lambda xs: round(statistics.mean(xs), 4) if xs else None
     pstd    = lambda xs: round(statistics.pstdev(xs), 4) if len(xs) > 1 else 0.0
@@ -277,13 +280,18 @@ def _average_f_elastic(run_files):
         _m = lambda rows, k: mean([r[k] for r in rows if r.get(k) is not None])
         prompt_sigma = pstd(core_comps)
         iadh = _m(core, "instruction_adherence")
-        hadh = _m(hard, "instruction_adherence")
+        # ⚠ Scoped to the constraints the hard rung ADDS (adherence.hard_band_ids) — the rung's full
+        # binary set dilutes the 3 discriminators with the saturated core ones (the 08-24 fix).
+        _hv  = [v for v in (elastic.hard_band_adherence(r, ladder) for r in hard) if v is not None]
+        hadh = round(statistics.mean(_hv), 4) if _hv else None
+        hadh_all = _m(hard, "instruction_adherence")   # continuity with the 08-23/08-24 series
         ladh = _m(core, "length_adherence")
         verdict = elastic.classify(prompt_sigma, iadh, cutoffs, hard_adherence=hadh)
         run_verdicts = [rec["summary"]["verdict"] for rec in recs]
         out.append({"model": name, "battery": "F-elastic", **_arm_of(recs), "runs": len(recs), "summary": {
             "prompt_sigma": prompt_sigma, "instruction_adherence": iadh, "length_adherence": ladh,
             "prompt_sigma_all": pstd(composites), "hard_adherence": hadh,
+            "hard_adherence_allbinary": hadh_all,
             "hard_adherence_stdev": pstd([rec["summary"]["hard_adherence"] for rec in recs
                                           if rec["summary"].get("hard_adherence") is not None]),
             "adherence": iadh, "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung,
