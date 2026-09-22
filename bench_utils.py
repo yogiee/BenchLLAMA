@@ -154,6 +154,16 @@ BATTERY_DATASETS = {
 # Every writer calls apply_think(payload, model, arm) instead of hard-coding "think": False, and
 # stamps arm_stamp(model, arm) onto its result so the DB row / export say which arm was measured.
 # A model with NO profile gets the legacy behaviour (think=False; a 400 is stripped by the caller).
+# ── Battery I (image generation) availability ─────────────────────────────────────
+# Ollama 0.32.6 (2026-08-06) removed image generation, so Battery I cannot produce a single image. The
+# code (imagegen.py, the Image Review tab, the /api/imagegen/* routes, suites/imagegen/) is KEPT but
+# HIDDEN: every entry point checks this switch — `./bench.sh imagegen` (web boot + --console),
+# `--with-imagegen`, the dashboard's /api/start units, and a direct `python3 imagegen.py`.
+# Re-enable by flipping to True if and when Ollama image generation returns (and set the matching
+# `IMAGEGEN_AVAILABLE` const in web/index.html, which un-hides the card + tab).
+IMAGEGEN_AVAILABLE = False
+IMAGEGEN_UNAVAILABLE_MSG = "Image generation is temporarily unavailable — this battery cannot run."
+
 THINK_OMIT = object()                       # sentinel: send no `think` key at all (the "absent" lever)
 THINK_LEVERS = ("absent", "false", "low", "medium", "high", "true")
 THINK_ARMS = ("direct", "think")
@@ -178,8 +188,37 @@ _PROFILE_CACHE: dict = {"mtime": None, "data": {}}
 
 
 def lever_value(name):
-    """Lever NAME (as stored in a profile) → the literal `think` value to send; 'absent' → THINK_OMIT."""
-    return _LEVER_VALUES.get(str(name), THINK_OMIT)
+    """Lever NAME (as stored in a profile) → the literal `think` value to send; 'absent' → THINK_OMIT.
+
+    A name outside THINK_LEVERS (e.g. "xhigh", "max" — levels a model DECLARES via /api/show since Ollama
+    0.34.3) is sent as the literal string. Until 2026-09-23 any unknown name silently became THINK_OMIT,
+    so a declared-only level would have been measured as `absent` under another name."""
+    if name is None or name is THINK_OMIT or str(name) in ("absent", ""):
+        return THINK_OMIT
+    return _LEVER_VALUES.get(str(name), str(name))
+
+
+def normalize_declared(block):
+    """Ollama 0.34.3+ `/api/show` → `thinking: {values: [...], default: ...}` → the same block with every
+    value as a lever NAME (False → "false", True → "true", strings kept). None when the model declares
+    nothing. ⚠ DECLARED ≠ MEASURED (2026-09-23): granite4.2:3b declares nothing yet its "low" is the
+    fleet's most consequential lever; gemma4 declares [false, true] yet splits into 2–3 thinking classes;
+    lfm2.5:8b declares [false] default false yet thinks by default. The declaration is a prior and an
+    alarm for think_probe.py — never a substitute for probing."""
+    if not isinstance(block, dict):
+        return None
+    vals = block.get("values")
+    return {"values": [lever_name(v) for v in vals] if isinstance(vals, list) else [],
+            "default": lever_name(block["default"]) if "default" in block else None}
+
+
+def fetch_declared(host: str, model: str):
+    """The model's normalized declared thinking block from /api/show, or None (undeclared / unreachable)."""
+    try:
+        r = requests.post(f"{host}/api/show", json={"model": model}, timeout=15)
+        return normalize_declared(r.json().get("thinking"))
+    except Exception:
+        return None
 
 
 def lever_name(value) -> str:

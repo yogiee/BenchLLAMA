@@ -16,7 +16,18 @@
       "ollama": "0.33.1",
       "digest": "40577dc168a3a9ad",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -38,6 +49,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 3,
           "items": {
             "bat_ball": {
@@ -75,6 +87,7 @@
           "thinking_chars_max": 221,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -116,6 +129,7 @@
           "thinking_chars_max": 588,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -147,6 +161,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "low",
       "raw": {
@@ -354,10 +370,9 @@
             "wall": 3.4
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
-    }
+      }
+    },
+    "thinking_declared": null
   },
   {
     "name": "ministral-3:3b",
@@ -413,7 +428,18 @@
       "ollama": "0.33.1",
       "digest": "a75697c145891910",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -435,6 +461,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -476,6 +503,7 @@
           "thinking_chars_max": 321,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -507,6 +535,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "low",
       "raw": {
@@ -714,9 +744,14 @@
             "wall": 3.4
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
     }
   },
   {
@@ -738,7 +773,18 @@
       "ollama": "0.33.1",
       "digest": "f0fc7e0ae4947d38",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -760,6 +806,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -797,6 +844,7 @@
           "thinking_chars_max": 1127,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -836,6 +884,7 @@
           "thinking_chars_max": 1930,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -875,6 +924,7 @@
           "thinking_chars_max": 2003,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -906,6 +956,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think2",
       "operating_lever": "low",
       "raw": {
@@ -1113,9 +1165,14 @@
             "wall": 5.8
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
     }
   },
   {
@@ -1137,7 +1194,18 @@
       "ollama": "0.33.1",
       "digest": "ac7f7a1e778577c4",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": false,
       "always_on": true,
       "default_thinks": true,
@@ -1159,6 +1227,7 @@
           "thinking_chars_max": 76,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1199,6 +1268,7 @@
           "thinking_chars_max": 361,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1238,6 +1308,7 @@
           "thinking_chars_max": 1018,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1269,6 +1340,8 @@
           "bounded": true
         }
       },
+      "direct_class": "think1",
+      "direct_lever": "low",
       "operating_point": null,
       "operating_lever": null,
       "raw": {
@@ -1476,9 +1549,15 @@
             "wall": 4.4
           }
         }
-      },
-      "direct_class": "think1",
-      "direct_lever": "low"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium"
     }
   },
   {
@@ -1501,7 +1580,18 @@
       "ollama": "0.33.1",
       "digest": "ded7a27350032202",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -1523,6 +1613,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1562,6 +1653,7 @@
           "thinking_chars_max": 1362,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1601,6 +1693,7 @@
           "thinking_chars_max": 1851,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1632,6 +1725,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "low",
       "raw": {
@@ -1839,9 +1934,14 @@
             "wall": 10.2
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
     }
   },
   {
@@ -1864,7 +1964,18 @@
       "ollama": "0.33.1",
       "digest": "ef09f235533c96cd",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": false,
@@ -1887,6 +1998,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1926,6 +2038,7 @@
           "thinking_chars_max": 1020,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1964,6 +2077,7 @@
           "thinking_chars_max": 1467,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -1995,6 +2109,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "low",
       "raw": {
@@ -2202,9 +2318,14 @@
             "wall": 2.7
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "false"
     }
   },
   {
@@ -2277,7 +2398,18 @@
       "ollama": "0.33.1",
       "digest": "e95583acac773b45",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -2299,6 +2431,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 3,
           "items": {
             "bat_ball": {
@@ -2339,6 +2472,7 @@
           "thinking_chars_max": 662,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -2377,6 +2511,7 @@
           "thinking_chars_max": 2412,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -2408,6 +2543,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "medium",
       "raw": {
@@ -2615,10 +2752,9 @@
             "wall": 0.9
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
-    }
+      }
+    },
+    "thinking_declared": null
   },
   {
     "name": "gemma4:e4b-mlx",
@@ -2639,7 +2775,18 @@
       "ollama": "0.33.1",
       "digest": "5a08735df03c348a",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -2661,6 +2808,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -2702,6 +2850,7 @@
           "thinking_chars_max": 660,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -2733,6 +2882,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "low",
       "raw": {
@@ -2940,9 +3091,14 @@
             "wall": 1.4
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
     }
   },
   {
@@ -2963,7 +3119,18 @@
       "ollama": "0.33.1",
       "digest": "e5df7dcdd8a26399",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -2985,6 +3152,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 3,
           "items": {
             "bat_ball": {
@@ -3026,6 +3194,7 @@
           "thinking_chars_max": 785,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -3057,6 +3226,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "low",
       "raw": {
@@ -3264,10 +3435,9 @@
             "wall": 9.6
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
-    }
+      }
+    },
+    "thinking_declared": null
   },
   {
     "name": "qwen3.5:4b-mlx",
@@ -3285,7 +3455,18 @@
       "ollama": "0.33.1",
       "digest": "61aa3858e9d3022e",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -3307,6 +3488,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 3,
           "items": {
             "bat_ball": {
@@ -3347,6 +3529,7 @@
           "thinking_chars_max": 3567,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -3385,6 +3568,7 @@
           "thinking_chars_max": 6123,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -3416,6 +3600,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think1",
       "operating_lever": "low",
       "raw": {
@@ -3623,9 +3809,14 @@
             "wall": 7.7
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
     }
   },
   {
@@ -3645,7 +3836,18 @@
       "ollama": "0.33.1",
       "digest": "17052f91a42e9793",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": false,
       "always_on": true,
       "default_thinks": true,
@@ -3667,6 +3869,7 @@
           "thinking_chars_max": 91,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -3707,6 +3910,7 @@
           "thinking_chars_max": 651,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -3745,6 +3949,7 @@
           "thinking_chars_max": 898,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -3783,6 +3988,7 @@
           "thinking_chars_max": 1655,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -3814,6 +4020,8 @@
           "bounded": true
         }
       },
+      "direct_class": "think1",
+      "direct_lever": "low",
       "operating_point": null,
       "operating_lever": null,
       "raw": {
@@ -4021,9 +4229,15 @@
             "wall": 3.6
           }
         }
-      },
-      "direct_class": "think1",
-      "direct_lever": "low"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium"
     }
   },
   {
@@ -4044,7 +4258,18 @@
       "ollama": "0.33.1",
       "digest": "5642e97495e1a088",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -4066,6 +4291,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4105,6 +4331,7 @@
           "thinking_chars_max": 737,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4144,6 +4371,7 @@
           "thinking_chars_max": 910,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4175,6 +4403,8 @@
           "bounded": true
         }
       },
+      "direct_class": "off",
+      "direct_lever": "false",
       "operating_point": "think2",
       "operating_lever": "low",
       "raw": {
@@ -4382,9 +4612,16 @@
             "wall": 13.1
           }
         }
-      },
-      "direct_class": "off",
-      "direct_lever": "false"
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "default": "medium"
     }
   },
   {
@@ -4405,7 +4642,18 @@
       "ollama": "0.33.2",
       "digest": "c6398e09afd407f9",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -4427,6 +4675,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4464,6 +4713,7 @@
           "thinking_chars_max": 237,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4503,6 +4753,7 @@
           "thinking_chars_max": 375,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4541,6 +4792,7 @@
           "thinking_chars_max": 339,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4579,6 +4831,7 @@
           "thinking_chars_max": 1356,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -4820,6 +5073,13 @@
           }
         }
       }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
     }
   },
   {
@@ -4837,7 +5097,18 @@
       "ollama": "0.33.2",
       "digest": "9cf756159fc2f3b9",
       "probe_sha": "91e6d738daca",
-      "derive_version": 4,
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
       "off_supported": true,
       "always_on": false,
       "default_thinks": true,
@@ -4859,6 +5130,7 @@
           "thinking_chars_max": 0,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 3,
           "items": {
             "bat_ball": {
@@ -4900,6 +5172,7 @@
           "thinking_chars_max": 1100,
           "starved": false,
           "hit_cap": false,
+          "leaked": false,
           "score": 4,
           "items": {
             "bat_ball": {
@@ -5141,6 +5414,12 @@
           }
         }
       }
+    },
+    "thinking_declared": {
+      "values": [
+        "false"
+      ],
+      "default": "false"
     }
   }
 ]

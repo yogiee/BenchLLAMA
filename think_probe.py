@@ -23,8 +23,21 @@ FAIL bat_ball — a protocol artifact. So the lever is chosen PER MODEL, from me
   python3 think_probe.py --rederive            # rebuild every profile from its stored raw (no calls)
   python3 think_probe.py --starved             # re-probe models whose profile has a starved class
 
-A profile is STALE when the model digest, the Ollama major.minor or the probe item-set hash moved.
+A profile is STALE when the model digest, the Ollama major.minor, the probe item-set hash, or the
+model's DECLARED think levels (Ollama ≥ 0.34.3 `/api/show` → `thinking`) moved.
 Models without the `thinking` capability get no profile (→ legacy think=False in every writer).
+
+DECLARED LEVELS (2026-09-23): the declaration is a prior and an alarm, never a substitute for probing —
+checked against the 0.33.x profiles it was wrong for about half the fleet (see bench_utils.normalize_declared).
+So the probe (a) ALSO tries any declared level outside THINK_LEVERS (qwen3.8 declares "xhigh"), (b) stores
+the declaration in the profile, (c) reports every declared-vs-measured disagreement, and (d) re-probes when
+the declaration changes.
+
+LEAKED THINKING: a model can think with no `thinking` channel at all — the reasoning arrives inside
+`content` as raw `<think>…</think>` (lfm2.5:8b on 0.34.3 at think=false and "low"). Counting that as zero
+think tokens classifies inline thinking as "off", and every battery at that lever would then grade raw
+reasoning text as the answer. Such calls are marked `leaked`, graded on the text after `</think>`, kept
+in their own class, and never chosen for an arm while a clean lever exists.
 """
 import hashlib
 import json
@@ -38,7 +51,7 @@ import requests
 
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO))
-from bench_utils import (THINK_LEVERS, THINK_PROBE_NUM_PREDICT, lever_value, THINK_OMIT)
+from bench_utils import (THINK_LEVERS, THINK_PROBE_NUM_PREDICT, lever_value, THINK_OMIT, fetch_declared)
 
 PROBE_FILE = REPO / "suites" / "think" / "probe.json"
 REGISTRY   = REPO / "models.json"
@@ -133,6 +146,7 @@ def call(model, item, lever, options):
     r.raise_for_status()
     d = r.json(); msg = d.get("message") or {}
     thinking, content = msg.get("thinking") or "", msg.get("content") or ""
+    thinking, content, leaked = split_leaked(thinking, content)
     ev = d.get("eval_count") or 0
     tc = thinking and (len(thinking) / max(1, len(thinking) + len(content)))
     return {
@@ -141,8 +155,21 @@ def call(model, item, lever, options):
         "done_reason": d.get("done_reason"), "eval_count": ev,
         "think_tokens_est": int(round(ev * tc)) if thinking else 0,
         "starved": d.get("done_reason") == "length" and not content.strip(),
-        "correct": check(item, msg), "wall": round(wall, 1),
+        "correct": check(item, {**msg, "content": content}), "wall": round(wall, 1),
+        "leaked": leaked,
     }
+
+
+def split_leaked(thinking: str, content: str):
+    """(thinking, content, leaked). With an empty thinking channel, reasoning that arrived inline as
+    `<think>…</think>` is moved back out of `content`; an unterminated `<think>` is all reasoning (the
+    reply never started — it reads as starved when the budget ran out)."""
+    if thinking or not ("<think>" in content or "</think>" in content):
+        return thinking, content, False
+    pre, sep, post = content.partition("</think>")
+    if sep:
+        return pre.replace("<think>", "", 1).strip(), post.strip(), True
+    return content.replace("<think>", "", 1).strip(), "", True
 
 
 def unload(model):
@@ -154,13 +181,20 @@ def unload(model):
 
 # ── profile derivation ────────────────────────────────────────────────────────
 
-DERIVE_VERSION = 4   # bump when the class/operating-point derivation changes → profiles re-derive from `raw` on load
+DERIVE_VERSION = 5   # bump when the class/operating-point derivation changes → profiles re-derive from `raw` on load
+                     # v5 (2026-09-23): leaked-thinking classes + declared-level provenance/mismatches
+
+
+def _lever_order(lv: str):
+    """THINK_LEVERS first in their canonical order, then any declared-only level (xhigh, max…) by name."""
+    return (THINK_LEVERS.index(lv), "") if lv in THINK_LEVERS else (len(THINK_LEVERS), lv)
 
 
 def _sig(res: dict):
     """Behaviour signature of one lever: per-item correctness + starvation pattern (item-id order)."""
     ids = sorted(res)
-    return (tuple(bool(res[i]["correct"]) for i in ids), tuple(bool(res[i]["starved"]) for i in ids))
+    return (tuple(bool(res[i]["correct"]) for i in ids), tuple(bool(res[i]["starved"]) for i in ids),
+            any(res[i].get("leaked") for i in ids))
 
 
 def _same_demand(a: int, b: int) -> bool:
@@ -176,7 +210,7 @@ def derive(model, per_lever: dict, meta) -> dict:
     ok = [lv for lv, res in per_lever.items() if res and not any(r.get("unsupported") for r in res.values())]
     info = {lv: (max(r["think_tokens_est"] for r in per_lever[lv].values()), _sig(per_lever[lv])) for lv in ok}
     groups: list[list[str]] = []
-    for lv in sorted(ok, key=lambda x: (info[x][0], THINK_LEVERS.index(x))):
+    for lv in sorted(ok, key=lambda x: (info[x][0], _lever_order(x))):
         tk, sig = info[lv]
         for g in groups:
             gtk, gsig = info[g[0]]
@@ -195,6 +229,7 @@ def derive(model, per_lever: dict, meta) -> dict:
             "thinking_chars_max": max(len(r["thinking"]) for res in allres for r in res.values()),
             "starved": any(r["starved"] for res in allres for r in res.values()),
             "hit_cap": any(r["done_reason"] == "length" for res in allres for r in res.values()),
+            "leaked": any(r.get("leaked") for res in allres for r in res.values()),
             "score": sum(1 for r in rep.values() if r["correct"]),
             "items": {iid: {"correct": r["correct"], "think_tokens": r["think_tokens_est"],
                             "done": r["done_reason"], "wall": r["wall"]} for iid, r in rep.items()},
@@ -222,6 +257,10 @@ def derive(model, per_lever: dict, meta) -> dict:
             lever_class[lv] = "unsupported"
 
     bounded = [cid for cid, c in class_stats.items() if cid != "off" and c.get("bounded")]
+    # A leaked class answers only once `</think>` is stripped — no battery does that, so it is never an arm
+    # while a clean bounded class exists (it stays in class_stats and is reported).
+    if any(not class_stats[c].get("leaked") for c in bounded):
+        bounded = [c for c in bounded if not class_stats[c].get("leaked")]
     op = None
     if bounded:
         best = max(class_stats[c]["score"] for c in bounded)
@@ -262,18 +301,27 @@ def derive(model, per_lever: dict, meta) -> dict:
 
     raw = {lv: {iid: {"tt": r.get("think_tokens_est", 0), "tc": len(r.get("thinking") or ""),
                       "ok": bool(r.get("correct")), "st": bool(r.get("starved")),
-                      "done": r.get("done_reason"), "wall": r.get("wall")}
+                      "done": r.get("done_reason"), "wall": r.get("wall"),
+                      **({"lk": True} if r.get("leaked") else {})}
                 for iid, r in res.items()} if res and not any(r.get("unsupported") for r in res.values())
            else {"unsupported": True}
            for lv, res in per_lever.items()}
 
+    default_thinks = lever_class.get("absent") not in ("off", "unsupported", None)
+    declared = meta.get("declared")
     return {
         "probed_at": meta.get("probed_at") or time.strftime("%Y-%m-%d"),
         "ollama": meta.get("ollama"), "digest": meta.get("digest"), "probe_sha": meta.get("probe_sha"),
         "derive_version": DERIVE_VERSION,
+        "declared": declared,          # /api/show `thinking` at probe time (normalized); None = undeclared
+        "levers_probed": sorted(per_lever, key=_lever_order),
+        "leaked_levers": sorted((lv for c in class_stats.values() if c.get("leaked") for lv in c["levers"]),
+                                key=_lever_order),
+        "declared_mismatch": declared_mismatch(declared, lever_class, class_stats, default_thinks, off_supported,
+                                               meta.get("ollama")),
         "off_supported": off_supported,
         "always_on": not off_supported,
-        "default_thinks": lever_class.get("absent") not in ("off", "unsupported", None),
+        "default_thinks": default_thinks,
         "think_unbounded": bool(thinking) and not bounded,
         "classes": lever_class,
         "class_stats": class_stats,
@@ -281,6 +329,41 @@ def derive(model, per_lever: dict, meta) -> dict:
         "operating_point": operating_point, "operating_lever": operating_lever,
         "raw": raw,      # compact per-lever measurements → `--rederive` recomputes everything above offline
     }
+
+
+DECLARED_SINCE = (0, 34, 3)   # first Ollama whose /api/show carries `thinking`
+
+
+def _ver(v) -> tuple:
+    try:
+        return tuple(int(x) for x in str(v).split("-")[0].split(".")[:3])
+    except ValueError:
+        return ()
+
+
+def declared_mismatch(declared, lever_class, class_stats, default_thinks, off_supported, ollama=None) -> list[str]:
+    """Every way the /api/show declaration disagrees with the measurement — informational; the measured
+    profile is authoritative. [] = the declaration matches what was measured."""
+    if declared is None:
+        if _ver(ollama) and _ver(ollama) < DECLARED_SINCE:
+            return []                  # the server could not declare anything — absence is not a finding
+        return ["no think levels declared by /api/show"]
+    vals, out = set(declared.get("values") or []), []
+    off_levers = (class_stats.get("off") or {}).get("levers") or []
+    if "false" in vals and not off_supported:
+        out.append("declares `false`, but no lever turned thinking off")
+    if "false" not in vals and off_supported:
+        out.append(f"`false` not declared, yet {','.join(off_levers)} turn(s) thinking off")
+    d = declared.get("default")
+    if d is not None and (d != "false") != default_thinks:
+        out.append(f"declared default `{d}`, but measured default {'thinks' if default_thinks else 'does not think'}")
+    for cid, c in class_stats.items():
+        if cid != "off" and not vals.intersection(c["levers"]) and set(c["levers"]) != {"absent"}:
+            out.append(f"{cid} ({','.join(c['levers'])}) behaves distinctly but only via undeclared levers")
+    for lv in sorted(vals, key=_lever_order):
+        if lever_class.get(lv) == "unsupported":
+            out.append(f"declares `{lv}`, but the server rejected it")
+    return out
 
 
 def rederive(prof: dict) -> dict | None:
@@ -294,9 +377,10 @@ def rederive(prof: dict) -> dict | None:
             per_lever[lv] = {"_": {"unsupported": True}}
             continue
         per_lever[lv] = {iid: {"think_tokens_est": r["tt"], "thinking": "x" * r["tc"], "correct": r["ok"],
-                               "starved": r["st"], "done_reason": r["done"], "wall": r["wall"]}
+                               "starved": r["st"], "done_reason": r["done"], "wall": r["wall"],
+                               "leaked": r.get("lk", False)}
                          for iid, r in res.items()}
-    meta = {k: prof.get(k) for k in ("probed_at", "ollama", "digest", "probe_sha")}
+    meta = {k: prof.get(k) for k in ("probed_at", "ollama", "digest", "probe_sha", "declared")}
     return derive(None, per_lever, meta)
 
 
@@ -320,7 +404,10 @@ def ollama_meta():
     return ver, digests
 
 
-def is_stale(prof, digest, ver, psha) -> str | None:
+_NOT_CHECKED = object()
+
+
+def is_stale(prof, digest, ver, psha, declared=_NOT_CHECKED) -> str | None:
     if not prof:
         return "no profile"
     if prof.get("derive_version") != DERIVE_VERSION and not prof.get("raw"):
@@ -332,6 +419,10 @@ def is_stale(prof, digest, ver, psha) -> str | None:
     a, b = str(prof.get("ollama") or ""), str(ver or "")
     if a.split(".")[:2] != b.split(".")[:2]:
         return f"ollama {a}→{b}"
+    # Checked AFTER the version gate: a server older than 0.34.3 declares nothing, so on a downgrade the
+    # version reason is the true one. A profile predating the field reads as None = "undeclared".
+    if declared is not _NOT_CHECKED and prof.get("declared") != declared:
+        return "declared think levels changed"
     return None
 
 
@@ -339,14 +430,22 @@ def fmt_report(model, prof) -> str:
     L = [f"  {model}: off_supported={prof['off_supported']} default_thinks={prof['default_thinks']} "
          f"direct={prof['direct_class']}({prof['direct_lever']}) think={prof['operating_point']}({prof['operating_lever']})"
          + ("  ⚠ think UNBOUNDED" if prof["think_unbounded"] else "")]
+    dec = prof.get("declared")
+    L.append(f"    declared: " + (f"levels={','.join(dec.get('values') or [])} default={dec.get('default')}"
+                                   if dec else "none"))
     for cid, c in prof["class_stats"].items():
         items = " ".join(f"{k}:{'✓' if v['correct'] else '✗'}" for k, v in c["items"].items())
         L.append(f"    {cid:7s} levers={','.join(c['levers']):28s} think_tok≤{c['think_tokens_max']:5d} "
                  f"score={c['score']}/{len(c['items'])} {'bounded' if not c['starved'] else 'STARVED'} "
-                 f"wall_p50={c['wall_p50']}s  [{items}]")
+                 f"wall_p50={c['wall_p50']}s  [{items}]" + ("  ⚠ leaked" if c.get("leaked") else ""))
     unsup = [lv for lv, cid in prof["classes"].items() if cid == "unsupported"]
     if unsup:
         L.append(f"    unsupported levers: {', '.join(unsup)}")
+    if prof.get("leaked_levers"):
+        L.append(f"    ⚠ LEAKED: thinking arrives inside content at {','.join(prof['leaked_levers'])} "
+                 f"— never used as an arm while a clean lever exists; batteries would grade raw <think> text")
+    for mm in prof.get("declared_mismatch") or []:
+        L.append(f"    ≠ declared vs measured: {mm}")
     return "\n".join(L)
 
 
@@ -380,6 +479,15 @@ if __name__ == "__main__":
 
     thinking_models = [m for m in registry if "thinking" in (m.get("capabilities") or [])
                        and m.get("role") in ("worker", "router")]
+    # Declared levels are read LIVE (not from models.json, which is only as fresh as the last registry
+    # sync): they feed both the staleness check and the per-model lever set.
+    _declared: dict = {}
+    def declared_of(name):
+        if name not in _declared:
+            _declared[name] = fetch_declared(ollama_host, name)
+        return _declared[name]
+    def stale(m):
+        return is_stale(m.get("think_profile"), digests.get(m["name"]), ver, psha, declared_of(m["name"]))
     if model_args:
         by = {m["name"]: m for m in registry}
         targets = []
@@ -400,7 +508,7 @@ if __name__ == "__main__":
         if _flag("--stale-only"):
             # the orchestrator's automatic probe phase: scope to the run's --models selection, but a fresh
             # profile is still a no-op — only an explicit `probe --models …` re-probes a fresh model
-            fresh = [m for m in targets if not is_stale(m.get("think_profile"), digests.get(m["name"]), ver, psha)]
+            fresh = [m for m in targets if not stale(m)]
             for m in fresh:
                 print(f"  ↷ {m['name']}  profile fresh — skipped")
             targets = [m for m in targets if m not in fresh]
@@ -410,8 +518,7 @@ if __name__ == "__main__":
         targets = [m for m in thinking_models
                    if any(c.get("starved") for c in ((m.get("think_profile") or {}).get("class_stats") or {}).values())]
     else:
-        targets = [m for m in thinking_models
-                   if is_stale(m.get("think_profile"), digests.get(m["name"]), ver, psha)]
+        targets = [m for m in thinking_models if stale(m)]
     no_cap = [m["name"] for m in registry if m.get("role") in ("worker", "router")
               and "thinking" not in (m.get("capabilities") or []) and m.get("think_profile")]
 
@@ -426,10 +533,12 @@ if __name__ == "__main__":
     profiles = {}
     for m in targets:
         name = m["name"]
-        why = is_stale(m.get("think_profile"), digests.get(name), ver, psha) or "requested"
-        print(f"\n▶ {name}  ({why})", flush=True)
+        why = stale(m) or "requested"
+        declared = declared_of(name)
+        extra = [lv for lv in (declared or {}).get("values") or [] if lv not in THINK_LEVERS]
+        print(f"\n▶ {name}  ({why})" + (f"  + declared-only level(s): {','.join(extra)}" if extra else ""), flush=True)
         per_lever = {}
-        for lever in THINK_LEVERS:
+        for lever in (*THINK_LEVERS, *extra):
             res = {}
             for it in items:
                 try:
@@ -463,9 +572,11 @@ if __name__ == "__main__":
                 print(f"    {lever:7s} ↑ re-ran {len(starved)} starved item(s) at num_predict={budget}: "
                       + " ".join(f"{it['id']}:{'✓' if res[it['id']].get('correct') else '✗'}{'!' if res[it['id']].get('starved') else ''}" for it in starved), flush=True)
             marks = " ".join(f"{k}:{'✓' if r['correct'] else '✗'}{'!' if r['starved'] else ''}" for k, r in res.items())
-            print(f"    {lever:7s} think_tok≤{max(r['think_tokens_est'] for r in res.values()):5d}  {marks}", flush=True)
+            print(f"    {lever:7s} think_tok≤{max(r['think_tokens_est'] for r in res.values()):5d}  {marks}"
+                  + ("  ⚠ leaked <think> into content" if any(r.get("leaked") for r in res.values()) else ""), flush=True)
         unload(name)
-        prof = derive(name, per_lever, {"ollama": ver, "digest": digests.get(name), "probe_sha": psha})
+        prof = derive(name, per_lever, {"ollama": ver, "digest": digests.get(name), "probe_sha": psha,
+                                        "declared": declared})
         if not prof["class_stats"]:
             print(f"  ✗ {name}: every lever was rejected or errored — no profile written", flush=True)
             continue

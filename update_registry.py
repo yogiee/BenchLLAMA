@@ -47,6 +47,8 @@ from pathlib import Path
 
 REPO     = Path(__file__).parent
 REGISTRY = REPO / "models.json"
+sys.path.insert(0, str(REPO))
+from bench_utils import normalize_declared, fetch_declared   # noqa: E402
 
 # Architectures that report "completion" but are not general-purpose chat models.
 # glmocr: OCR-specialist (glm-ocr); fails all chat benchmarks despite the flag,
@@ -106,9 +108,10 @@ def fetch_installed(host):
             caps     = set(body.get("capabilities", []))
             arch     = body.get("modelinfo", {}).get("general.architecture", "") or \
                        body.get("details", {}).get("family", "")
+            declared = normalize_declared(body.get("thinking"))   # Ollama ≥ 0.34.3; None before / undeclared
         except Exception:
-            caps, arch = set(), ""
-        result[name] = {"disk_gb": disk_gb, "capabilities": caps, "arch": arch}
+            caps, arch, declared = set(), "", None
+        result[name] = {"disk_gb": disk_gb, "capabilities": caps, "arch": arch, "thinking_declared": declared}
     return result
 
 
@@ -176,6 +179,11 @@ if __name__ == "__main__":
             if entry.get("capabilities") != caps_list:
                 entry["capabilities"] = caps_list
                 changed = True
+            # Declared think levels (docs/think-spec.md §declared): provenance + a probe-staleness trigger
+            # in think_probe.py. Stored even when None so "undeclared" is explicit, not missing data.
+            if "thinking" in caps_list and entry.get("thinking_declared", "∅") != info["thinking_declared"]:
+                entry["thinking_declared"] = info["thinking_declared"]
+                changed = True
             # Role = lane assignment. Completion models keep their gated role
             # (preserves manual edits + router promotions). Specialists are always
             # 'utility' — migrate any deprecated role=vision/embedding here too.
@@ -196,6 +204,8 @@ if __name__ == "__main__":
                 "role":         LANE_DEFAULT_ROLE[lane],
                 "capabilities": caps_list,
             }
+            if "thinking" in caps_list:
+                entry["thinking_declared"] = info["thinking_declared"]
             if is_cloud(name):
                 entry["cloud"] = True
             if lane == "completion":
@@ -209,6 +219,9 @@ if __name__ == "__main__":
             # regardless, else every sync would prune a registered cloud model.
             if keep_missing or entry.get("cloud"):
                 missing.append(name)
+                if entry.get("cloud") and "thinking" in (entry.get("capabilities") or []):
+                    entry = dict(entry)                  # cloud endpoints still answer /api/show
+                    entry["thinking_declared"] = fetch_declared(host, name)
                 proposed.append(entry)  # retained (--keep-missing or cloud:true)
             else:
                 pruned.append(name)     # no longer installed → dropped
@@ -236,7 +249,7 @@ if __name__ == "__main__":
         print()
 
     if updated:
-        print("Refreshed (disk size or capabilities):")
+        print("Refreshed (disk size, capabilities or declared think levels):")
         for name in updated:
             print(f"  ~ {name}")
         print()

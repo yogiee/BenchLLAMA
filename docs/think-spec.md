@@ -135,6 +135,42 @@ usable think arm; it is measured on `direct` only and flagged `think_unbounded`)
 Worked results: granite4.2 → `low`; qwen3.5 → `full`(=true); gemma4 → `full`; ornith → `full`;
 gpt-oss → `low` unless a higher level fixes a probe item; deepcoder → single arm `always`.
 
+### 4.4 Declared levels and leaked thinking (derive v5, 2026-09-23)
+
+**Declared levels.** Since Ollama **0.34.3**, `POST /api/show` returns `thinking: {values, default}`.
+`update_registry.py` syncs it into `models.json` as `thinking_declared`, and the probe stores the
+normalized block in the profile as `declared` (both via `bench_utils.normalize_declared`). The
+declaration is a **prior and an alarm, never a substitute for probing**. Checked against the 0.33.x
+profiles, it disagreed with the measurement for about half the fleet:
+
+| model | declared | measured |
+|---|---|---|
+| `granite4.2:3b` | nothing | `low` is a distinct, correct class (the lever that fixes bat_ball) |
+| gemma4 tags | `false, true` | 2–3 distinct thinking classes |
+| `qwen3.8:27b-mlx` | `false, low, medium, xhigh` | `xhigh` was never probed |
+| `lfm2.5:8b` | `false`, default `false` | thinks by default; on 0.34.3 no lever turns it off |
+
+So the probe:
+- tries THINK_LEVERS **plus** any declared level outside it (sent as the literal string, e.g. `"xhigh"`);
+- records `levers_probed`;
+- lists every disagreement in `declared_mismatch` (informational — the measured profile is authoritative);
+- treats a **changed declaration** as a staleness reason (`declared think levels changed`), checked
+  after the Ollama major.minor gate.
+
+**Leaked thinking.** A model can think with no `thinking` channel, delivering the reasoning inside
+`content` as raw `<think>…</think>`. On 0.34.3 `lfm2.5:8b` does this at `false`, `low` and absent, while
+`true` is parsed correctly. Counted naively, that reads as **zero think tokens**: the probe would
+classify inline thinking as `off`, and every battery at that lever would grade raw reasoning as the
+answer. Such calls are now:
+- marked `leaked`;
+- graded on the text after `</think>` (an unterminated `<think>` is all reasoning);
+- kept in their own class (the leak flag is part of the class signature);
+- listed in `leaked_levers`;
+- never chosen as an arm while a clean bounded class exists.
+
+⚠ The batteries do NOT strip leaked `<think>`. The guard works by steering the arm onto a clean lever,
+so a model whose every lever leaks would still be graded on raw text. The probe report says so.
+
 ## 5. Component 2 — lever-aware budgets (`bench_utils.think_budget`)
 
 For a call to model M at lever class C with a test's `base_max_tokens`:
@@ -175,7 +211,7 @@ sub-block per arm; ranking keys unchanged but each list says which arm it ranked
 
 `env_fingerprint` gains `think_profiles: {model: {operating_lever, digest_of_profile}}`. A changed
 operating point is a determinant (the test changed for that model). The probe set is hashed like
-any dataset. `BATTERY_REVISION` bumps for `standard, A, B, C, D, E, F, F-elastic, G, confab` →
+any dataset. A profile also goes stale when its model's **declared** think levels change (§4.4). `BATTERY_REVISION` bumps for `standard, A, B, C, D, E, F, F-elastic, G, confab` →
 **full fleet re-measure**, accepted (§9). ⚠ The long-lived webserver must read the new revisions
 fresh (`_live_battery_revisions`) — same trap as 08-22.
 
