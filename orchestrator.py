@@ -87,6 +87,29 @@ def _arg(args: list[str], flag: str) -> Optional[str]:
 def _cmd(*parts) -> list[str]:
     return [sys.executable] + [str(p) for p in parts]
 
+def _model_selection(args: list[str]) -> list[str]:
+    """The run's model selection: `--models a b` (web UI, aptitude/average_e_runs) plus runner-style
+    positional names (`./bench.sh standard new-model:tag`). A positional counts only if it is a
+    registered name, so flag values (--battery B, --system-prompt path) are never mistaken for one."""
+    sel = []
+    if "--models" in args:
+        i = args.index("--models") + 1
+        while i < len(args) and not args[i].startswith("--"):
+            sel.append(args[i]); i += 1
+    registered = {m.name for m in load_all_models()}
+    sel += [a for a in args if a in registered and a not in sel]
+    return sel
+
+def _probe_scope(args: list[str], explicit: bool = False) -> list[str]:
+    """think_probe.py flags for a run. Scoped to the run's model selection — unscoped, the probe
+    re-probed every stale model in the fleet (2026-09-22: a 1-model run probed 18, because an Ollama
+    minor bump staled every profile). The automatic phase stays stale-only; an explicitly requested
+    probe re-probes the selection as `think_probe.py --models …` does by hand."""
+    sel = _model_selection(args)
+    if not sel:
+        return []
+    return ["--models", *sel] + ([] if explicit else ["--stale-only"])
+
 # ── Phase builder ─────────────────────────────────────────────────────────────
 
 # Human-readable progress-step labels for the lettered batteries — the progress tree mirrors the
@@ -112,7 +135,7 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
 
     # v3 (docs/think-spec.md): the think probe writes each model's lever profile; the standard suite runs a
     # direct pass (speed lane, role gate) AND a think pass (models with an operating point).
-    probe = ("Think Probe", _cmd(REPO/"think_probe.py"), None)
+    probe = ("Think Probe", _cmd(REPO/"think_probe.py", *_probe_scope(x)), None)
     if cmd == "probe":
         return [("Think Probe", _cmd(REPO/"think_probe.py", *x), None)]
     if cmd == "standard":
@@ -224,7 +247,8 @@ def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
 
     P = {
         "update":    ("Update Registry", _cmd(REPO/"update_registry.py", *ux("update")), None),
-        "probe":     ("Think Probe",     _cmd(REPO/"think_probe.py", *ux("probe")), None),
+        "probe":     ("Think Probe",     _cmd(REPO/"think_probe.py", *_probe_scope(x, explicit="probe" in units),
+                                              *ux("probe")), None),
         "standard":  [("Standard Suite",  _cmd(REPO/"runner.py", *x, *ux("standard")), None),
                       ("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x, *ux("standard")), None)],
         "ladder":    ("ctx Ladder",      _cmd(REPO/"ctx_ladder.py", *x, *ux("ladder")), None),

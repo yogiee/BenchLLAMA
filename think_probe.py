@@ -18,6 +18,7 @@ FAIL bat_ball — a protocol artifact. So the lever is chosen PER MODEL, from me
   python3 think_probe.py                       # --missing: thinking-capable models w/o a fresh profile
   python3 think_probe.py --all                 # re-probe every thinking-capable model
   python3 think_probe.py --models a:b c:d      # explicit
+  python3 think_probe.py --models a:b --stale-only   # explicit set, but skip the fresh ones (orchestrator ride-along)
   python3 think_probe.py --dry-run             # report only, don't write models.json
   python3 think_probe.py --rederive            # rebuild every profile from its stored raw (no calls)
   python3 think_probe.py --starved             # re-probe models whose profile has a starved class
@@ -42,6 +43,8 @@ from bench_utils import (THINK_LEVERS, THINK_PROBE_NUM_PREDICT, lever_value, THI
 PROBE_FILE = REPO / "suites" / "think" / "probe.json"
 REGISTRY   = REPO / "models.json"
 TIMEOUT    = 900
+SLOW_ITEM_S = 30   # items slower than this print a progress line — a lever only reports once all 4 items land,
+                   # and on the slowest local model (bonsai-27b, ~100 s/item) that is ~7 silent minutes per lever
 PROBE_ESCALATION = (8192, 16384)   # num_predict retries for items starved at the base probe budget
 
 
@@ -394,6 +397,13 @@ if __name__ == "__main__":
                 print(f"  ↷ {n}: no `thinking` capability — nothing to probe (legacy think=False applies)")
                 continue
             targets.append(entry)
+        if _flag("--stale-only"):
+            # the orchestrator's automatic probe phase: scope to the run's --models selection, but a fresh
+            # profile is still a no-op — only an explicit `probe --models …` re-probes a fresh model
+            fresh = [m for m in targets if not is_stale(m.get("think_profile"), digests.get(m["name"]), ver, psha)]
+            for m in fresh:
+                print(f"  ↷ {m['name']}  profile fresh — skipped")
+            targets = [m for m in targets if m not in fresh]
     elif _flag("--all"):
         targets = thinking_models
     elif _flag("--starved"):      # re-probe models whose profile has a class that starved (pre-escalation probes)
@@ -408,7 +418,9 @@ if __name__ == "__main__":
     print(f"think_probe — ollama={ver} probe_sha={psha} | {len(targets)} model(s) to probe"
           + (" [dry-run]" if dry else ""), flush=True)
     if not targets:
-        print("  nothing to do (every thinking-capable model has a fresh profile; --all to re-probe)")
+        print("  nothing to do (" + ("every selected model has a fresh profile or no thinking capability"
+                                     if model_args else "every thinking-capable model has a fresh profile")
+              + "; --all to re-probe)")
         sys.exit(0)
 
     profiles = {}
@@ -427,6 +439,8 @@ if __name__ == "__main__":
                 res[it["id"]] = r
                 if r.get("unsupported"):
                     break
+                if r.get("wall", 0) >= SLOW_ITEM_S:
+                    print(f"    {lever:7s} · {it['id']} {r['wall']:.0f}s think_tok≈{r.get('think_tokens_est', 0)}", flush=True)
             per_lever[lever] = res
             if any(r.get("unsupported") for r in res.values()):
                 print(f"    {lever:7s} unsupported ({list(res.values())[-1].get('error','')[:60]})", flush=True)
@@ -457,12 +471,13 @@ if __name__ == "__main__":
             continue
         profiles[name] = prof
         print(fmt_report(name, prof), flush=True)
+        # Persist per model, not once at the end: a Stop mid-fleet used to discard every profile already
+        # measured (2026-09-22: three aborted runs re-probed the same models from scratch each time).
+        if not dry and not m.get("_unregistered"):
+            m["think_profile"] = prof             # m IS the registry entry (targets are drawn from it)
+            REGISTRY.write_text(json.dumps(registry, indent=2) + "\n")
 
     if dry:
         print("\n[dry-run] models.json not written")
         sys.exit(0)
-    for entry in registry:
-        if entry["name"] in profiles:
-            entry["think_profile"] = profiles[entry["name"]]
-    REGISTRY.write_text(json.dumps(registry, indent=2) + "\n")
     print(f"\n✓ wrote think_profile for {len(profiles)} model(s) → {REGISTRY}")
