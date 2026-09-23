@@ -1141,7 +1141,7 @@ function buildProfile(m){
     ["prefill t/s", m.prefill_tps!=null?Math.round(m.prefill_tps):null],
     ["decode t/s",  m.tps!=null?Math.round(m.tps):null],
     ["wall s",      m.wall_s!=null?Number(m.wall_s).toFixed(2):null],
-    ["RAM GB", m.ram_gb], ["disk GB", m.disk_gb],
+    ["RAM GB est", m.ram_gb], ["RAM GB measured", m.ram_measured_gb], ["disk GB", m.disk_gb],
     ...(m.cloud?[["cloud","☁ quality-only"]]:[]),
   ])}</div>`;
   const s=m.standard;

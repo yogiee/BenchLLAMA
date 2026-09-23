@@ -33,7 +33,7 @@ import requests
 from pathlib import Path
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
                          post_with_budget_retry, apply_think, arm_stamp, reply_stats, requested_arm, resolve_arm,
-                         budget_timeout)
+                         budget_timeout, measured_ram_gb, runner_pids)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -388,14 +388,17 @@ def run_model(model_name, disk_gb=0.0, role="worker", arm="direct"):
     }
 
     print("  [warmup] loading...", flush=True)
+    before = runner_pids()   # lets measured_ram_gb find an MLX runner (no blob in its args)
     try:
         data, _ = chat(model_name, sys_msgs + [{"role": "user", "content": "Ready."}],
                        max_tokens=50, arm=arm)
         result["load_s"]     = load_s(data)
         result["warmup_tps"] = tps(data)
         time.sleep(1)
-        result["ram_gb"] = get_ram_gb(model_name)
-        print(f"  load={result['load_s']}s  ram={result['ram_gb']}GB  warmup_tps={result['warmup_tps']}", flush=True)
+        result["ram_gb"] = get_ram_gb(model_name)                       # Ollama's estimate (/api/ps)
+        result["ram_measured_gb"] = measured_ram_gb(model_name, ollama_host, before)
+        print(f"  load={result['load_s']}s  ram={result['ram_gb']}GB (est)  {result['ram_measured_gb']}GB (measured)"
+              f"  warmup_tps={result['warmup_tps']}", flush=True)
     except Exception as e:
         msg = f"warmup failed: {e}"
         print(f"  FAILED: {msg}", flush=True)
@@ -495,8 +498,13 @@ def run_model(model_name, disk_gb=0.0, role="worker", arm="direct"):
     # across models, so it's comparable — and it folds verbosity + prefill + decode into the
     # single number a user actually waits for ("wall-clock is the only number that matters").
     result["avg_wall_s"]      = round(sum(wall_samples) / len(wall_samples), 1) if wall_samples else None
+    # Measured residency grows with real input (GGUF pages in more weights) — keep the larger of the
+    # post-warmup and post-suite readings.
+    after = measured_ram_gb(model_name, ollama_host, before)
+    result["ram_measured_gb"] = max(filter(None, (result.get("ram_measured_gb"), after)), default=None)
     print(f"\n  ✓ avg_tps={result['avg_tps']}  prefill_tps={result['avg_prefill_tps']}"
-          f"  avg_wall={result['avg_wall_s']}s  ram={result['ram_gb']}GB  load={result['load_s']}s", flush=True)
+          f"  avg_wall={result['avg_wall_s']}s  ram={result['ram_gb']}GB (est) {result['ram_measured_gb']}GB (measured)"
+          f"  load={result['load_s']}s", flush=True)
     print("  [unload] freeing VRAM...", flush=True)
     unload(model_name)
     time.sleep(3)
@@ -517,13 +525,15 @@ def write_summary(results, out_md: Path, fast_mode: bool = False):
         "Prefill = prompt-processing tok/s · Decode = generation tok/s · Wall = mean end-to-end "
         "seconds per test over the fixed suite (load excluded — the number you actually wait for).",
         "",
-        "| Model | Role | Disk | RAM | Load (s) | Prefill t/s | Decode t/s | Avg wall (s) |",
-        "|-------|------|------|-----|----------|------------:|-----------:|-------------:|",
+        "| Model | Role | Disk | RAM est | RAM measured | Load (s) | Prefill t/s | Decode t/s | Avg wall (s) |",
+        "|-------|------|------|---------|--------------|----------|------------:|-----------:|-------------:|",
     ]
     for r in results:
+        meas = f"{r['ram_measured_gb']}GB" if r.get("ram_measured_gb") else "—"
         lines.append(
             f"| `{r['model']}` | {r.get('role','worker')} | {r['disk_gb']}GB"
-            f" | {r.get('ram_gb','?')}GB | {r.get('load_s','?')}"
+            f" | {r.get('ram_gb','?')}GB | {meas}"
+            f" | {r.get('load_s','?')}"
             f" | {r.get('avg_prefill_tps','?')} | {r.get('avg_tps','?')} | {r.get('avg_wall_s','?')} |"
         )
 

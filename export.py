@@ -177,7 +177,8 @@ def build():
             m["tps"] = None if is_cloud else s.get("avg_tps")
             m["prefill_tps"] = None if is_cloud else s.get("avg_prefill_tps")
             m["wall_s"] = None if is_cloud else s.get("avg_wall_s")
-            m["ram_gb"] = None if is_cloud else s.get("ram_gb")
+            m["ram_gb"] = None if is_cloud else s.get("ram_gb")                    # Ollama's /api/ps estimate
+            m["ram_measured_gb"] = None if is_cloud else s.get("ram_measured_gb")  # runner footprint (bench_utils)
             m["standard"] = _standard_summary(s)
         # v3 think-aware protocol: what the probe found, which arm the batteries ran at, and the
         # standard suite's think arm beside the fast one (docs/think-spec.md).

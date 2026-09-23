@@ -472,6 +472,57 @@ def env_fingerprint(host: str = "http://localhost:11434", models=None) -> dict:
     }
 
 
+# ── Measured residency (macOS, 2026-09-23) ────────────────────────────────────
+# `/api/ps` size / size_vram (what `ram_gb` has always published) is Ollama's ESTIMATE, not a
+# measurement. Measured on 0.34.3 it is right for dense text GGUF, but UNDERSTATES GGUF models with
+# a vision stack (ministral-3:3b +0.7, ornith-1.5:9b +1.0, minicpm-v4.6:1b 0.9 → 2.3 GB) and gpt-oss:20b
+# (+1.7–2.8), and swings both ways for gemma4 "e" GGUF builds (MemoryCentral report 2026-09-23).
+# Measured = the runner process's phys_footprint (dirty, incl. Metal allocations) + its resident
+# clean "mapped file" bytes (GGUF weights paged in from the mmap'd blob). Keep BOTH numbers: the
+# scheduler probably evicts by its own estimate, while the machine runs out of the measured one.
+
+def runner_pids() -> dict:
+    """{pid: args} of the runner processes `ollama serve` spawned (llama-server = GGUF, `ollama` = MLX)."""
+    serve = set((_sh("pgrep", "-f", "ollama serve") or "").split())
+    out = {}
+    for line in (_sh("ps", "-axo", "pid=,ppid=,args=") or "").splitlines():
+        pid, ppid, *args = line.split(None, 2)
+        if ppid in serve:
+            out[int(pid)] = args[0] if args else ""
+    return out
+
+
+def measured_ram_gb(model: str, host: str, before: dict | None = None) -> float | None:
+    """Measured residency of `model`'s runner, in GB — None off-macOS, for a remote host, or when the
+    runner can't be identified. GGUF runners are matched by blob sha in `llama-server --model`; MLX
+    (`FROM <name>`, no blob) needs `before` = runner_pids() snapshotted before the load, and is
+    measured only when exactly one runner appeared since."""
+    if platform.system() != "Darwin" or not re.match(r"https?://(localhost|127\.0\.0\.1)(:|/|$)", host):
+        return None
+    try:
+        mf = requests.post(f"{host}/api/show", json={"model": model}, timeout=10).json().get("modelfile", "")
+    except Exception:
+        return None
+    kids = runner_pids()
+    b = re.search(r"^FROM \S*(sha256-[0-9a-f]+)", mf, re.M)
+    pids = [p for p, a in kids.items() if b and b.group(1) in a]
+    if not pids and before is not None:
+        new = [p for p in kids if p not in before]
+        pids = new if len(new) == 1 else []
+    if not pids:
+        return None
+    try:   # not _sh: its 5 s cap is too tight to walk an 18 GB runner's address space
+        out = subprocess.run(["footprint", "-f", "bytes", "-p", str(pids[0])],
+                             capture_output=True, text=True, timeout=60).stdout
+    except Exception:
+        return None
+    fp = re.search(r"phys_footprint: (\d+)", out)
+    mapped = re.search(r"^\s*\d+ B\s+(\d+) B\s+\d+ B\s+\d+\s+mapped file$", out, re.M)
+    if not fp:
+        return None
+    return round((int(fp.group(1)) + (int(mapped.group(1)) if mapped else 0)) / 1e9, 1)
+
+
 # ── Model sort order (shared run + dashboard sort) ────────────────────────────
 def sort_key(default: str = "size") -> str:
     """Sort key for the run/display order, from env BENCH_SORT (the orchestrator sets it from the
