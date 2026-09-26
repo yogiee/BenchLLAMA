@@ -1,5 +1,1184 @@
 [
   {
+    "name": "granite-embedding:30m",
+    "disk_gb": 0.1,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ],
+    "added_idx": 16
+  },
+  {
+    "name": "embeddinggemma:300m",
+    "disk_gb": 0.6,
+    "role": "utility",
+    "capabilities": [
+      "embedding"
+    ],
+    "added_idx": 15
+  },
+  {
+    "name": "minicpm-v4.6:1b",
+    "disk_gb": 1.6,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [],
+    "added_idx": 17,
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "e95583acac773b45",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [
+        "no think levels declared by /api/show"
+      ],
+      "off_supported": true,
+      "always_on": false,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "false": "off",
+        "absent": "think1",
+        "low": "think1",
+        "medium": "think1",
+        "high": "think1",
+        "true": "think1"
+      },
+      "class_stats": {
+        "off": {
+          "levers": [
+            "false"
+          ],
+          "think_tokens_max": 0,
+          "thinking_chars_max": 0,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 3,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.4
+            },
+            "classify_1word": {
+              "correct": false,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.1
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.3
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.0
+            }
+          },
+          "wall_p50": 1.0
+        },
+        "think1": {
+          "levers": [
+            "absent",
+            "low",
+            "medium",
+            "high",
+            "true"
+          ],
+          "think_tokens_max": 474,
+          "thinking_chars_max": 1879,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 117,
+              "done": "stop",
+              "wall": 2.8
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 176,
+              "done": "stop",
+              "wall": 1.4
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 135,
+              "done": "stop",
+              "wall": 1.0
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 474,
+              "done": "stop",
+              "wall": 4.1
+            }
+          },
+          "wall_p50": 2.8,
+          "bounded": true
+        }
+      },
+      "direct_class": "off",
+      "direct_lever": "false",
+      "operating_point": "think1",
+      "operating_lever": "low",
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 117,
+            "tc": 237,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.8
+          },
+          "classify_1word": {
+            "tt": 176,
+            "tc": 714,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "calculate": {
+            "tt": 135,
+            "tc": 423,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          },
+          "tiny_code": {
+            "tt": 474,
+            "tc": 1879,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.1
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": false,
+            "st": false,
+            "done": "stop",
+            "wall": 0.1
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.3
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 117,
+            "tc": 237,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          },
+          "classify_1word": {
+            "tt": 176,
+            "tc": 714,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.3
+          },
+          "calculate": {
+            "tt": 135,
+            "tc": 423,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          },
+          "tiny_code": {
+            "tt": 474,
+            "tc": 1879,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.3
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 117,
+            "tc": 237,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          },
+          "classify_1word": {
+            "tt": 176,
+            "tc": 714,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.3
+          },
+          "calculate": {
+            "tt": 135,
+            "tc": 423,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.1
+          },
+          "tiny_code": {
+            "tt": 474,
+            "tc": 1879,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.1
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 117,
+            "tc": 237,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.1
+          },
+          "classify_1word": {
+            "tt": 176,
+            "tc": 714,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.3
+          },
+          "calculate": {
+            "tt": 135,
+            "tc": 423,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.1
+          },
+          "tiny_code": {
+            "tt": 474,
+            "tc": 1879,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.2
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 117,
+            "tc": 237,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          },
+          "classify_1word": {
+            "tt": 176,
+            "tc": 714,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.3
+          },
+          "calculate": {
+            "tt": 135,
+            "tc": 423,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.1
+          },
+          "tiny_code": {
+            "tt": 474,
+            "tc": 1879,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.1
+          }
+        }
+      }
+    },
+    "thinking_declared": null
+  },
+  {
+    "name": "llama3.2:3b",
+    "disk_gb": 2.0,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [],
+    "added_idx": 9
+  },
+  {
+    "name": "granite4.1:3b",
+    "disk_gb": 2.1,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 10
+  },
+  {
+    "name": "granite4.2:3b",
+    "disk_gb": 2.2,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "40577dc168a3a9ad",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": null,
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [
+        "no think levels declared by /api/show"
+      ],
+      "off_supported": true,
+      "always_on": false,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "false": "off",
+        "low": "think1",
+        "absent": "think2",
+        "medium": "think2",
+        "high": "think2",
+        "true": "think2"
+      },
+      "class_stats": {
+        "off": {
+          "levers": [
+            "false"
+          ],
+          "think_tokens_max": 0,
+          "thinking_chars_max": 0,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 3,
+          "items": {
+            "bat_ball": {
+              "correct": false,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.2
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.1
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.5
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.9
+            }
+          },
+          "wall_p50": 0.5
+        },
+        "think1": {
+          "levers": [
+            "low"
+          ],
+          "think_tokens_max": 101,
+          "thinking_chars_max": 221,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 101,
+              "done": "stop",
+              "wall": 1.8
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 11,
+              "done": "stop",
+              "wall": 0.3
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 44,
+              "done": "stop",
+              "wall": 0.8
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 5,
+              "done": "stop",
+              "wall": 0.9
+            }
+          },
+          "wall_p50": 0.9,
+          "bounded": true
+        },
+        "think2": {
+          "levers": [
+            "absent",
+            "medium",
+            "high",
+            "true"
+          ],
+          "think_tokens_max": 198,
+          "thinking_chars_max": 588,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 198,
+              "done": "stop",
+              "wall": 4.1
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 148,
+              "done": "stop",
+              "wall": 2.1
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 104,
+              "done": "stop",
+              "wall": 2.8
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 144,
+              "done": "stop",
+              "wall": 2.7
+            }
+          },
+          "wall_p50": 2.8,
+          "bounded": true
+        }
+      },
+      "direct_class": "off",
+      "direct_lever": "false",
+      "operating_point": "think1",
+      "operating_lever": "low",
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 198,
+            "tc": 588,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.1
+          },
+          "classify_1word": {
+            "tt": 148,
+            "tc": 580,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.1
+          },
+          "calculate": {
+            "tt": 104,
+            "tc": 346,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.8
+          },
+          "tiny_code": {
+            "tt": 144,
+            "tc": 516,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.7
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": false,
+            "st": false,
+            "done": "stop",
+            "wall": 0.2
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.1
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.5
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 101,
+            "tc": 221,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.8
+          },
+          "classify_1word": {
+            "tt": 11,
+            "tc": 29,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.3
+          },
+          "calculate": {
+            "tt": 44,
+            "tc": 51,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.8
+          },
+          "tiny_code": {
+            "tt": 5,
+            "tc": 14,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 198,
+            "tc": 588,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.2
+          },
+          "classify_1word": {
+            "tt": 148,
+            "tc": 580,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.5
+          },
+          "calculate": {
+            "tt": 104,
+            "tc": 346,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 144,
+            "tc": 516,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.0
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 198,
+            "tc": 588,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.3
+          },
+          "classify_1word": {
+            "tt": 148,
+            "tc": 580,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.5
+          },
+          "calculate": {
+            "tt": 104,
+            "tc": 346,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 144,
+            "tc": 516,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.1
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 198,
+            "tc": 588,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.3
+          },
+          "classify_1word": {
+            "tt": 148,
+            "tc": 580,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.5
+          },
+          "calculate": {
+            "tt": 104,
+            "tc": 346,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 144,
+            "tc": 516,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.1
+          }
+        }
+      }
+    },
+    "thinking_declared": null
+  },
+  {
+    "name": "ministral-3:3b",
+    "disk_gb": 3.0,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ]
+  },
+  {
+    "name": "qwen2.5vl:3b",
+    "disk_gb": 3.2,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "vision"
+    ],
+    "extended_roles": [],
+    "added_idx": 14
+  },
+  {
+    "name": "vincentg/llama3.2-fluxassistant:uncensored",
+    "disk_gb": 3.4,
+    "role": "router",
+    "capabilities": [
+      "completion",
+      "tools"
+    ],
+    "extended_roles": [],
+    "added_idx": 0
+  },
+  {
+    "name": "qwen3.5:4b-mlx",
+    "disk_gb": 4.0,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [],
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "61aa3858e9d3022e",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": {
+        "values": [
+          "false",
+          "true"
+        ],
+        "default": "true"
+      },
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
+      "off_supported": true,
+      "always_on": false,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "false": "off",
+        "low": "think1",
+        "medium": "think1",
+        "high": "think1",
+        "true": "think1",
+        "absent": "think2"
+      },
+      "class_stats": {
+        "off": {
+          "levers": [
+            "false"
+          ],
+          "think_tokens_max": 0,
+          "thinking_chars_max": 0,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 3,
+          "items": {
+            "bat_ball": {
+              "correct": false,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.1
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.1
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.6
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.4
+            }
+          },
+          "wall_p50": 0.6
+        },
+        "think1": {
+          "levers": [
+            "low",
+            "medium",
+            "high",
+            "true"
+          ],
+          "think_tokens_max": 608,
+          "thinking_chars_max": 1758,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 608,
+              "done": "stop",
+              "wall": 10.1
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 229,
+              "done": "stop",
+              "wall": 3.8
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 67,
+              "done": "stop",
+              "wall": 1.2
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 387,
+              "done": "stop",
+              "wall": 7.5
+            }
+          },
+          "wall_p50": 7.5,
+          "bounded": true
+        },
+        "think2": {
+          "levers": [
+            "absent"
+          ],
+          "think_tokens_max": 1736,
+          "thinking_chars_max": 5428,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 1736,
+              "done": "stop",
+              "wall": 30.3
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 230,
+              "done": "stop",
+              "wall": 3.9
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 67,
+              "done": "stop",
+              "wall": 1.7
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 271,
+              "done": "stop",
+              "wall": 5.4
+            }
+          },
+          "wall_p50": 5.4,
+          "bounded": true
+        }
+      },
+      "direct_class": "off",
+      "direct_lever": "false",
+      "operating_point": "think1",
+      "operating_lever": "low",
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 1736,
+            "tc": 5428,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 30.3
+          },
+          "classify_1word": {
+            "tt": 230,
+            "tc": 906,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.9
+          },
+          "calculate": {
+            "tt": 67,
+            "tc": 128,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 271,
+            "tc": 1139,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.4
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": false,
+            "st": false,
+            "done": "stop",
+            "wall": 0.1
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.1
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 608,
+            "tc": 1758,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 10.1
+          },
+          "classify_1word": {
+            "tt": 229,
+            "tc": 898,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.8
+          },
+          "calculate": {
+            "tt": 67,
+            "tc": 128,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.2
+          },
+          "tiny_code": {
+            "tt": 387,
+            "tc": 1556,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.5
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 608,
+            "tc": 1758,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 10.2
+          },
+          "classify_1word": {
+            "tt": 229,
+            "tc": 898,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.9
+          },
+          "calculate": {
+            "tt": 67,
+            "tc": 128,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.2
+          },
+          "tiny_code": {
+            "tt": 387,
+            "tc": 1556,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.6
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 608,
+            "tc": 1758,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 10.3
+          },
+          "classify_1word": {
+            "tt": 229,
+            "tc": 898,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.9
+          },
+          "calculate": {
+            "tt": 67,
+            "tc": 128,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.2
+          },
+          "tiny_code": {
+            "tt": 387,
+            "tc": 1556,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.6
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 608,
+            "tc": 1758,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 10.4
+          },
+          "classify_1word": {
+            "tt": 229,
+            "tc": 898,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.9
+          },
+          "calculate": {
+            "tt": 67,
+            "tc": 128,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.2
+          },
+          "tiny_code": {
+            "tt": 387,
+            "tc": 1556,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.6
+          }
+        }
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
+    }
+  },
+  {
     "name": "lfm2.5:8b",
     "disk_gb": 5.2,
     "role": "worker",
@@ -8,7 +1187,9 @@
       "thinking",
       "tools"
     ],
-    "extended_roles": [],
+    "extended_roles": [
+      "coder"
+    ],
     "think_profile": {
       "probed_at": "2026-09-23",
       "ollama": "0.34.3",
@@ -376,3649 +1557,16 @@
     }
   },
   {
-    "name": "nemotron-3-super:cloud",
-    "disk_gb": 0.0,
+    "name": "granite4.1:8b",
+    "disk_gb": 5.3,
     "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "cloud": true,
-    "extended_roles": [
-      "coder"
-    ],
-    "think_profile": {
-      "probed_at": "2026-09-01",
-      "ollama": "0.33.2",
-      "digest": "c6398e09afd407f9",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": true,
-      "always_on": false,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "false": "off",
-        "absent": "think1",
-        "true": "think2",
-        "low": "think2",
-        "medium": "think3",
-        "high": "think4"
-      },
-      "class_stats": {
-        "off": {
-          "levers": [
-            "false"
-          ],
-          "think_tokens_max": 0,
-          "thinking_chars_max": 0,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.0
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.0
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 4.0
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.0
-            }
-          },
-          "wall_p50": 1.0
-        },
-        "think1": {
-          "levers": [
-            "absent"
-          ],
-          "think_tokens_max": 57,
-          "thinking_chars_max": 237,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 39,
-              "done": "stop",
-              "wall": 1.2
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 54,
-              "done": "stop",
-              "wall": 4.6
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 49,
-              "done": "stop",
-              "wall": 3.2
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 57,
-              "done": "stop",
-              "wall": 2.1
-            }
-          },
-          "wall_p50": 3.2,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "true",
-            "low"
-          ],
-          "think_tokens_max": 116,
-          "thinking_chars_max": 375,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 101,
-              "done": "stop",
-              "wall": 4.5
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 33,
-              "done": "stop",
-              "wall": 3.8
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 44,
-              "done": "stop",
-              "wall": 11.5
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 99,
-              "done": "stop",
-              "wall": 2.9
-            }
-          },
-          "wall_p50": 4.5,
-          "bounded": true
-        },
-        "think3": {
-          "levers": [
-            "medium"
-          ],
-          "think_tokens_max": 148,
-          "thinking_chars_max": 339,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 148,
-              "done": "stop",
-              "wall": 4.0
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 30,
-              "done": "stop",
-              "wall": 2.1
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 53,
-              "done": "stop",
-              "wall": 2.2
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 50,
-              "done": "stop",
-              "wall": 4.6
-            }
-          },
-          "wall_p50": 4.0,
-          "bounded": true
-        },
-        "think4": {
-          "levers": [
-            "high"
-          ],
-          "think_tokens_max": 482,
-          "thinking_chars_max": 1356,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 482,
-              "done": "stop",
-              "wall": 4.4
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 49,
-              "done": "stop",
-              "wall": 5.9
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 44,
-              "done": "stop",
-              "wall": 3.0
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 45,
-              "done": "stop",
-              "wall": 2.1
-            }
-          },
-          "wall_p50": 4.4,
-          "bounded": true
-        }
-      },
-      "direct_class": "off",
-      "direct_lever": "false",
-      "operating_point": "think1",
-      "operating_lever": "absent",
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 39,
-            "tc": 97,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "classify_1word": {
-            "tt": 54,
-            "tc": 189,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.6
-          },
-          "calculate": {
-            "tt": 49,
-            "tc": 65,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.2
-          },
-          "tiny_code": {
-            "tt": 57,
-            "tc": 237,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.1
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.0
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 116,
-            "tc": 201,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.1
-          },
-          "classify_1word": {
-            "tt": 41,
-            "tc": 140,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.2
-          },
-          "calculate": {
-            "tt": 50,
-            "tc": 66,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.4
-          },
-          "tiny_code": {
-            "tt": 92,
-            "tc": 332,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.7
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 148,
-            "tc": 339,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.0
-          },
-          "classify_1word": {
-            "tt": 30,
-            "tc": 106,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.1
-          },
-          "calculate": {
-            "tt": 53,
-            "tc": 74,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.2
-          },
-          "tiny_code": {
-            "tt": 50,
-            "tc": 197,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.6
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 482,
-            "tc": 1356,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.4
-          },
-          "classify_1word": {
-            "tt": 49,
-            "tc": 160,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 5.9
-          },
-          "calculate": {
-            "tt": 44,
-            "tc": 45,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.0
-          },
-          "tiny_code": {
-            "tt": 45,
-            "tc": 184,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.1
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 101,
-            "tc": 188,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.5
-          },
-          "classify_1word": {
-            "tt": 33,
-            "tc": 122,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.8
-          },
-          "calculate": {
-            "tt": 44,
-            "tc": 47,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 11.5
-          },
-          "tiny_code": {
-            "tt": 99,
-            "tc": 375,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.9
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "false",
-        "true"
-      ],
-      "default": "true"
-    }
-  },
-  {
-    "name": "qwen3.8:27b-mlx",
-    "disk_gb": 18.2,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "5642e97495e1a088",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": true,
-      "always_on": false,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "false": "off",
-        "high": "think1",
-        "medium": "think1",
-        "absent": "think1",
-        "true": "think2",
-        "low": "think2"
-      },
-      "class_stats": {
-        "off": {
-          "levers": [
-            "false"
-          ],
-          "think_tokens_max": 0,
-          "thinking_chars_max": 0,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.7
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.7
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.6
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 2.3
-            }
-          },
-          "wall_p50": 1.6
-        },
-        "think1": {
-          "levers": [
-            "high",
-            "medium",
-            "absent"
-          ],
-          "think_tokens_max": 187,
-          "thinking_chars_max": 737,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 141,
-              "done": "stop",
-              "wall": 8.5
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 46,
-              "done": "stop",
-              "wall": 3.7
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 53,
-              "done": "stop",
-              "wall": 6.0
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 103,
-              "done": "stop",
-              "wall": 7.7
-            }
-          },
-          "wall_p50": 7.7,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "true",
-            "low"
-          ],
-          "think_tokens_max": 246,
-          "thinking_chars_max": 910,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 123,
-              "done": "stop",
-              "wall": 6.7
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 72,
-              "done": "stop",
-              "wall": 3.9
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 53,
-              "done": "stop",
-              "wall": 2.8
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 206,
-              "done": "stop",
-              "wall": 13.1
-            }
-          },
-          "wall_p50": 6.7,
-          "bounded": true
-        }
-      },
-      "direct_class": "off",
-      "direct_lever": "false",
-      "operating_point": "think2",
-      "operating_lever": "low",
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 118,
-            "tc": 268,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 16.1
-          },
-          "classify_1word": {
-            "tt": 72,
-            "tc": 269,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.0
-          },
-          "calculate": {
-            "tt": 57,
-            "tc": 109,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.0
-          },
-          "tiny_code": {
-            "tt": 187,
-            "tc": 734,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 11.3
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.7
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.7
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.6
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.3
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 120,
-            "tc": 277,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.3
-          },
-          "classify_1word": {
-            "tt": 61,
-            "tc": 233,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.2
-          },
-          "calculate": {
-            "tt": 53,
-            "tc": 85,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.1
-          },
-          "tiny_code": {
-            "tt": 246,
-            "tc": 910,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 15.1
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 118,
-            "tc": 268,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 28.8
-          },
-          "classify_1word": {
-            "tt": 69,
-            "tc": 266,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.2
-          },
-          "calculate": {
-            "tt": 57,
-            "tc": 109,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.1
-          },
-          "tiny_code": {
-            "tt": 185,
-            "tc": 737,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 11.9
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 141,
-            "tc": 362,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 8.5
-          },
-          "classify_1word": {
-            "tt": 46,
-            "tc": 170,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.7
-          },
-          "calculate": {
-            "tt": 53,
-            "tc": 85,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.0
-          },
-          "tiny_code": {
-            "tt": 103,
-            "tc": 409,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.7
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 123,
-            "tc": 299,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.7
-          },
-          "classify_1word": {
-            "tt": 72,
-            "tc": 271,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.9
-          },
-          "calculate": {
-            "tt": 53,
-            "tc": 84,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.8
-          },
-          "tiny_code": {
-            "tt": 206,
-            "tc": 832,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 13.1
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "false",
-        "low",
-        "medium",
-        "xhigh"
-      ],
-      "default": "medium"
-    }
-  },
-  {
-    "name": "gpt-oss:20b",
-    "disk_gb": 13.8,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "17052f91a42e9793",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": false,
-      "always_on": true,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "low": "think1",
-        "absent": "think2",
-        "true": "think2",
-        "false": "think2",
-        "medium": "think3",
-        "high": "think4"
-      },
-      "class_stats": {
-        "think1": {
-          "levers": [
-            "low"
-          ],
-          "think_tokens_max": 55,
-          "thinking_chars_max": 91,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 55,
-              "done": "stop",
-              "wall": 1.6
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 17,
-              "done": "stop",
-              "wall": 0.7
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 30,
-              "done": "stop",
-              "wall": 0.9
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 15,
-              "done": "stop",
-              "wall": 1.5
-            }
-          },
-          "wall_p50": 1.5,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "absent",
-            "true",
-            "false"
-          ],
-          "think_tokens_max": 170,
-          "thinking_chars_max": 651,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 151,
-              "done": "stop",
-              "wall": 7.3
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 93,
-              "done": "stop",
-              "wall": 1.7
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 39,
-              "done": "stop",
-              "wall": 0.9
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 121,
-              "done": "stop",
-              "wall": 2.7
-            }
-          },
-          "wall_p50": 2.7,
-          "bounded": true
-        },
-        "think3": {
-          "levers": [
-            "medium"
-          ],
-          "think_tokens_max": 227,
-          "thinking_chars_max": 898,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 151,
-              "done": "stop",
-              "wall": 3.1
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 69,
-              "done": "stop",
-              "wall": 1.6
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 39,
-              "done": "stop",
-              "wall": 0.9
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 227,
-              "done": "stop",
-              "wall": 5.4
-            }
-          },
-          "wall_p50": 3.1,
-          "bounded": true
-        },
-        "think4": {
-          "levers": [
-            "high"
-          ],
-          "think_tokens_max": 464,
-          "thinking_chars_max": 1655,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 464,
-              "done": "stop",
-              "wall": 9.8
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 155,
-              "done": "stop",
-              "wall": 3.5
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 69,
-              "done": "stop",
-              "wall": 1.8
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 384,
-              "done": "stop",
-              "wall": 8.9
-            }
-          },
-          "wall_p50": 8.9,
-          "bounded": true
-        }
-      },
-      "direct_class": "think1",
-      "direct_lever": "low",
-      "operating_point": null,
-      "operating_lever": null,
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 151,
-            "tc": 367,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.3
-          },
-          "classify_1word": {
-            "tt": 93,
-            "tc": 325,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.7
-          },
-          "calculate": {
-            "tt": 39,
-            "tc": 63,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 121,
-            "tc": 463,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.7
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 142,
-            "tc": 314,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.3
-          },
-          "classify_1word": {
-            "tt": 75,
-            "tc": 252,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.2
-          },
-          "calculate": {
-            "tt": 45,
-            "tc": 86,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "tiny_code": {
-            "tt": 170,
-            "tc": 651,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.3
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 55,
-            "tc": 91,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.6
-          },
-          "classify_1word": {
-            "tt": 17,
-            "tc": 33,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.7
-          },
-          "calculate": {
-            "tt": 30,
-            "tc": 22,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 15,
-            "tc": 43,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.5
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 151,
-            "tc": 367,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.1
-          },
-          "classify_1word": {
-            "tt": 69,
-            "tc": 241,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.6
-          },
-          "calculate": {
-            "tt": 39,
-            "tc": 63,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 227,
-            "tc": 898,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 5.4
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 464,
-            "tc": 1322,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 9.8
-          },
-          "classify_1word": {
-            "tt": 155,
-            "tc": 576,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.5
-          },
-          "calculate": {
-            "tt": 69,
-            "tc": 183,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.8
-          },
-          "tiny_code": {
-            "tt": 384,
-            "tc": 1655,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 8.9
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 151,
-            "tc": 367,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.2
-          },
-          "classify_1word": {
-            "tt": 69,
-            "tc": 241,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.6
-          },
-          "calculate": {
-            "tt": 39,
-            "tc": 63,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 121,
-            "tc": 463,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.6
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "default": "medium"
-    }
-  },
-  {
-    "name": "qwen3.5:4b-mlx",
-    "disk_gb": 4.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [],
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "61aa3858e9d3022e",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": true,
-      "always_on": false,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "false": "off",
-        "low": "think1",
-        "medium": "think1",
-        "high": "think1",
-        "true": "think1",
-        "absent": "think2"
-      },
-      "class_stats": {
-        "off": {
-          "levers": [
-            "false"
-          ],
-          "think_tokens_max": 0,
-          "thinking_chars_max": 0,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 3,
-          "items": {
-            "bat_ball": {
-              "correct": false,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.1
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.1
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.6
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.3
-            }
-          },
-          "wall_p50": 0.6
-        },
-        "think1": {
-          "levers": [
-            "low",
-            "medium",
-            "high",
-            "true"
-          ],
-          "think_tokens_max": 1184,
-          "thinking_chars_max": 3567,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 1184,
-              "done": "stop",
-              "wall": 19.9
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 402,
-              "done": "stop",
-              "wall": 6.7
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 67,
-              "done": "stop",
-              "wall": 1.2
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 390,
-              "done": "stop",
-              "wall": 7.6
-            }
-          },
-          "wall_p50": 7.6,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "absent"
-          ],
-          "think_tokens_max": 1994,
-          "thinking_chars_max": 6123,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 1994,
-              "done": "stop",
-              "wall": 34.8
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 243,
-              "done": "stop",
-              "wall": 4.2
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 67,
-              "done": "stop",
-              "wall": 1.8
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 411,
-              "done": "stop",
-              "wall": 7.9
-            }
-          },
-          "wall_p50": 7.9,
-          "bounded": true
-        }
-      },
-      "direct_class": "off",
-      "direct_lever": "false",
-      "operating_point": "think1",
-      "operating_lever": "low",
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 1994,
-            "tc": 6123,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 34.8
-          },
-          "classify_1word": {
-            "tt": 243,
-            "tc": 980,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.2
-          },
-          "calculate": {
-            "tt": 67,
-            "tc": 128,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.8
-          },
-          "tiny_code": {
-            "tt": 411,
-            "tc": 1742,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.9
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": false,
-            "st": false,
-            "done": "stop",
-            "wall": 0.1
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.1
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.6
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.3
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 1184,
-            "tc": 3567,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 19.9
-          },
-          "classify_1word": {
-            "tt": 402,
-            "tc": 1682,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.7
-          },
-          "calculate": {
-            "tt": 67,
-            "tc": 128,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 390,
-            "tc": 1577,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.6
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 1184,
-            "tc": 3567,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 20.0
-          },
-          "classify_1word": {
-            "tt": 402,
-            "tc": 1682,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.7
-          },
-          "calculate": {
-            "tt": 67,
-            "tc": 128,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 390,
-            "tc": 1577,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.6
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 1184,
-            "tc": 3567,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 19.8
-          },
-          "classify_1word": {
-            "tt": 402,
-            "tc": 1682,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.8
-          },
-          "calculate": {
-            "tt": 67,
-            "tc": 128,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 390,
-            "tc": 1577,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.7
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 1184,
-            "tc": 3567,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 20.0
-          },
-          "classify_1word": {
-            "tt": 402,
-            "tc": 1682,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.8
-          },
-          "calculate": {
-            "tt": 67,
-            "tc": 128,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 390,
-            "tc": 1577,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.7
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "false",
-        "true"
-      ],
-      "default": "true"
-    }
-  },
-  {
-    "name": "minicpm-v4.6:1b",
-    "disk_gb": 1.6,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [],
-    "added_idx": 17,
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "e95583acac773b45",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": true,
-      "always_on": false,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "false": "off",
-        "absent": "think1",
-        "medium": "think1",
-        "high": "think1",
-        "true": "think1",
-        "low": "think2"
-      },
-      "class_stats": {
-        "off": {
-          "levers": [
-            "false"
-          ],
-          "think_tokens_max": 0,
-          "thinking_chars_max": 0,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 3,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.1
-            },
-            "classify_1word": {
-              "correct": false,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.1
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.3
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.4
-            }
-          },
-          "wall_p50": 0.4
-        },
-        "think1": {
-          "levers": [
-            "absent",
-            "medium",
-            "high",
-            "true"
-          ],
-          "think_tokens_max": 157,
-          "thinking_chars_max": 662,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 114,
-              "done": "stop",
-              "wall": 2.6
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 157,
-              "done": "stop",
-              "wall": 0.9
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 142,
-              "done": "stop",
-              "wall": 0.8
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 72,
-              "done": "stop",
-              "wall": 0.8
-            }
-          },
-          "wall_p50": 0.9,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "low"
-          ],
-          "think_tokens_max": 593,
-          "thinking_chars_max": 2412,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 114,
-              "done": "stop",
-              "wall": 0.7
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 593,
-              "done": "stop",
-              "wall": 3.9
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 142,
-              "done": "stop",
-              "wall": 1.0
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 202,
-              "done": "stop",
-              "wall": 1.7
-            }
-          },
-          "wall_p50": 1.7,
-          "bounded": true
-        }
-      },
-      "direct_class": "off",
-      "direct_lever": "false",
-      "operating_point": "think1",
-      "operating_lever": "medium",
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 114,
-            "tc": 228,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.6
-          },
-          "classify_1word": {
-            "tt": 157,
-            "tc": 662,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "calculate": {
-            "tt": 142,
-            "tc": 467,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.8
-          },
-          "tiny_code": {
-            "tt": 72,
-            "tc": 290,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.8
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": false,
-            "st": false,
-            "done": "stop",
-            "wall": 0.1
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.3
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.4
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 114,
-            "tc": 228,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.7
-          },
-          "classify_1word": {
-            "tt": 593,
-            "tc": 2412,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.9
-          },
-          "calculate": {
-            "tt": 142,
-            "tc": 467,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "tiny_code": {
-            "tt": 202,
-            "tc": 831,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.7
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 114,
-            "tc": 228,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.8
-          },
-          "classify_1word": {
-            "tt": 157,
-            "tc": 662,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "calculate": {
-            "tt": 142,
-            "tc": 467,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 72,
-            "tc": 290,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 114,
-            "tc": 228,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.8
-          },
-          "classify_1word": {
-            "tt": 157,
-            "tc": 662,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "calculate": {
-            "tt": 142,
-            "tc": 467,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 72,
-            "tc": 290,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 114,
-            "tc": 228,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.8
-          },
-          "classify_1word": {
-            "tt": 157,
-            "tc": 662,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "calculate": {
-            "tt": 142,
-            "tc": 467,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 72,
-            "tc": 290,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          }
-        }
-      }
-    },
-    "thinking_declared": null
-  },
-  {
-    "name": "granite-embedding:30m",
-    "disk_gb": 0.1,
-    "role": "utility",
-    "capabilities": [
-      "embedding"
-    ],
-    "added_idx": 16
-  },
-  {
-    "name": "embeddinggemma:300m",
-    "disk_gb": 0.6,
-    "role": "utility",
-    "capabilities": [
-      "embedding"
-    ],
-    "added_idx": 15
-  },
-  {
-    "name": "qwen2.5vl:3b",
-    "disk_gb": 3.2,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "vision"
-    ],
-    "extended_roles": [],
-    "added_idx": 14
-  },
-  {
-    "name": "granite4.1:3b",
-    "disk_gb": 2.1,
-    "role": "router",
     "capabilities": [
       "completion",
       "tools"
     ],
     "extended_roles": [
       "coder"
-    ],
-    "added_idx": 10
-  },
-  {
-    "name": "llama3.2:3b",
-    "disk_gb": 2.0,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [],
-    "added_idx": 9
-  },
-  {
-    "name": "gemma4:31b-cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "cloud": true,
-    "added_idx": 8,
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "ef09f235533c96cd",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": true,
-      "always_on": false,
-      "default_thinks": false,
-      "think_unbounded": false,
-      "classes": {
-        "absent": "off",
-        "false": "off",
-        "low": "think1",
-        "high": "think1",
-        "true": "think1",
-        "medium": "think2"
-      },
-      "class_stats": {
-        "off": {
-          "levers": [
-            "absent",
-            "false"
-          ],
-          "think_tokens_max": 0,
-          "thinking_chars_max": 0,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.7
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.7
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.6
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.6
-            }
-          },
-          "wall_p50": 0.7
-        },
-        "think1": {
-          "levers": [
-            "low",
-            "high",
-            "true"
-          ],
-          "think_tokens_max": 311,
-          "thinking_chars_max": 1020,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 242,
-              "done": "stop",
-              "wall": 1.5
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 134,
-              "done": "stop",
-              "wall": 1.4
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 45,
-              "done": "stop",
-              "wall": 0.7
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 262,
-              "done": "stop",
-              "wall": 2.2
-            }
-          },
-          "wall_p50": 1.5,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "medium"
-          ],
-          "think_tokens_max": 417,
-          "thinking_chars_max": 1467,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 252,
-              "done": "stop",
-              "wall": 1.1
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 68,
-              "done": "stop",
-              "wall": 1.0
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 49,
-              "done": "stop",
-              "wall": 1.0
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 417,
-              "done": "stop",
-              "wall": 8.5
-            }
-          },
-          "wall_p50": 1.1,
-          "bounded": true
-        }
-      },
-      "direct_class": "off",
-      "direct_lever": "false",
-      "operating_point": "think1",
-      "operating_lever": "low",
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.7
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.7
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.6
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.6
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.5
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.6
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.6
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.5
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 242,
-            "tc": 487,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.5
-          },
-          "classify_1word": {
-            "tt": 134,
-            "tc": 502,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.4
-          },
-          "calculate": {
-            "tt": 45,
-            "tc": 80,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.7
-          },
-          "tiny_code": {
-            "tt": 262,
-            "tc": 883,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.2
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 252,
-            "tc": 507,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "classify_1word": {
-            "tt": 68,
-            "tc": 214,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "calculate": {
-            "tt": 49,
-            "tc": 97,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "tiny_code": {
-            "tt": 417,
-            "tc": 1467,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 8.5
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 240,
-            "tc": 486,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.1
-          },
-          "classify_1word": {
-            "tt": 65,
-            "tc": 258,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "calculate": {
-            "tt": 45,
-            "tc": 80,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.5
-          },
-          "tiny_code": {
-            "tt": 308,
-            "tc": 1004,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.6
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 250,
-            "tc": 488,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "classify_1word": {
-            "tt": 114,
-            "tc": 398,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "calculate": {
-            "tt": 45,
-            "tc": 80,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.0
-          },
-          "tiny_code": {
-            "tt": 311,
-            "tc": 1020,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.7
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "false",
-        "true"
-      ],
-      "default": "false"
-    }
-  },
-  {
-    "name": "gemma4:12b-mlx",
-    "disk_gb": 7.7,
-    "role": "worker",
-    "capabilities": [
-      "audio",
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 6,
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "ded7a27350032202",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": true,
-      "always_on": false,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "false": "off",
-        "high": "think1",
-        "low": "think1",
-        "true": "think1",
-        "absent": "think2",
-        "medium": "think2"
-      },
-      "class_stats": {
-        "off": {
-          "levers": [
-            "false"
-          ],
-          "think_tokens_max": 0,
-          "thinking_chars_max": 0,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.6
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.5
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.9
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 2.0
-            }
-          },
-          "wall_p50": 0.9
-        },
-        "think1": {
-          "levers": [
-            "high",
-            "low",
-            "true"
-          ],
-          "think_tokens_max": 384,
-          "thinking_chars_max": 1362,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 315,
-              "done": "stop",
-              "wall": 7.2
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 140,
-              "done": "stop",
-              "wall": 3.8
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 52,
-              "done": "stop",
-              "wall": 1.2
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 327,
-              "done": "stop",
-              "wall": 8.8
-            }
-          },
-          "wall_p50": 7.2,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "absent",
-            "medium"
-          ],
-          "think_tokens_max": 526,
-          "thinking_chars_max": 1851,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 482,
-              "done": "stop",
-              "wall": 16.7
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 117,
-              "done": "stop",
-              "wall": 3.7
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 44,
-              "done": "stop",
-              "wall": 1.7
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 453,
-              "done": "stop",
-              "wall": 11.9
-            }
-          },
-          "wall_p50": 11.9,
-          "bounded": true
-        }
-      },
-      "direct_class": "off",
-      "direct_lever": "false",
-      "operating_point": "think1",
-      "operating_lever": "low",
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 482,
-            "tc": 1092,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 16.7
-          },
-          "classify_1word": {
-            "tt": 117,
-            "tc": 390,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.7
-          },
-          "calculate": {
-            "tt": 44,
-            "tc": 80,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.7
-          },
-          "tiny_code": {
-            "tt": 453,
-            "tc": 1521,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 11.9
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.6
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.5
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.0
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 382,
-            "tc": 922,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 9.2
-          },
-          "classify_1word": {
-            "tt": 125,
-            "tc": 432,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.0
-          },
-          "calculate": {
-            "tt": 45,
-            "tc": 78,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.0
-          },
-          "tiny_code": {
-            "tt": 361,
-            "tc": 1288,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 9.3
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 305,
-            "tc": 620,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.6
-          },
-          "classify_1word": {
-            "tt": 79,
-            "tc": 254,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.1
-          },
-          "calculate": {
-            "tt": 44,
-            "tc": 80,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 526,
-            "tc": 1851,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 14.1
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 315,
-            "tc": 636,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.2
-          },
-          "classify_1word": {
-            "tt": 140,
-            "tc": 531,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.8
-          },
-          "calculate": {
-            "tt": 52,
-            "tc": 97,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 327,
-            "tc": 1189,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 8.8
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 315,
-            "tc": 636,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.0
-          },
-          "classify_1word": {
-            "tt": 140,
-            "tc": 531,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.8
-          },
-          "calculate": {
-            "tt": 52,
-            "tc": 97,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 384,
-            "tc": 1362,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 10.2
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "false",
-        "true"
-      ],
-      "default": "true"
-    }
-  },
-  {
-    "name": "gpt-oss:120b-cloud",
-    "disk_gb": 0.0,
-    "role": "worker",
-    "cloud": true,
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 4,
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "ac7f7a1e778577c4",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": false,
-      "always_on": true,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "low": "think1",
-        "absent": "think2",
-        "medium": "think2",
-        "false": "think2",
-        "high": "think3",
-        "true": "think3"
-      },
-      "class_stats": {
-        "think1": {
-          "levers": [
-            "low"
-          ],
-          "think_tokens_max": 51,
-          "thinking_chars_max": 76,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 51,
-              "done": "stop",
-              "wall": 2.9
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 16,
-              "done": "stop",
-              "wall": 0.9
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 35,
-              "done": "stop",
-              "wall": 0.9
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 5,
-              "done": "stop",
-              "wall": 3.1
-            }
-          },
-          "wall_p50": 2.9,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "absent",
-            "medium",
-            "false"
-          ],
-          "think_tokens_max": 108,
-          "thinking_chars_max": 361,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 70,
-              "done": "stop",
-              "wall": 1.3
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 37,
-              "done": "stop",
-              "wall": 1.1
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 36,
-              "done": "stop",
-              "wall": 1.1
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 93,
-              "done": "stop",
-              "wall": 2.9
-            }
-          },
-          "wall_p50": 1.3,
-          "bounded": true
-        },
-        "think3": {
-          "levers": [
-            "high",
-            "true"
-          ],
-          "think_tokens_max": 262,
-          "thinking_chars_max": 1018,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 157,
-              "done": "stop",
-              "wall": 1.9
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 158,
-              "done": "stop",
-              "wall": 2.3
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 99,
-              "done": "stop",
-              "wall": 1.6
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 223,
-              "done": "stop",
-              "wall": 4.9
-            }
-          },
-          "wall_p50": 2.3,
-          "bounded": true
-        }
-      },
-      "direct_class": "think1",
-      "direct_lever": "low",
-      "operating_point": null,
-      "operating_lever": null,
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 70,
-            "tc": 187,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.3
-          },
-          "classify_1word": {
-            "tt": 37,
-            "tc": 111,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "calculate": {
-            "tt": 36,
-            "tc": 34,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "tiny_code": {
-            "tt": 93,
-            "tc": 338,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.9
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 108,
-            "tc": 248,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.7
-          },
-          "classify_1word": {
-            "tt": 60,
-            "tc": 216,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.1
-          },
-          "calculate": {
-            "tt": 41,
-            "tc": 45,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "tiny_code": {
-            "tt": 78,
-            "tc": 328,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.7
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 51,
-            "tc": 76,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.9
-          },
-          "classify_1word": {
-            "tt": 16,
-            "tc": 26,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "calculate": {
-            "tt": 35,
-            "tc": 25,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.9
-          },
-          "tiny_code": {
-            "tt": 5,
-            "tc": 18,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.1
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 104,
-            "tc": 218,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.9
-          },
-          "classify_1word": {
-            "tt": 98,
-            "tc": 361,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.1
-          },
-          "calculate": {
-            "tt": 42,
-            "tc": 59,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "tiny_code": {
-            "tt": 42,
-            "tc": 156,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.4
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 157,
-            "tc": 381,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.9
-          },
-          "classify_1word": {
-            "tt": 158,
-            "tc": 654,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.3
-          },
-          "calculate": {
-            "tt": 99,
-            "tc": 319,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.6
-          },
-          "tiny_code": {
-            "tt": 223,
-            "tc": 900,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.9
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 89,
-            "tc": 163,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.0
-          },
-          "classify_1word": {
-            "tt": 38,
-            "tc": 119,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "calculate": {
-            "tt": 46,
-            "tc": 67,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.1
-          },
-          "tiny_code": {
-            "tt": 262,
-            "tc": 1018,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.4
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "default": "medium"
-    }
-  },
-  {
-    "name": "gemma4:26b-mlx",
-    "disk_gb": 18.3,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "thinking",
-      "tools",
-      "vision"
-    ],
-    "extended_roles": [
-      "coder"
-    ],
-    "added_idx": 3,
-    "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "f0fc7e0ae4947d38",
-      "probe_sha": "91e6d738daca",
-      "derive_version": 5,
-      "declared": null,
-      "levers_probed": [
-        "absent",
-        "false",
-        "low",
-        "medium",
-        "high",
-        "true"
-      ],
-      "leaked_levers": [],
-      "declared_mismatch": [],
-      "off_supported": true,
-      "always_on": false,
-      "default_thinks": true,
-      "think_unbounded": false,
-      "classes": {
-        "false": "off",
-        "high": "think1",
-        "true": "think2",
-        "low": "think2",
-        "absent": "think3",
-        "medium": "think3"
-      },
-      "class_stats": {
-        "off": {
-          "levers": [
-            "false"
-          ],
-          "think_tokens_max": 0,
-          "thinking_chars_max": 0,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.5
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.4
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.5
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 1.5
-            }
-          },
-          "wall_p50": 0.5
-        },
-        "think1": {
-          "levers": [
-            "high"
-          ],
-          "think_tokens_max": 333,
-          "thinking_chars_max": 1127,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 301,
-              "done": "stop",
-              "wall": 4.6
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 138,
-              "done": "stop",
-              "wall": 2.4
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 94,
-              "done": "stop",
-              "wall": 1.5
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 333,
-              "done": "stop",
-              "wall": 6.2
-            }
-          },
-          "wall_p50": 4.6,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
-            "true",
-            "low"
-          ],
-          "think_tokens_max": 582,
-          "thinking_chars_max": 1930,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 455,
-              "done": "stop",
-              "wall": 7.6
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 107,
-              "done": "stop",
-              "wall": 2.1
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 0,
-              "done": "stop",
-              "wall": 0.4
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 342,
-              "done": "stop",
-              "wall": 5.8
-            }
-          },
-          "wall_p50": 5.8,
-          "bounded": true
-        },
-        "think3": {
-          "levers": [
-            "absent",
-            "medium"
-          ],
-          "think_tokens_max": 690,
-          "thinking_chars_max": 2003,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 339,
-              "done": "stop",
-              "wall": 11.3
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 147,
-              "done": "stop",
-              "wall": 2.8
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 54,
-              "done": "stop",
-              "wall": 1.2
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 653,
-              "done": "stop",
-              "wall": 12.3
-            }
-          },
-          "wall_p50": 11.3,
-          "bounded": true
-        }
-      },
-      "direct_class": "off",
-      "direct_lever": "false",
-      "operating_point": "think2",
-      "operating_lever": "low",
-      "raw": {
-        "absent": {
-          "bat_ball": {
-            "tt": 339,
-            "tc": 731,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 11.3
-          },
-          "classify_1word": {
-            "tt": 147,
-            "tc": 548,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.8
-          },
-          "calculate": {
-            "tt": 54,
-            "tc": 101,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.2
-          },
-          "tiny_code": {
-            "tt": 653,
-            "tc": 2003,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 12.3
-          }
-        },
-        "false": {
-          "bat_ball": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.5
-          },
-          "classify_1word": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.4
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.5
-          },
-          "tiny_code": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.5
-          }
-        },
-        "low": {
-          "bat_ball": {
-            "tt": 382,
-            "tc": 874,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 5.5
-          },
-          "classify_1word": {
-            "tt": 114,
-            "tc": 438,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.1
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.4
-          },
-          "tiny_code": {
-            "tt": 582,
-            "tc": 1930,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 9.8
-          }
-        },
-        "medium": {
-          "bat_ball": {
-            "tt": 690,
-            "tc": 1637,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 12.4
-          },
-          "classify_1word": {
-            "tt": 129,
-            "tc": 489,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.4
-          },
-          "calculate": {
-            "tt": 99,
-            "tc": 244,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.7
-          },
-          "tiny_code": {
-            "tt": 370,
-            "tc": 1226,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.7
-          }
-        },
-        "high": {
-          "bat_ball": {
-            "tt": 301,
-            "tc": 641,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 4.6
-          },
-          "classify_1word": {
-            "tt": 138,
-            "tc": 459,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.4
-          },
-          "calculate": {
-            "tt": 94,
-            "tc": 228,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.5
-          },
-          "tiny_code": {
-            "tt": 333,
-            "tc": 1127,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 6.2
-          }
-        },
-        "true": {
-          "bat_ball": {
-            "tt": 455,
-            "tc": 1022,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 7.6
-          },
-          "classify_1word": {
-            "tt": 107,
-            "tc": 439,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.1
-          },
-          "calculate": {
-            "tt": 0,
-            "tc": 0,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 0.4
-          },
-          "tiny_code": {
-            "tt": 342,
-            "tc": 1090,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 5.8
-          }
-        }
-      }
-    },
-    "thinking_declared": {
-      "values": [
-        "false",
-        "true"
-      ],
-      "default": "true"
-    }
+    ]
   },
   {
     "name": "ornith:9b",
@@ -4371,44 +1919,400 @@
     }
   },
   {
-    "name": "vincentg/llama3.2-fluxassistant:uncensored",
-    "disk_gb": 3.4,
-    "role": "router",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": [],
-    "added_idx": 0
-  },
-  {
-    "name": "granite4.1:8b",
-    "disk_gb": 5.3,
+    "name": "gemma4:12b-mlx",
+    "disk_gb": 7.7,
     "role": "worker",
     "capabilities": [
+      "audio",
       "completion",
-      "tools"
-    ],
-    "extended_roles": [
-      "coder"
-    ]
-  },
-  {
-    "name": "ministral-3:3b",
-    "disk_gb": 3.0,
-    "role": "router",
-    "capabilities": [
-      "completion",
+      "thinking",
       "tools",
       "vision"
     ],
     "extended_roles": [
       "coder"
-    ]
+    ],
+    "added_idx": 6,
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "ded7a27350032202",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": {
+        "values": [
+          "false",
+          "true"
+        ],
+        "default": "true"
+      },
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [
+        "think2 (low) behaves distinctly but only via undeclared levers"
+      ],
+      "off_supported": true,
+      "always_on": false,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "false": "off",
+        "medium": "think1",
+        "absent": "think1",
+        "high": "think1",
+        "true": "think1",
+        "low": "think2"
+      },
+      "class_stats": {
+        "off": {
+          "levers": [
+            "false"
+          ],
+          "think_tokens_max": 0,
+          "thinking_chars_max": 0,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.5
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.5
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.9
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 2.0
+            }
+          },
+          "wall_p50": 0.9
+        },
+        "think1": {
+          "levers": [
+            "medium",
+            "absent",
+            "high",
+            "true"
+          ],
+          "think_tokens_max": 479,
+          "thinking_chars_max": 1691,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 322,
+              "done": "stop",
+              "wall": 7.5
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 151,
+              "done": "stop",
+              "wall": 4.5
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 53,
+              "done": "stop",
+              "wall": 1.7
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 370,
+              "done": "stop",
+              "wall": 9.8
+            }
+          },
+          "wall_p50": 7.5,
+          "bounded": true
+        },
+        "think2": {
+          "levers": [
+            "low"
+          ],
+          "think_tokens_max": 748,
+          "thinking_chars_max": 2602,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 333,
+              "done": "stop",
+              "wall": 8.0
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 141,
+              "done": "stop",
+              "wall": 3.5
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 45,
+              "done": "stop",
+              "wall": 1.0
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 748,
+              "done": "stop",
+              "wall": 23.0
+            }
+          },
+          "wall_p50": 8.0,
+          "bounded": true
+        }
+      },
+      "direct_class": "off",
+      "direct_lever": "false",
+      "operating_point": "think2",
+      "operating_lever": "low",
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 287,
+            "tc": 568,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 11.1
+          },
+          "classify_1word": {
+            "tt": 161,
+            "tc": 620,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.9
+          },
+          "calculate": {
+            "tt": 44,
+            "tc": 81,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 456,
+            "tc": 1463,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 13.0
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.5
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.5
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 333,
+            "tc": 697,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 8.0
+          },
+          "classify_1word": {
+            "tt": 141,
+            "tc": 462,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.5
+          },
+          "calculate": {
+            "tt": 45,
+            "tc": 78,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          },
+          "tiny_code": {
+            "tt": 748,
+            "tc": 2602,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 23.0
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 322,
+            "tc": 666,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.5
+          },
+          "classify_1word": {
+            "tt": 151,
+            "tc": 561,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.5
+          },
+          "calculate": {
+            "tt": 53,
+            "tc": 101,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 370,
+            "tc": 1272,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 9.8
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 379,
+            "tc": 846,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 9.1
+          },
+          "classify_1word": {
+            "tt": 122,
+            "tc": 500,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.1
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 457,
+            "tc": 1569,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 13.2
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 365,
+            "tc": 802,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 8.3
+          },
+          "classify_1word": {
+            "tt": 124,
+            "tc": 425,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.7
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 479,
+            "tc": 1691,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 15.7
+          }
+        }
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
+    }
   },
   {
-    "name": "granite4.2:3b",
-    "disk_gb": 2.2,
+    "name": "gpt-oss:20b",
+    "disk_gb": 13.8,
     "role": "worker",
     "capabilities": [
       "completion",
@@ -4419,12 +2323,841 @@
       "coder"
     ],
     "think_profile": {
-      "probed_at": "2026-08-29",
-      "ollama": "0.33.1",
-      "digest": "40577dc168a3a9ad",
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "17052f91a42e9793",
       "probe_sha": "91e6d738daca",
       "derive_version": 5,
-      "declared": null,
+      "declared": {
+        "values": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "default": "medium"
+      },
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
+      "off_supported": false,
+      "always_on": true,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "low": "think1",
+        "absent": "think2",
+        "medium": "think2",
+        "true": "think2",
+        "false": "think2",
+        "high": "think3"
+      },
+      "class_stats": {
+        "think1": {
+          "levers": [
+            "low"
+          ],
+          "think_tokens_max": 41,
+          "thinking_chars_max": 68,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 41,
+              "done": "stop",
+              "wall": 1.3
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 17,
+              "done": "stop",
+              "wall": 0.7
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 30,
+              "done": "stop",
+              "wall": 1.0
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 15,
+              "done": "stop",
+              "wall": 1.4
+            }
+          },
+          "wall_p50": 1.3,
+          "bounded": true
+        },
+        "think2": {
+          "levers": [
+            "absent",
+            "medium",
+            "true",
+            "false"
+          ],
+          "think_tokens_max": 142,
+          "thinking_chars_max": 535,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 118,
+              "done": "stop",
+              "wall": 10.1
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 93,
+              "done": "stop",
+              "wall": 2.7
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 39,
+              "done": "stop",
+              "wall": 1.7
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 101,
+              "done": "stop",
+              "wall": 2.7
+            }
+          },
+          "wall_p50": 2.7,
+          "bounded": true
+        },
+        "think3": {
+          "levers": [
+            "high"
+          ],
+          "think_tokens_max": 356,
+          "thinking_chars_max": 1433,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 198,
+              "done": "stop",
+              "wall": 4.4
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 147,
+              "done": "stop",
+              "wall": 3.3
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 69,
+              "done": "stop",
+              "wall": 1.7
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 356,
+              "done": "stop",
+              "wall": 8.4
+            }
+          },
+          "wall_p50": 4.4,
+          "bounded": true
+        }
+      },
+      "direct_class": "think1",
+      "direct_lever": "low",
+      "operating_point": null,
+      "operating_lever": null,
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 118,
+            "tc": 257,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 10.1
+          },
+          "classify_1word": {
+            "tt": 93,
+            "tc": 325,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.7
+          },
+          "calculate": {
+            "tt": 39,
+            "tc": 63,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 101,
+            "tc": 374,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.7
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 142,
+            "tc": 316,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.2
+          },
+          "classify_1word": {
+            "tt": 73,
+            "tc": 244,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          },
+          "calculate": {
+            "tt": 45,
+            "tc": 86,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.2
+          },
+          "tiny_code": {
+            "tt": 142,
+            "tc": 535,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.7
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 41,
+            "tc": 68,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.3
+          },
+          "classify_1word": {
+            "tt": 17,
+            "tc": 33,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.7
+          },
+          "calculate": {
+            "tt": 30,
+            "tc": 22,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          },
+          "tiny_code": {
+            "tt": 15,
+            "tc": 43,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 118,
+            "tc": 257,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.0
+          },
+          "classify_1word": {
+            "tt": 93,
+            "tc": 325,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.2
+          },
+          "calculate": {
+            "tt": 39,
+            "tc": 63,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.8
+          },
+          "tiny_code": {
+            "tt": 101,
+            "tc": 374,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.8
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 198,
+            "tc": 553,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.4
+          },
+          "classify_1word": {
+            "tt": 147,
+            "tc": 543,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.3
+          },
+          "calculate": {
+            "tt": 69,
+            "tc": 183,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 356,
+            "tc": 1433,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 8.4
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 118,
+            "tc": 257,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.4
+          },
+          "classify_1word": {
+            "tt": 93,
+            "tc": 325,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          },
+          "calculate": {
+            "tt": 39,
+            "tc": 63,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          },
+          "tiny_code": {
+            "tt": 101,
+            "tc": 374,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.9
+          }
+        }
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium"
+    }
+  },
+  {
+    "name": "qwen3.8:27b-mlx",
+    "disk_gb": 18.2,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "5642e97495e1a088",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": {
+        "values": [
+          "false",
+          "low",
+          "medium",
+          "xhigh"
+        ],
+        "default": "medium"
+      },
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true",
+        "xhigh"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [
+        "think2 (true) behaves distinctly but only via undeclared levers"
+      ],
+      "off_supported": true,
+      "always_on": false,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "false": "off",
+        "low": "think1",
+        "absent": "think1",
+        "medium": "think1",
+        "xhigh": "think1",
+        "high": "think1",
+        "true": "think2"
+      },
+      "class_stats": {
+        "off": {
+          "levers": [
+            "false"
+          ],
+          "think_tokens_max": 0,
+          "thinking_chars_max": 0,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.7
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.6
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.6
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 2.0
+            }
+          },
+          "wall_p50": 1.6
+        },
+        "think1": {
+          "levers": [
+            "low",
+            "absent",
+            "medium",
+            "xhigh",
+            "high"
+          ],
+          "think_tokens_max": 248,
+          "thinking_chars_max": 1011,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 101,
+              "done": "stop",
+              "wall": 5.0
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 70,
+              "done": "stop",
+              "wall": 3.7
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 56,
+              "done": "stop",
+              "wall": 5.1
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 203,
+              "done": "stop",
+              "wall": 10.8
+            }
+          },
+          "wall_p50": 5.1,
+          "bounded": true
+        },
+        "think2": {
+          "levers": [
+            "true"
+          ],
+          "think_tokens_max": 283,
+          "thinking_chars_max": 1139,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 116,
+              "done": "stop",
+              "wall": 5.4
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 50,
+              "done": "stop",
+              "wall": 3.2
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 68,
+              "done": "stop",
+              "wall": 6.1
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 283,
+              "done": "stop",
+              "wall": 28.4
+            }
+          },
+          "wall_p50": 6.1,
+          "bounded": true
+        }
+      },
+      "direct_class": "off",
+      "direct_lever": "false",
+      "operating_point": "think1",
+      "operating_lever": "low",
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 118,
+            "tc": 268,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 14.5
+          },
+          "classify_1word": {
+            "tt": 70,
+            "tc": 264,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.9
+          },
+          "calculate": {
+            "tt": 63,
+            "tc": 102,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 6.5
+          },
+          "tiny_code": {
+            "tt": 210,
+            "tc": 843,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 12.7
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.7
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 101,
+            "tc": 220,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.0
+          },
+          "classify_1word": {
+            "tt": 70,
+            "tc": 264,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.7
+          },
+          "calculate": {
+            "tt": 56,
+            "tc": 108,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.1
+          },
+          "tiny_code": {
+            "tt": 203,
+            "tc": 774,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 10.8
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 103,
+            "tc": 221,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.8
+          },
+          "classify_1word": {
+            "tt": 72,
+            "tc": 275,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.4
+          },
+          "calculate": {
+            "tt": 53,
+            "tc": 75,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.4
+          },
+          "tiny_code": {
+            "tt": 223,
+            "tc": 898,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 11.8
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 108,
+            "tc": 245,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.2
+          },
+          "classify_1word": {
+            "tt": 43,
+            "tc": 165,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          },
+          "calculate": {
+            "tt": 56,
+            "tc": 96,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.4
+          },
+          "tiny_code": {
+            "tt": 248,
+            "tc": 1011,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 13.6
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 116,
+            "tc": 275,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.4
+          },
+          "classify_1word": {
+            "tt": 50,
+            "tc": 203,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.2
+          },
+          "calculate": {
+            "tt": 68,
+            "tc": 151,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 6.1
+          },
+          "tiny_code": {
+            "tt": 283,
+            "tc": 1139,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 28.4
+          }
+        },
+        "xhigh": {
+          "bat_ball": {
+            "tt": 93,
+            "tc": 236,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 11.2
+          },
+          "classify_1word": {
+            "tt": 242,
+            "tc": 941,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 27.2
+          },
+          "calculate": {
+            "tt": 73,
+            "tc": 175,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 9.0
+          },
+          "tiny_code": {
+            "tt": 131,
+            "tc": 498,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 14.4
+          }
+        }
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "default": "medium"
+    }
+  },
+  {
+    "name": "gemma4:26b-mlx",
+    "disk_gb": 18.3,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 3,
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "f0fc7e0ae4947d38",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": {
+        "values": [
+          "false",
+          "true"
+        ],
+        "default": "true"
+      },
       "levers_probed": [
         "absent",
         "false",
@@ -4441,11 +3174,11 @@
       "think_unbounded": false,
       "classes": {
         "false": "off",
+        "true": "think1",
+        "absent": "think1",
+        "high": "think1",
         "low": "think1",
-        "absent": "think2",
-        "medium": "think2",
-        "high": "think2",
-        "true": "think2"
+        "medium": "think1"
       },
       "class_stats": {
         "off": {
@@ -4457,19 +3190,19 @@
           "starved": false,
           "hit_cap": false,
           "leaked": false,
-          "score": 3,
+          "score": 4,
           "items": {
             "bat_ball": {
-              "correct": false,
+              "correct": true,
               "think_tokens": 0,
               "done": "stop",
-              "wall": 0.2
+              "wall": 0.5
             },
             "classify_1word": {
               "correct": true,
               "think_tokens": 0,
               "done": "stop",
-              "wall": 0.2
+              "wall": 0.4
             },
             "calculate": {
               "correct": true,
@@ -4481,59 +3214,21 @@
               "correct": true,
               "think_tokens": 0,
               "done": "stop",
-              "wall": 0.9
+              "wall": 1.6
             }
           },
           "wall_p50": 0.6
         },
         "think1": {
           "levers": [
-            "low"
-          ],
-          "think_tokens_max": 101,
-          "thinking_chars_max": 221,
-          "starved": false,
-          "hit_cap": false,
-          "leaked": false,
-          "score": 4,
-          "items": {
-            "bat_ball": {
-              "correct": true,
-              "think_tokens": 101,
-              "done": "stop",
-              "wall": 1.7
-            },
-            "classify_1word": {
-              "correct": true,
-              "think_tokens": 11,
-              "done": "stop",
-              "wall": 0.3
-            },
-            "calculate": {
-              "correct": true,
-              "think_tokens": 44,
-              "done": "stop",
-              "wall": 0.8
-            },
-            "tiny_code": {
-              "correct": true,
-              "think_tokens": 5,
-              "done": "stop",
-              "wall": 1.1
-            }
-          },
-          "wall_p50": 1.1,
-          "bounded": true
-        },
-        "think2": {
-          "levers": [
+            "true",
             "absent",
-            "medium",
             "high",
-            "true"
+            "low",
+            "medium"
           ],
-          "think_tokens_max": 198,
-          "thinking_chars_max": 588,
+          "think_tokens_max": 435,
+          "thinking_chars_max": 1381,
           "starved": false,
           "hit_cap": false,
           "leaked": false,
@@ -4541,30 +3236,30 @@
           "items": {
             "bat_ball": {
               "correct": true,
-              "think_tokens": 198,
+              "think_tokens": 308,
               "done": "stop",
-              "wall": 4.0
+              "wall": 5.4
             },
             "classify_1word": {
               "correct": true,
-              "think_tokens": 148,
+              "think_tokens": 80,
               "done": "stop",
-              "wall": 3.6
+              "wall": 1.4
             },
             "calculate": {
               "correct": true,
-              "think_tokens": 104,
+              "think_tokens": 94,
               "done": "stop",
-              "wall": 2.0
+              "wall": 1.6
             },
             "tiny_code": {
               "correct": true,
-              "think_tokens": 144,
+              "think_tokens": 335,
               "done": "stop",
-              "wall": 3.3
+              "wall": 6.5
             }
           },
-          "wall_p50": 3.6,
+          "wall_p50": 5.4,
           "bounded": true
         }
       },
@@ -4575,46 +3270,46 @@
       "raw": {
         "absent": {
           "bat_ball": {
-            "tt": 198,
-            "tc": 588,
+            "tt": 351,
+            "tc": 779,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 4.0
+            "wall": 12.6
           },
           "classify_1word": {
-            "tt": 148,
-            "tc": 580,
+            "tt": 72,
+            "tc": 231,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 3.6
+            "wall": 1.7
           },
           "calculate": {
-            "tt": 104,
-            "tc": 346,
+            "tt": 0,
+            "tc": 0,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 2.0
+            "wall": 0.8
           },
           "tiny_code": {
-            "tt": 144,
-            "tc": 516,
+            "tt": 323,
+            "tc": 1087,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 3.3
+            "wall": 6.7
           }
         },
         "false": {
           "bat_ball": {
             "tt": 0,
             "tc": 0,
-            "ok": false,
+            "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 0.2
+            "wall": 0.5
           },
           "classify_1word": {
             "tt": 0,
@@ -4622,7 +3317,461 @@
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 0.2
+            "wall": 0.4
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 300,
+            "tc": 626,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.9
+          },
+          "classify_1word": {
+            "tt": 135,
+            "tc": 520,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.6
+          },
+          "calculate": {
+            "tt": 92,
+            "tc": 226,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          },
+          "tiny_code": {
+            "tt": 401,
+            "tc": 1265,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.9
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 294,
+            "tc": 630,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.8
+          },
+          "classify_1word": {
+            "tt": 157,
+            "tc": 554,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.8
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.4
+          },
+          "tiny_code": {
+            "tt": 435,
+            "tc": 1381,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 8.4
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 256,
+            "tc": 491,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 4.2
+          },
+          "classify_1word": {
+            "tt": 137,
+            "tc": 493,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.5
+          },
+          "calculate": {
+            "tt": 94,
+            "tc": 228,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.7
+          },
+          "tiny_code": {
+            "tt": 392,
+            "tc": 1266,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.3
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 308,
+            "tc": 647,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.4
+          },
+          "classify_1word": {
+            "tt": 80,
+            "tc": 265,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "calculate": {
+            "tt": 94,
+            "tc": 228,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          },
+          "tiny_code": {
+            "tt": 335,
+            "tc": 1143,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 6.5
+          }
+        }
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
+    }
+  },
+  {
+    "name": "gemma4:31b-cloud",
+    "disk_gb": 0.0,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools",
+      "vision"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "cloud": true,
+    "added_idx": 8,
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "ef09f235533c96cd",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": {
+        "values": [
+          "false",
+          "true"
+        ],
+        "default": "false"
+      },
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [],
+      "off_supported": true,
+      "always_on": false,
+      "default_thinks": false,
+      "think_unbounded": false,
+      "classes": {
+        "absent": "off",
+        "false": "off",
+        "low": "off",
+        "medium": "off",
+        "high": "off",
+        "true": "think1"
+      },
+      "class_stats": {
+        "off": {
+          "levers": [
+            "absent",
+            "false",
+            "low",
+            "medium",
+            "high"
+          ],
+          "think_tokens_max": 0,
+          "thinking_chars_max": 0,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.6
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 0.5
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.4
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 2.0
+            }
+          },
+          "wall_p50": 1.6
+        },
+        "think1": {
+          "levers": [
+            "true"
+          ],
+          "think_tokens_max": 381,
+          "thinking_chars_max": 1313,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 235,
+              "done": "stop",
+              "wall": 1.1
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 91,
+              "done": "stop",
+              "wall": 1.6
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 48,
+              "done": "stop",
+              "wall": 0.8
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 381,
+              "done": "stop",
+              "wall": 2.5
+            }
+          },
+          "wall_p50": 1.6,
+          "bounded": true
+        }
+      },
+      "direct_class": "off",
+      "direct_lever": "false",
+      "operating_point": "think1",
+      "operating_lever": "true",
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.5
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.9
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.5
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.5
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.5
           },
           "calculate": {
             "tt": 0,
@@ -4641,144 +3790,871 @@
             "wall": 0.9
           }
         },
-        "low": {
+        "true": {
           "bat_ball": {
-            "tt": 101,
-            "tc": 221,
+            "tt": 235,
+            "tc": 460,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 1.7
+            "wall": 1.1
           },
           "classify_1word": {
-            "tt": 11,
-            "tc": 29,
+            "tt": 91,
+            "tc": 313,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 0.3
+            "wall": 1.6
           },
           "calculate": {
-            "tt": 44,
-            "tc": 51,
+            "tt": 48,
+            "tc": 97,
             "ok": true,
             "st": false,
             "done": "stop",
             "wall": 0.8
           },
           "tiny_code": {
-            "tt": 5,
-            "tc": 14,
+            "tt": 381,
+            "tc": 1313,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.5
+          }
+        }
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "false"
+    }
+  },
+  {
+    "name": "gpt-oss:120b-cloud",
+    "disk_gb": 0.0,
+    "role": "worker",
+    "cloud": true,
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "extended_roles": [
+      "coder"
+    ],
+    "added_idx": 4,
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "ac7f7a1e778577c4",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": {
+        "values": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "default": "medium"
+      },
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [
+        "think2 (true) behaves distinctly but only via undeclared levers",
+        "think3 (false) behaves distinctly but only via undeclared levers"
+      ],
+      "off_supported": false,
+      "always_on": true,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "low": "think1",
+        "medium": "think1",
+        "absent": "think1",
+        "true": "think2",
+        "false": "think3",
+        "high": "think4"
+      },
+      "class_stats": {
+        "think1": {
+          "levers": [
+            "low",
+            "medium",
+            "absent"
+          ],
+          "think_tokens_max": 82,
+          "thinking_chars_max": 273,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 55,
+              "done": "stop",
+              "wall": 0.7
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 18,
+              "done": "stop",
+              "wall": 1.5
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 35,
+              "done": "stop",
+              "wall": 0.6
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 7,
+              "done": "stop",
+              "wall": 0.9
+            }
+          },
+          "wall_p50": 0.9,
+          "bounded": true
+        },
+        "think2": {
+          "levers": [
+            "true"
+          ],
+          "think_tokens_max": 119,
+          "thinking_chars_max": 468,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 85,
+              "done": "stop",
+              "wall": 0.8
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 119,
+              "done": "stop",
+              "wall": 1.0
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 41,
+              "done": "stop",
+              "wall": 0.6
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 79,
+              "done": "stop",
+              "wall": 2.0
+            }
+          },
+          "wall_p50": 1.0,
+          "bounded": true
+        },
+        "think3": {
+          "levers": [
+            "false"
+          ],
+          "think_tokens_max": 196,
+          "thinking_chars_max": 748,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 101,
+              "done": "stop",
+              "wall": 0.8
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 59,
+              "done": "stop",
+              "wall": 0.7
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 54,
+              "done": "stop",
+              "wall": 0.7
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 196,
+              "done": "stop",
+              "wall": 2.2
+            }
+          },
+          "wall_p50": 0.8,
+          "bounded": true
+        },
+        "think4": {
+          "levers": [
+            "high"
+          ],
+          "think_tokens_max": 299,
+          "thinking_chars_max": 1249,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 174,
+              "done": "stop",
+              "wall": 1.0
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 114,
+              "done": "stop",
+              "wall": 0.8
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 45,
+              "done": "stop",
+              "wall": 0.7
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 299,
+              "done": "stop",
+              "wall": 1.7
+            }
+          },
+          "wall_p50": 1.0,
+          "bounded": true
+        }
+      },
+      "direct_class": "think1",
+      "direct_lever": "low",
+      "operating_point": null,
+      "operating_lever": null,
+      "raw": {
+        "absent": {
+          "bat_ball": {
+            "tt": 82,
+            "tc": 178,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.8
+          },
+          "classify_1word": {
+            "tt": 78,
+            "tc": 273,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          },
+          "calculate": {
+            "tt": 43,
+            "tc": 52,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.6
+          },
+          "tiny_code": {
+            "tt": 50,
+            "tc": 206,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.0
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 101,
+            "tc": 207,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.8
+          },
+          "classify_1word": {
+            "tt": 59,
+            "tc": 200,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.7
+          },
+          "calculate": {
+            "tt": 54,
+            "tc": 110,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.7
+          },
+          "tiny_code": {
+            "tt": 196,
+            "tc": 748,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.2
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 55,
+            "tc": 87,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.7
+          },
+          "classify_1word": {
+            "tt": 18,
+            "tc": 36,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.5
+          },
+          "calculate": {
+            "tt": 35,
+            "tc": 26,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 7,
+            "tc": 28,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.9
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 80,
+            "tc": 134,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.7
+          },
+          "classify_1word": {
+            "tt": 67,
+            "tc": 226,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.8
+          },
+          "calculate": {
+            "tt": 42,
+            "tc": 59,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 39,
+            "tc": 160,
             "ok": true,
             "st": false,
             "done": "stop",
             "wall": 1.1
           }
         },
-        "medium": {
-          "bat_ball": {
-            "tt": 198,
-            "tc": 588,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.5
-          },
-          "classify_1word": {
-            "tt": 148,
-            "tc": 580,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 2.7
-          },
-          "calculate": {
-            "tt": 104,
-            "tc": 346,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 1.9
-          },
-          "tiny_code": {
-            "tt": 144,
-            "tc": 516,
-            "ok": true,
-            "st": false,
-            "done": "stop",
-            "wall": 3.3
-          }
-        },
         "high": {
           "bat_ball": {
-            "tt": 198,
-            "tc": 588,
+            "tt": 174,
+            "tc": 488,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 3.6
+            "wall": 1.0
           },
           "classify_1word": {
-            "tt": 148,
-            "tc": 580,
+            "tt": 114,
+            "tc": 431,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 2.7
+            "wall": 0.8
           },
           "calculate": {
-            "tt": 104,
-            "tc": 346,
+            "tt": 45,
+            "tc": 63,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 1.8
+            "wall": 0.7
           },
           "tiny_code": {
-            "tt": 144,
-            "tc": 516,
+            "tt": 299,
+            "tc": 1249,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 3.3
+            "wall": 1.7
           }
         },
         "true": {
           "bat_ball": {
-            "tt": 198,
-            "tc": 588,
+            "tt": 85,
+            "tc": 144,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 3.6
+            "wall": 0.8
           },
           "classify_1word": {
-            "tt": 148,
-            "tc": 580,
+            "tt": 119,
+            "tc": 468,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 2.7
+            "wall": 1.0
           },
           "calculate": {
+            "tt": 41,
+            "tc": 50,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 0.6
+          },
+          "tiny_code": {
+            "tt": 79,
+            "tc": 326,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          }
+        }
+      }
+    },
+    "thinking_declared": {
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium"
+    }
+  },
+  {
+    "name": "nemotron-3-super:cloud",
+    "disk_gb": 0.0,
+    "role": "worker",
+    "capabilities": [
+      "completion",
+      "thinking",
+      "tools"
+    ],
+    "cloud": true,
+    "extended_roles": [
+      "coder"
+    ],
+    "think_profile": {
+      "probed_at": "2026-09-26",
+      "ollama": "0.34.4",
+      "digest": "c6398e09afd407f9",
+      "probe_sha": "91e6d738daca",
+      "derive_version": 5,
+      "declared": {
+        "values": [
+          "false",
+          "true"
+        ],
+        "default": "true"
+      },
+      "levers_probed": [
+        "absent",
+        "false",
+        "low",
+        "medium",
+        "high",
+        "true"
+      ],
+      "leaked_levers": [],
+      "declared_mismatch": [
+        "think1 (medium) behaves distinctly but only via undeclared levers"
+      ],
+      "off_supported": true,
+      "always_on": false,
+      "default_thinks": true,
+      "think_unbounded": false,
+      "classes": {
+        "false": "off",
+        "medium": "think1",
+        "true": "think2",
+        "absent": "think2",
+        "high": "think2",
+        "low": "think2"
+      },
+      "class_stats": {
+        "off": {
+          "levers": [
+            "false"
+          ],
+          "think_tokens_max": 0,
+          "thinking_chars_max": 0,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.8
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 1.7
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 3.7
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 0,
+              "done": "stop",
+              "wall": 3.8
+            }
+          },
+          "wall_p50": 3.7
+        },
+        "think1": {
+          "levers": [
+            "medium"
+          ],
+          "think_tokens_max": 57,
+          "thinking_chars_max": 178,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 57,
+              "done": "stop",
+              "wall": 2.6
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 46,
+              "done": "stop",
+              "wall": 5.5
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 47,
+              "done": "stop",
+              "wall": 5.9
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 38,
+              "done": "stop",
+              "wall": 1.9
+            }
+          },
+          "wall_p50": 5.5,
+          "bounded": true
+        },
+        "think2": {
+          "levers": [
+            "true",
+            "absent",
+            "high",
+            "low"
+          ],
+          "think_tokens_max": 118,
+          "thinking_chars_max": 321,
+          "starved": false,
+          "hit_cap": false,
+          "leaked": false,
+          "score": 4,
+          "items": {
+            "bat_ball": {
+              "correct": true,
+              "think_tokens": 102,
+              "done": "stop",
+              "wall": 6.2
+            },
+            "classify_1word": {
+              "correct": true,
+              "think_tokens": 30,
+              "done": "stop",
+              "wall": 12.4
+            },
+            "calculate": {
+              "correct": true,
+              "think_tokens": 50,
+              "done": "stop",
+              "wall": 13.5
+            },
+            "tiny_code": {
+              "correct": true,
+              "think_tokens": 85,
+              "done": "stop",
+              "wall": 7.0
+            }
+          },
+          "wall_p50": 12.4,
+          "bounded": true
+        }
+      },
+      "direct_class": "off",
+      "direct_lever": "false",
+      "operating_point": "think1",
+      "operating_lever": "medium",
+      "raw": {
+        "absent": {
+          "bat_ball": {
             "tt": 104,
-            "tc": 346,
+            "tc": 195,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.6
+          },
+          "classify_1word": {
+            "tt": 60,
+            "tc": 235,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.0
+          },
+          "calculate": {
+            "tt": 68,
+            "tc": 149,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.5
+          },
+          "tiny_code": {
+            "tt": 44,
+            "tc": 178,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 8.5
+          }
+        },
+        "false": {
+          "bat_ball": {
+            "tt": 0,
+            "tc": 0,
             "ok": true,
             "st": false,
             "done": "stop",
             "wall": 1.8
           },
-          "tiny_code": {
-            "tt": 144,
-            "tc": 516,
+          "classify_1word": {
+            "tt": 0,
+            "tc": 0,
             "ok": true,
             "st": false,
             "done": "stop",
-            "wall": 3.4
+            "wall": 1.7
+          },
+          "calculate": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.7
+          },
+          "tiny_code": {
+            "tt": 0,
+            "tc": 0,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.8
+          }
+        },
+        "low": {
+          "bat_ball": {
+            "tt": 118,
+            "tc": 220,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 6.3
+          },
+          "classify_1word": {
+            "tt": 34,
+            "tc": 126,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.0
+          },
+          "calculate": {
+            "tt": 57,
+            "tc": 97,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.8
+          },
+          "tiny_code": {
+            "tt": 40,
+            "tc": 151,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.4
+          }
+        },
+        "medium": {
+          "bat_ball": {
+            "tt": 57,
+            "tc": 140,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.6
+          },
+          "classify_1word": {
+            "tt": 46,
+            "tc": 178,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.5
+          },
+          "calculate": {
+            "tt": 47,
+            "tc": 53,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 5.9
+          },
+          "tiny_code": {
+            "tt": 38,
+            "tc": 154,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 1.9
+          }
+        },
+        "high": {
+          "bat_ball": {
+            "tt": 112,
+            "tc": 206,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 8.0
+          },
+          "classify_1word": {
+            "tt": 39,
+            "tc": 143,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 3.1
+          },
+          "calculate": {
+            "tt": 51,
+            "tc": 76,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 2.6
+          },
+          "tiny_code": {
+            "tt": 19,
+            "tc": 69,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 8.7
+          }
+        },
+        "true": {
+          "bat_ball": {
+            "tt": 102,
+            "tc": 191,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 6.2
+          },
+          "classify_1word": {
+            "tt": 30,
+            "tc": 117,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 12.4
+          },
+          "calculate": {
+            "tt": 50,
+            "tc": 80,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 13.5
+          },
+          "tiny_code": {
+            "tt": 85,
+            "tc": 321,
+            "ok": true,
+            "st": false,
+            "done": "stop",
+            "wall": 7.0
           }
         }
       }
     },
-    "thinking_declared": null
+    "thinking_declared": {
+      "values": [
+        "false",
+        "true"
+      ],
+      "default": "true"
+    }
   }
 ]
