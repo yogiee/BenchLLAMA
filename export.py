@@ -42,6 +42,10 @@ PROTOCOL = {"num_ctx": 16384, "protocol_version": 3,
             "think": "per-model arm — see models[*].think (docs/think-spec.md); standard = direct arm, "
                      "standard_think = think arm, batteries at the operating point"}
 
+# F-elastic ranking: hard-adherence at/above this counts as SATURATED — within that tier models are
+# ordered by per-turn cost, not by adherence (see elastic_key). Policy, not test content.
+F_ELASTIC_RANK_BAND = 0.95
+
 
 def _latest(prefix):
     """Newest canonical result file for a battery prefix, or None. Skips informal /
@@ -61,6 +65,37 @@ _PREFIX_BATTERY = {
     "aptitude_f_elastic": "F-elastic", "vision": "vision", "embedding": "embedding", "longctx": "G",
     "confab": "confab",
 }
+
+
+def _load_operating(prefix):
+    """(main, other, source) — one row per model at its OPERATING-POINT arm (`think` if it has an
+    operating lever, else `direct` — bench_utils.resolve_arm(…, "auto"), the arm the batteries run
+    at), plus the other arm's row when one exists.
+
+    Why (2026-09-26): `_load(arm=None)` returns the NEWEST row whatever its arm, so a deliberate
+    direct-arm measurement silently replaced a model's operating-point result in the export — and in
+    resume, which then carried it forward as if it were the operating point. Used for F-elastic only
+    for now (user decision 09-26; the other batteries still read newest-of-any-arm)."""
+    bat = _PREFIX_BATTERY[prefix]
+    import results_db
+    from bench_utils import resolve_arm, think_lever
+    by = {a: results_db.latest(bat, arm=a) for a in ("direct", "think")}
+    lever_now = lambda n, a: str(think_lever(n, a)).lower()
+    main, other = {}, {}
+    for name in set(by["direct"]) | set(by["think"]):
+        want = resolve_arm(name, "auto")
+        alt = "direct" if want == "think" else "think"
+        if name in by[want]:
+            main[name] = by[want][name]
+            # the other arm only from v3 rows measured at the lever that arm uses TODAY — a pre-v3 row
+            # (no `think_lever` stamp) ran under blanket think=False, and a row at a since-moved lever
+            # (lfm2.5:8b's 09-02 `low` row; its profile now has no operating lever) is not this arm's number
+            o = by[alt].get(name)
+            if o and "think_lever" in o and str(o["think_lever"]).lower() == lever_now(name, alt):
+                other[name] = o
+        else:                                   # never measured at its operating arm — show what exists
+            main[name] = by[alt][name]
+    return main, other, f"db:{bat}@operating"
 
 
 def _load(prefix, arm=None):
@@ -134,13 +169,98 @@ def _routing_summary(rec):
     return out
 
 
+def _elastic_view(pe, is_cloud):
+    """Compact F-elastic view of one DB row: arm + verdict + meters + cost.
+
+    `thinking` comes from the think CLASS, not the arm label: gpt-oss / lfm2.5 run their `direct` arm
+    at a thinking lever because they have no working off switch. The verdict does not transfer across
+    arms — thinking solves the cross-turn `distinct_openers` constraint that drives the hard band
+    (09-26: 11 of 17 `robust` verdicts were earned while thinking)."""
+    pes = pe["summary"]
+    c = pes.get("cost") or {}
+    return {
+        "arm": pe.get("arm"),
+        "think_lever": pe.get("think_lever"),
+        "thinking": pe.get("think_class") not in (None, "off"),
+        "verdict": pes.get("verdict"),
+        "prompt_sigma": pes.get("prompt_sigma"),
+        "instruction_adherence": pes.get("instruction_adherence"),
+        # two-band since 2026-08-23 — absent on rows measured before the hard rung existed
+        **({"hard_adherence": pes["hard_adherence"]} if pes.get("hard_adherence") is not None else {}),
+        "length_adherence": pes.get("length_adherence"),
+        # wall-clock cost per rollout turn INCLUDING attempts discarded by a budget retry. Cloud =
+        # quality-only (remote hardware + network), so no cost. `retry_s_estimated` = the discarded
+        # attempts were back-filled as num_predict / decode tps (rows measured before 09-26 instrumentation).
+        **({"cost": {k: c.get(k) for k in ("s_per_turn", "retries_per_pass", "unrecovered",
+                                           "retry_s_estimated")}} if c and not is_cloud else {}),
+        "runs": pes.get("n_runs", 1),
+    }
+
+
+def _elastic_block(pe, is_cloud):
+    """Full F-elastic sub-block for the headline (operating-point) row."""
+    pes = pe["summary"]; rc = pes.get("cutoffs", {})
+    return {
+        **_elastic_view(pe, is_cloud),
+        **({"prompt_sigma_all": pes["prompt_sigma_all"]} if pes.get("prompt_sigma_all") is not None else {}),
+        # cutoffs trimmed to the DECLARED numeric thresholds so a consumer can re-threshold
+        "cutoffs": {k: rc.get(k) for k in ("sigma_hi", "adherence_hi", "adherence_lo",
+                                           "hard_adherence_hi", "keyed_on")},
+        "verdict_stable": pes.get("verdict_stable"),
+        "prompt_sigma_stdev": pes.get("prompt_sigma_stdev"),
+        "instruction_adherence_stdev": pes.get("instruction_adherence_stdev"),
+        "per_rung": [{"rung": r["rung"], "constraints_n": r["constraints_n"],
+                      "composite": r["composite"], "run_sigma": r.get("run_sigma"),
+                      "instruction_adherence": r["instruction_adherence"],
+                      "length_adherence": r["length_adherence"],
+                      # per-constraint hit rates — without them a saturating verdict can't be diagnosed
+                      "per_constraint": r.get("per_constraint")}
+                     for r in pes.get("per_rung", [])],
+    }
+
+
+def _elastic_arm_key(v):
+    """Sort key for ONE measured arm of F-elastic (higher = better). Cost decides once adherence has
+    saturated (user direction, 2026-09-26): v3 runs F-elastic at the operating point, thinking solves the
+    cross-turn `distinct_openers` constraint, and 17 of 18 models came out `robust` — while the thinking
+    pass cost 3-57x the per-turn time of the same model's no-think pass. Order:
+      1. `robust` above everything else (the verdict still gates);
+      2. within robust, hard-adherence >= F_ELASTIC_RANK_BAND = the saturated tier;
+      3. within a tier, cheaper s/turn first (cost includes budget-retry discards);
+      4. an arm with no cost (cloud = quality-only, or no timed files) after the costed ones of its tier.
+    Non-robust arms sort by hard-adherence, then instruction-adherence."""
+    if not v.get("verdict"):
+        return None
+    hard = v.get("hard_adherence") or 0.0
+    if v["verdict"] != "robust":
+        return (0, 0, hard, v.get("instruction_adherence") or 0.0)
+    tier = 2 if hard >= F_ELASTIC_RANK_BAND else 1
+    # a full arm view carries cost.s_per_turn; the published best_arm pointer carries it flat
+    spt = v["s_per_turn"] if "s_per_turn" in v else (v.get("cost") or {}).get("s_per_turn")
+    return (tier, 1, -spt, hard) if spt else (tier, 0, hard, 0.0)
+
+
+def _elastic_best_arm(pe):
+    """The measured arm that scores best on _elastic_arm_key — what `prompt_elasticity` ranks on (option B,
+    09-26: aptitude = each model at its best settings, and 'best' includes what the pass costs). Returns
+    a compact pointer so a consumer knows which arm the rank was earned at, i.e. which arm to call."""
+    views = [pe] + [pe[k] for k in ("direct", "think") if isinstance(pe.get(k), dict)]
+    views = [v for v in views if _elastic_arm_key(v) is not None]
+    if not views:
+        return None
+    b = max(views, key=_elastic_arm_key)
+    return {k: b.get(k) for k in ("arm", "think_lever", "thinking", "verdict", "hard_adherence",
+                                  "instruction_adherence")} \
+        | {"s_per_turn": (b.get("cost") or {}).get("s_per_turn")}
+
+
 def build():
     registry = json.load((REPO / "models.json").open())
     std, std_f = _load("benchmark", arm="direct")
     std_t, std_t_f = _load("benchmark", arm="think")   # v3: the think arm, when a model has one
     coding, cod_f = _load("aptitude_e")
     cons, cons_f = _load("aptitude_f")
-    elastic, ela_f = _load("aptitude_f_elastic")
+    elastic, elastic_other, ela_f = _load_operating("aptitude_f_elastic")
     vision, vis_f = _load("vision")
     emb, emb_f = _load("embedding")
     lctx, lctx_f = _load("longctx")
@@ -230,35 +350,24 @@ def build():
                                  "runs": fs.get("n_runs", 1)}
         pe = elastic.get(name)
         if pe and pe.get("summary"):
-            pes = pe["summary"]; rc = pes.get("cutoffs", {})
-            # prompt-elasticity is a per-model SUB-BLOCK (like `consistency`), NOT a ranking list:
-            # the verdict is categorical and prompt-σ is only meaningful PAIRED with adherence, so
-            # there's nothing to sort. Emitted only when F-elastic has been run (opt-in battery).
-            # cutoffs trimmed to the DECLARED numeric thresholds (prose rationale lives in
-            # suites/elasticity/ladder.json) so a consumer can re-threshold against its own scope.
-            m["prompt_elasticity"] = {
-                "verdict": pes.get("verdict"),
-                "prompt_sigma": pes.get("prompt_sigma"),
-                "instruction_adherence": pes.get("instruction_adherence"),
-                # two-band since 2026-08-23 — core numbers above stay v1-comparable, the hard band
-                # is the one that separates. Absent on rows measured before the hard rung existed.
-                **({"hard_adherence": pes["hard_adherence"]}
-                   if pes.get("hard_adherence") is not None else {}),
-                **({"prompt_sigma_all": pes["prompt_sigma_all"]}
-                   if pes.get("prompt_sigma_all") is not None else {}),
-                "length_adherence": pes.get("length_adherence"),
-                "cutoffs": {k: rc.get(k) for k in ("sigma_hi", "adherence_hi", "adherence_lo",
-                                                   "hard_adherence_hi", "keyed_on")},
-                "verdict_stable": pes.get("verdict_stable"),
-                "prompt_sigma_stdev": pes.get("prompt_sigma_stdev"),
-                "instruction_adherence_stdev": pes.get("instruction_adherence_stdev"),
-                "per_rung": [{"rung": r["rung"], "constraints_n": r["constraints_n"],
-                              "composite": r["composite"], "run_sigma": r.get("run_sigma"),
-                              "instruction_adherence": r["instruction_adherence"],
-                              "length_adherence": r["length_adherence"]}
-                             for r in pes.get("per_rung", [])],
-                "runs": pes.get("n_runs", 1),
-            }
+            # prompt-elasticity is a per-model SUB-BLOCK (like `consistency`); the `prompt_elasticity`
+            # ranking list (below) orders it. Headline = the OPERATING-POINT arm (see _load_operating);
+            # a measurement at the other arm rides along under `direct` / `think` so a consumer that
+            # calls the model with thinking off can read the number that applies to it.
+            m["prompt_elasticity"] = _elastic_block(pe, is_cloud)
+            po = elastic_other.get(name)
+            if po and po.get("summary"):
+                oview = _elastic_view(po, is_cloud)
+                m["prompt_elasticity"][oview["arm"] or "other"] = oview
+                # what thinking costs per turn on this battery, when both arms were measured locally
+                mc, oc = m["prompt_elasticity"].get("cost"), oview.get("cost")
+                if mc and oc and mc.get("s_per_turn") and oc.get("s_per_turn"):
+                    th, nt = (mc, oc) if m["prompt_elasticity"]["thinking"] else (oc, mc)
+                    if th is not nt:
+                        m["prompt_elasticity"]["think_penalty"] = round(th["s_per_turn"] / nt["s_per_turn"], 2)
+            best = _elastic_best_arm(m["prompt_elasticity"])
+            if best:
+                m["prompt_elasticity"]["best_arm"] = best
         v = vision.get(name)
         if v:
             m["vision"] = {"composite": v.get("composite"),           # 0.75·core + 0.25·hard (two-band)
@@ -418,6 +527,12 @@ def build():
             return (0, 0.0, 0.0, tps)
         return (1, acc, -(r.get("false_escalation_rate") or 0.0), tps)
 
+    def elastic_key(m):
+        """Rank on the model's BEST measured arm (user decision 2026-09-26, option B) — see _elastic_arm_key.
+        The chosen arm is published as prompt_elasticity.best_arm."""
+        pe = m.get("prompt_elasticity") or {}
+        return _elastic_arm_key(pe["best_arm"]) if pe.get("best_arm") else None
+
     rankings = {
         "routers": ranked(routers, router_key),
         "workers": ranked(workers, worker_quality),
@@ -434,6 +549,7 @@ def build():
         "embedding_short": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite")),
         "embedding_long": ranked(has_emb, lambda m: (m.get("embedding") or {}).get("composite_long")),
         "long_context": ranked(has_lctx, lctx_key),
+        "prompt_elasticity": ranked(completion, elastic_key),
     }
 
     # Run-provenance fingerprint of the most recent run (ollama_version / benchllama_commit /

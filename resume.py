@@ -142,6 +142,29 @@ def targets(battery: str, universe: list[str], cur_env: dict, *,
     return to_run, skipped, reasons
 
 
+# Batteries whose prior result is looked up at each model's OPERATING-POINT arm, not newest-of-any-arm.
+# 2026-09-26: a deliberate direct-arm F-elastic measurement became the newest row and was then carried
+# forward as if it were the operating point. Mirrors export._load_operating (F-elastic only for now —
+# user decision 09-26; the other batteries hold one arm per model in practice).
+OPERATING_ARM_BATTERIES = {"F-elastic"}
+
+
+def _operating_arm_prior(battery: str, universe: list[str]) -> tuple[dict, set]:
+    """(scored_env, scored_models) from each model's row at bench_utils.resolve_arm(model, "auto").
+    A model with no row at its operating arm counts as unscored → it runs ("new-model")."""
+    import results_db
+    from bench_utils import resolve_arm
+    env = {a: results_db.latest_env_by_model(battery, arm=a) for a in ("direct", "think")}
+    have = {a: set(results_db.latest(battery, arm=a)) for a in ("direct", "think")}
+    scored_env, scored = {}, set()
+    for m in universe:
+        a = resolve_arm(m, "auto")
+        if m in have[a]:
+            scored.add(m)
+            scored_env[m] = env[a].get(m) or {}
+    return scored_env, scored
+
+
 def resolve(battery: str, universe: list[str], *, host: str = "http://localhost:11434",
             cur_env: dict | None = None, cloud: set | None = None, force: bool = False,
             explicit_models: list[str] | None = None, check_runtime: bool = False,
@@ -154,8 +177,11 @@ def resolve(battery: str, universe: list[str], *, host: str = "http://localhost:
     import results_db
     cur_env = cur_env or env_fingerprint(host=host, models=universe)
     db_arm = None if arm == "auto" else arm
-    scored_env = results_db.latest_env_by_model(battery, arm=db_arm)
-    scored_models = set(results_db.latest(battery, arm=db_arm).keys())
+    if arm == "auto" and battery in OPERATING_ARM_BATTERIES:
+        scored_env, scored_models = _operating_arm_prior(battery, universe)
+    else:
+        scored_env = results_db.latest_env_by_model(battery, arm=db_arm)
+        scored_models = set(results_db.latest(battery, arm=db_arm).keys())
     return targets(battery, universe, cur_env, scored_env=scored_env, scored_models=scored_models,
                    cloud=cloud or set(), force=force, explicit_models=explicit_models,
                    check_runtime=check_runtime, arm=arm)
