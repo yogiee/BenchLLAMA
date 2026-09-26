@@ -2162,8 +2162,14 @@ def _f_rollout_and_grade(model_name, system_prompt, echo_label=""):
         data, wall = chat(model_name, history, max_tokens=F_MAX_TOKENS)
         resp = data.get("message", {}).get("content", "")
         history.append({"role": "assistant", "content": resp})
+        br = data.get("_budget_retry") or {}
         turns[turn["id"]] = {"type": turn["type"], "user": user, "resp": resp,
-                             "vec": _fstyle.style_vector(resp, lex), "wall_s": round(wall, 1)}
+                             "vec": _fstyle.style_vector(resp, lex), "wall_s": round(wall, 1),
+                             # COST of the turn (09-26): wall + generated tokens INCLUDING an attempt a
+                             # budget retry discarded. eval_count counts thinking tokens too.
+                             "wall_total_s": round(wall + (br.get("discarded_wall_s") or 0.0), 1),
+                             "tokens": (data.get("eval_count") or 0) + (br.get("discarded_tokens") or 0),
+                             "retry": bool(br), "recovered": br.get("recovered", True)}
         if turn["id"] == "T1":
             picked_key, picked_label = _fstyle.detect_stance(resp, opts)
             if picked_key:
@@ -2280,7 +2286,9 @@ def run_battery_f_elastic(model_name):
             "dims": g["dims"], "stance_detected": g["stance_detected"],
         })
         composites.append(g["composite"])
-        tests[rung["id"]] = {tid: {"type": t["type"], "resp": t["resp"], "wall_s": t["wall_s"]}
+        tests[rung["id"]] = {tid: {"type": t["type"], "resp": t["resp"], "wall_s": t["wall_s"],
+                                   "wall_total_s": t["wall_total_s"], "tokens": t["tokens"],
+                                   "retry": t["retry"], "recovered": t["recovered"]}
                              for tid, t in g["turns"].items()}
         print(f"  → rung={rung['id']} n={len(rung['constraints'])} composite={g['composite']} "
               f"instr_adh={adh['instruction_adherence']} len_adh={adh['length_adherence']}", flush=True)
@@ -2314,9 +2322,19 @@ def run_battery_f_elastic(model_name):
     verdict               = _elastic.classify(prompt_sigma, instruction_adherence, cutoffs,
                                               hard_adherence=hard_adherence)
 
+    # COST of the whole pass (09-26) — what holding the constraints cost at this arm. Past the saturation
+    # band it is what separates models (export elastic_key). Includes budget-retry discards.
+    all_turns = [t for rung_t in tests.values() for t in rung_t.values()]
+    cost = {"s_per_turn": round(sum(t["wall_total_s"] for t in all_turns) / len(all_turns), 2),
+            "tokens_per_turn": round(sum(t["tokens"] for t in all_turns) / len(all_turns), 1),
+            "retries_per_pass": sum(1 for t in all_turns if t["retry"]),
+            "unrecovered": sum(1 for t in all_turns if t["retry"] and not t["recovered"]),
+            "retry_s_estimated": False, "passes_timed": 1}
+
     print(f"\n  → prompt_sigma={prompt_sigma} (all-rung {prompt_sigma_all})  "
           f"instruction_adherence={instruction_adherence}  hard_adherence={hard_adherence}  "
-          f"length_adherence={length_adherence}  verdict={verdict}", flush=True)
+          f"length_adherence={length_adherence}  verdict={verdict}  "
+          f"cost={cost['s_per_turn']}s·{cost['tokens_per_turn']}tok/turn", flush=True)
     return {
         "model": model_name, "battery": "F-elastic",
         "summary": {"prompt_sigma": prompt_sigma,
@@ -2326,7 +2344,7 @@ def run_battery_f_elastic(model_name):
                     "hard_adherence_allbinary": hard_adherence_allbinary,
                     "length_adherence": length_adherence,
                     "adherence": instruction_adherence,   # co-equal alias: the pairing is prompt-σ + instruction-adherence
-                    "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung},
+                    "verdict": verdict, "cutoffs": cutoffs, "per_rung": per_rung, "cost": cost},
         "tests": tests,
     }
 

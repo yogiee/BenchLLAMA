@@ -288,6 +288,15 @@ def _average_f_elastic(run_files):
         ladh = _m(core, "length_adherence")
         verdict = elastic.classify(prompt_sigma, iadh, cutoffs, hard_adherence=hadh)
         run_verdicts = [rec["summary"]["verdict"] for rec in recs]
+        # COST (09-26): mean over the passes that recorded one (rows before 09-26 carry none)
+        costs = [rec["summary"]["cost"] for rec in recs if rec["summary"].get("cost")]
+        cost = ({"s_per_turn": mean([c["s_per_turn"] for c in costs]),
+                 "tokens_per_turn": mean([c["tokens_per_turn"] for c in costs
+                                          if c.get("tokens_per_turn") is not None]),
+                 "retries_per_pass": mean([c["retries_per_pass"] for c in costs]),
+                 "unrecovered": sum(c.get("unrecovered") or 0 for c in costs),
+                 "retry_s_estimated": any(c.get("retry_s_estimated") for c in costs),
+                 "passes_timed": len(costs)} if costs else None)
         out.append({"model": name, "battery": "F-elastic", **_arm_of(recs), "runs": len(recs), "summary": {
             "prompt_sigma": prompt_sigma, "instruction_adherence": iadh, "length_adherence": ladh,
             "prompt_sigma_all": pstd(composites), "hard_adherence": hadh,
@@ -299,7 +308,8 @@ def _average_f_elastic(run_files):
             "prompt_sigma_stdev": pstd([rec["summary"]["prompt_sigma"] for rec in recs]),
             "instruction_adherence_stdev": pstd([rec["summary"]["instruction_adherence"] for rec in recs
                                                  if rec["summary"].get("instruction_adherence") is not None]),
-            "per_run_verdicts": run_verdicts, "verdict_stable": len(set(run_verdicts)) == 1}})
+            "per_run_verdicts": run_verdicts, "verdict_stable": len(set(run_verdicts)) == 1,
+            **({"cost": cost} if cost else {})}})
     return out, len(runs)
 
 

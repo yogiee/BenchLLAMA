@@ -857,7 +857,11 @@ def post_with_budget_retry(payload: dict, post, *, label: str = "", quiet: bool 
     data2["_budget_retry"] = {"reason": _why,
                               "num_predict": [old_p, new_p],
                               "num_ctx": [old_c, new_opts.get("num_ctx")] if old_c else None,
-                              "recovered": recovered}
+                              "recovered": recovered,
+                              # the returned `wall` excludes the attempt thrown away above; a battery that
+                              # reports what an answer COST (F-elastic, 09-26) needs it (+ its tokens) back
+                              "discarded_wall_s": round(wall, 2),
+                              "discarded_tokens": data.get("eval_count")}
     if not quiet and not recovered:
         print(f"    ⚠  {label or payload.get('model','?')}: STILL {'truncated' if _truncated else 'empty'} "
               f"at {new_p} — recording as failed call",
