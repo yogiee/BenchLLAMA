@@ -27,8 +27,10 @@ is a target and the measured number is the truth.
     8192         42598      only 8k+ windows hold (embeddinggemma-2 trained at 8,192)
     16384        85197      beyond any trained window in the fleet — degradation probe
 
-8192/16384 were added for the MemoryCentral question (2026-10-08): 11% of its corpus
-exceeds 2,048 tokens and its longest memory is ~62k chars (~12k tokens).
+8192/16384 were added 2026-10-08 to measure 8k-window embedders (embeddinggemma-2).
+A consumer that embeds WHOLE documents needs them: 11% of MemoryCentral's memories
+exceed 2,048 tokens and the longest is ~19k. MemoryCentral itself embeds 4,000-char
+chunks (≤ ~1.5k tokens), so the deep buckets describe headroom, not its current need.
 
 Each doc carries TWO unique, DISTINCTIVE, OFF-TOPIC nuggets — a unique city
 (head) and a unique codename (tail). Distinctive real-world entities (not opaque
