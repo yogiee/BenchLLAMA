@@ -95,7 +95,7 @@ BATTERY_REVISION = {
     "F-elastic": 2,
     "G": 3,           # two-band G-hard (2026-08-21); v3 arms (2026-08-28)
     "vision": 2,      # two-band V-hard (2026-07-05)
-    "embedding": 2,   # length-stratified re-tune (2026-06-13)
+    "embedding": 3,   # v3 real-token buckets to 16k + native-window num_ctx/num_batch + one-dip clean walk (2026-10-08)
     "image": 1,
     "confab": 2,      # Battery H — honesty/confabulation (2026-07-07); v3 arms (2026-08-28)
 }

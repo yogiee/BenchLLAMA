@@ -15,11 +15,15 @@ Length-stratified (2026-06-13 re-tune). Two families of tasks:
   → composite (short) + quality_per_gb
 
   LONG (context-window fit) — the dimension the short corpus never exercised:
-    window probe     — largest input (chars) accepted before a 500
-    retrieval_long   — docs at 5 length buckets (256–4096 tok) with a head code
-                       (~char 150, control) and a tail code (last sentence). Tail
-                       recall@5 craters once the doc exceeds the model's window.
-  → composite_long (mean tail recall) + quality_per_gb_long + max_clean_bucket_tok
+    retrieval_long   — docs at 7 length buckets (256–16384 REAL tokens, v3) with a
+                       head nugget (~char 250, control) and a tail nugget (last
+                       sentence). Tail MRR craters once the doc exceeds the window.
+                       Every call runs at the model's native window (num_ctx AND
+                       num_batch — Ollama's num_batch default of 2048 otherwise caps
+                       encoder models there), and each doc's own token count
+                       (`prompt_eval_count`) is recorded, so truncation is measured
+                       directly, not inferred.
+  → composite_long (mean tail MRR) + quality_per_gb_long + max_clean_bucket_tok
 
 Why: a benchmark on short docs can crown a small-window model (granite:30m) that
 then truncates real long documents. This battery makes window fit a first-class,
@@ -39,6 +43,7 @@ Usage:
 """
 
 import json
+import re
 import sys
 import time
 import requests
@@ -75,6 +80,53 @@ TIMEOUT  = 120
 BATCH    = 64
 TOPK     = 5     # recall@K
 NDCG_K   = 10
+CTX_CAP  = 32768  # ≥ 2× the deepest long-doc bucket; bounds GGUF KV pre-allocation for huge native windows
+
+# ── Per-model window ──────────────────────────────────────────────────────────────
+# Every call runs at the window the RUNTIME enforces, with num_batch = num_ctx. Two
+# traps, both measured:
+#  · Ollama's num_batch default (2048) silently truncates non-causal encoders at 2048
+#    tokens even when num_ctx is larger (2026-09-23: bge-m3 / arctic-embed2).
+#  · /api/show's context_length is NOT the enforced window. embeddinggemma-2 reports
+#    262144 but Ollama 0.40.1 enforces 8192. With no options, a longer input is cut to
+#    2048 tokens; with num_ctx/num_batch 8192 it reads 8192; with 32768 it can 400
+#    ("cannot be truncated further") — 2026-10-08.
+# So the window is read from the runtime's own 413 ("input length (X tokens) exceeds
+# the context length (N)"), and every long doc is first sent with truncate:false to
+# learn its full token count, giving an exact cut count instead of an inference.
+
+_CTX_ERR = re.compile(r"input length \((\d+) tokens\) exceeds the context length \((\d+)\)")
+_PROBE_TEXT = "the quick brown fox jumps over the lazy dog. " * 20000   # ~200k tokens
+_OPTS: dict = {}
+
+def _native_ctx(model):
+    try:
+        info = requests.post(f"{ollama_host}/api/show", json={"model": model}, timeout=10).json()
+    except Exception:
+        return None
+    vals = [v for k, v in (info.get("model_info") or {}).items()
+            if k.endswith(".context_length") and isinstance(v, int)]
+    return max(vals) if vals else None
+
+def _enforced_ctx(model):
+    """The window the runtime actually enforces, from its own over-length error; None if it
+    accepted ~200k tokens or answered with something unparseable."""
+    try:
+        r = requests.post(f"{ollama_host}/api/embed",
+                          json={"model": model, "input": _PROBE_TEXT, "truncate": False}, timeout=TIMEOUT)
+    except requests.exceptions.RequestException:
+        return None
+    m = _CTX_ERR.search(r.text) if r.status_code >= 400 else None
+    return int(m.group(2)) if m else None
+
+def embed_options(model):
+    if model not in _OPTS:
+        native, enforced = _native_ctx(model), _enforced_ctx(model)
+        window = enforced or native
+        ctx = min(window, CTX_CAP) if window else CTX_CAP
+        _OPTS[model] = {"native_ctx": native, "enforced_ctx": enforced,
+                        "options": {"num_ctx": ctx, "num_batch": ctx}}
+    return _OPTS[model]
 
 # ── Model selection (by capability) ──────────────────────────────────────────────
 
@@ -104,7 +156,8 @@ def embed_texts(model, texts):
         chunk = texts[i:i + BATCH]
         t0 = time.time()
         r = requests.post(f"{ollama_host}/api/embed",
-                          json={"model": model, "input": chunk}, timeout=TIMEOUT)
+                          json={"model": model, "input": chunk,
+                                "options": embed_options(model)["options"]}, timeout=TIMEOUT)
         wall += time.time() - t0
         r.raise_for_status()
         emb = r.json().get("embeddings")
@@ -122,38 +175,67 @@ def _normalize(a):
 def _cos_matrix(a, b):
     return _normalize(a) @ _normalize(b).T
 
-# ── Window probe + truncation-safe single embed ───────────────────────────────────
-# These power the context-window dimension. Ollama hard-500s on inputs past a
-# model's window rather than silently truncating, so we detect the failure and
-# (for docs) halve-and-retry, recording the dropped chars as a visible fit penalty.
+# ── Truncation-safe single embed ──────────────────────────────────────────────────
+# Current Ollama truncates over-long input silently (truncate defaults to true) — the
+# measured `prompt_eval_count` is what reveals it. Older builds 500'd instead, so a
+# failed call still halves-and-retries, recording the dropped chars as a fit penalty.
 
 def _embed_raw(model, text):
-    """Single-text embed. Returns the vector (list) or None on 5xx/empty/timeout."""
+    """Single-text embed. Returns (vector list, tokens read) or (None, None) on error."""
     try:
         r = requests.post(f"{ollama_host}/api/embed",
-                          json={"model": model, "input": text}, timeout=TIMEOUT)
+                          json={"model": model, "input": text,
+                                "options": embed_options(model)["options"]}, timeout=TIMEOUT)
     except requests.exceptions.RequestException:
-        return None
+        return None, None
     if r.status_code >= 400:
-        return None
-    emb = r.json().get("embeddings")
+        return None, None
+    body = r.json()
+    emb = body.get("embeddings")
     if not emb or not emb[0]:
-        return None
-    return emb[0]
+        return None, None
+    return emb[0], body.get("prompt_eval_count")
+
+def over_window(model, text):
+    """(over, full_tokens): does `text` exceed the window the run uses, and its full token
+    count when the runtime says. Sent with truncate:false; the runtime rejects at
+    tokenization, so it's cheap.
+
+    The rejection has three shapes on Ollama 0.40.1 (2026-10-08): GGUF / llama.cpp runner →
+    400 "the input length exceeds the context length" (no numbers); MLX with options → the
+    same 400; MLX without options → 413 "the input length (X tokens) exceeds the context
+    length (N)". So any "exceeds the context length" is a cut, and the count comes from one
+    option-free retry (MLX only — GGUF cuts report full_tokens None)."""
+    def _post(with_opts):
+        body = {"model": model, "input": text, "truncate": False}
+        if with_opts:
+            body["options"] = embed_options(model)["options"]
+        try:
+            return requests.post(f"{ollama_host}/api/embed", json=body, timeout=TIMEOUT)
+        except requests.exceptions.RequestException:
+            return None
+    r = _post(True)
+    if r is None or r.status_code < 400 or "exceeds the context length" not in r.text:
+        return False, None
+    m = _CTX_ERR.search(r.text)
+    if not m:
+        r2 = _post(False)
+        m = _CTX_ERR.search(r2.text) if r2 is not None and r2.status_code >= 400 else None
+    return True, (int(m.group(1)) if m else None)
 
 def embed_one_safe(model, text, floor=256):
     """Embed one text; on failure halve length until it fits or hits the floor.
-    Returns (np.ndarray[dim] or None, used_chars, dropped_chars, retries, ok)."""
+    Returns (np.ndarray[dim] or None, used_chars, dropped_chars, retries, ok, tokens_read)."""
     full = len(text)
     cur = text
     retries = 0
     while True:
-        v = _embed_raw(model, cur)
+        v, tok = _embed_raw(model, cur)
         if v is not None:
             used = len(cur)
-            return np.asarray(v, dtype=np.float32), used, full - used, retries, True
+            return np.asarray(v, dtype=np.float32), used, full - used, retries, True, tok
         if len(cur) <= floor:
-            return None, 0, full, retries, False
+            return None, 0, full, retries, False, None
         cur = cur[: max(floor, len(cur) // 2)]
         retries += 1
 
@@ -289,19 +371,28 @@ def score_retrieval_long(model):
     docs    = data["docs"]; queries = data["queries"]
     doc_ids = [d["id"] for d in docs]
 
+    eo  = embed_options(model)
+    ctx = eo["options"]["num_ctx"]
     raw, dropped_by, trunc_by, fail_by = [], defaultdict(int), defaultdict(int), defaultdict(int)
+    tokens_by, full_by, cut_by = defaultdict(list), defaultdict(list), defaultdict(int)
     retries_total = chars_dropped_total = 0
     wall = 0.0
     for d in docs:
         b = str(d["bucket_tok"])
+        over, full = over_window(model, d["text"])   # excluded from wall: a tokenization reject
         t0 = time.time()
-        v, _used, dropped, retries, ok = embed_one_safe(model, d["text"])
+        v, _used, dropped, retries, ok, tok = embed_one_safe(model, d["text"])
         wall += time.time() - t0
         retries_total += retries
         if dropped > 0:
             dropped_by[b] += dropped; trunc_by[b] += 1; chars_dropped_total += dropped
         if not ok:
             fail_by[b] += 1
+        if tok:
+            tokens_by[b].append(tok)
+        full_by[b].append(full if over else tok)
+        if over:
+            cut_by[b] += 1
         raw.append(v)
 
     dim = next((v.shape[0] for v in raw if v is not None), None)
@@ -338,17 +429,30 @@ def score_retrieval_long(model):
         a = agg[b]
         tm = _m(a["rr"]); hm = _m(a["h_rr"])
         tail_mrrs.append(tm); head_mrrs.append(hm)
+        toks = tokens_by.get(b)
         by_bucket[b] = {
             "tail_mrr": tm, "tail_recall@1": _m(a["r1"]), "tail_recall@5": _m(a["r5"]),
             "head_mrr": hm, "head_recall@1": _m(a["h_r1"]), "head_recall@5": _m(a["h_r5"]),
             "n_pool": len(bucket_pool[b]),
+            # tokens the model actually READ per doc vs the doc's full length (its own
+            # tokenizer); None when the runtime doesn't report prompt_eval_count
+            "tokens_read": int(np.median(toks)) if toks else None,
+            "tokens_full": int(np.median([t for t in full_by[b] if t])) if any(full_by.get(b) or []) else None,
+            "cut": cut_by.get(b, 0),   # docs over the enforced window (runtime 413 with truncate:false)
         }
 
-    # DEEPEST bucket where the tail is still retained (not contiguous: the shortest
-    # bucket can dip because its prominent head nugget crowds the tail in a tiny doc;
-    # truncated buckets read near the 1/pool baseline, well below threshold).
-    clean = max((int(b) for b, v in by_bucket.items()
-                 if v["tail_mrr"] >= CLEAN_THRESHOLD), default=0)
+    # v3: walk UP from the shortest bucket, tolerating ONE dip (Battery G's rule). The
+    # shortest bucket can dip because its prominent head nugget crowds the tail in a tiny
+    # doc; v1/v2 took the max over passing buckets instead, which let a model report a
+    # deep clean bucket over failing shallow ones (qwen3-embedding:4b, 2026-09-23).
+    clean, dipped = 0, False
+    for b in sorted(by_bucket, key=int):
+        if by_bucket[b]["tail_mrr"] >= CLEAN_THRESHOLD:
+            clean = int(b)
+        elif dipped:
+            break
+        else:
+            dipped = True
 
     head_mrr_mean = round(float(np.mean(head_mrrs)), 4) if head_mrrs else 0.0
     head_mrr_sd   = round(float(np.std(head_mrrs)), 4) if head_mrrs else 0.0
@@ -361,6 +465,10 @@ def score_retrieval_long(model):
         "head_mrr": head_mrr_mean, "head_mrr_sd": head_mrr_sd,
         "reliable": reliable,
         "max_clean_bucket_tok": clean,
+        "clean_tokens_read": (by_bucket.get(str(clean)) or {}).get("tokens_read"),
+        "native_ctx": eo["native_ctx"], "num_ctx": ctx,
+        "enforced_ctx": eo["enforced_ctx"],
+        "total_cut": sum(cut_by.values()),
         "total_chars_dropped": chars_dropped_total,
         "total_truncated_docs": sum(trunc_by.values()),
         "total_failed_docs": sum(fail_by.values()),
@@ -457,7 +565,8 @@ def run_model(model_name, disk_gb):
         rl, _wl = score_retrieval_long(model_name)
         result["tests"]["retrieval_long"] = rl
         print(json.dumps({k: rl[k] for k in
-              ("tail_mrr", "head_mrr", "reliable", "max_clean_bucket_tok")}), flush=True)
+              ("tail_mrr", "head_mrr", "reliable", "max_clean_bucket_tok", "clean_tokens_read",
+               "native_ctx", "enforced_ctx", "total_cut")}), flush=True)
     except Exception as e:
         print(f"\n  ✗ FAILED: {e}", flush=True)
         result["errors"].append(str(e))
@@ -531,17 +640,22 @@ def write_summary(results, out_md):
     # Context-window / long-document fit
     lines += [
         "", "## Verdict — long-document fit (context window)", "",
-        "v2: **within-bucket scoring** (each query ranks against same-length docs only) "
-        "to neutralise length bias. Tail columns = **MRR** for a fact in the **last "
+        "v3 (2026-10-08): buckets are **real tokens** (5.2 chars/token, measured), up to "
+        "16,384; every call runs at the window the runtime enforces (read from its own "
+        "over-length error, not /api/show), with num_ctx = num_batch; "
+        "**Read** = tokens the model actually read at its clean bucket (its own tokenizer). "
+        "**Within-bucket scoring** (each query ranks against same-length docs only) "
+        "neutralises length bias. Tail columns = **MRR** for a fact in the **last "
         "sentence** of a doc at that bucket; they crater once the doc exceeds the "
-        "model's window. Clean = deepest bucket with tail MRR ≥ 0.5. `comp(long)` = "
+        "model's window. Clean = walk up from the shortest bucket while tail MRR ≥ 0.5, "
+        "tolerating one dip. `comp(long)` = "
         "mean tail MRR. **Valid?** = head-control gate (head MRR ≥ 0.6, stdev < 0.25): "
         "if ✗, the model clusters by length not content and the tail numbers are "
         "**confounded, not a real window** — shown in (parens), excluded from ranking.", "",
     ]
     bhdr = " ".join(f"| {b}t" for b in buckets)
-    lines.append(f"| Model | Valid? | Clean | **Comp(long)** | HeadMRR {bhdr} |")
-    lines.append("|-------|:----:|------:|------:|------:|" + "".join(["---:|" for _ in buckets]))
+    lines.append(f"| Model | Valid? | Clean | Read | **Comp(long)** | HeadMRR {bhdr} |")
+    lines.append("|-------|:----:|------:|------:|------:|------:|" + "".join(["---:|" for _ in buckets]))
     # reliable models first (by comp_long), then confounded
     def _sortkey(r):
         rl = r.get("tests", {}).get("retrieval_long") or {}
@@ -549,7 +663,7 @@ def write_summary(results, out_md):
     for r in sorted(ok, key=_sortkey, reverse=True):
         rl = r.get("tests", {}).get("retrieval_long")
         if not rl:
-            lines.append(f"| `{r['model']}` | — | — | — | — {' '.join('| —' for _ in buckets)} |")
+            lines.append(f"| `{r['model']}` | — | — | — | — | — {' '.join('| —' for _ in buckets)} |")
             continue
         rel = rl.get("reliable")
         cells = []
@@ -557,9 +671,11 @@ def write_summary(results, out_md):
             v = rl["by_bucket"].get(str(b))
             cells.append(f"| {v['tail_mrr']}" if v else "| —")
         cl  = f"{rl['max_clean_bucket_tok']}t" if rel else "—"
+        rd  = rl.get("clean_tokens_read")
+        rd  = f"{rd}" if rel and rd else "—"
         cmp = f"**{rl['tail_mrr']}**" if rel else f"({rl['tail_mrr']})"
         lines.append(
-            f"| `{r['model']}` | {'✅' if rel else '⚠️'} | {cl} | {cmp} "
+            f"| `{r['model']}` | {'✅' if rel else '⚠️'} | {cl} | {rd} | {cmp} "
             f"| {rl['head_mrr']} {' '.join(cells)} |")
 
     lines += ["", "_Tail columns are **MRR** on a last-sentence fact (within-bucket pool "

@@ -11,15 +11,24 @@ embedding eval showed this directly — granite-embedding:30m "won" the battery,
 then truncated 66% of a real 191-memory corpus (dropping 78k chars) because its
 512-token window never engaged on the toy-length benchmark corpus.
 
-This corpus fixes that. Docs are generated at five length buckets (nominal token
-counts realised at ~4 chars/token):
+This corpus fixes that. Docs are generated at seven length buckets. v3 (2026-10-08)
+sizes them in REAL tokens: CHARS_PER_TOKEN = 5.2 is measured on this filler with the
+Gemma tokenizer (granite's WordPiece reads ~5.0). v1/v2 assumed 4, so the old "4096"
+bucket held only ~2.9–3.8k real tokens and nothing ever reached 8k. embedding.py now
+also records each model's own token count per doc (`prompt_eval_count`), so the label
+is a target and the measured number is the truth.
 
     bucket(tok)   chars     who truncates here
-    256           1024      nobody
-    512           2048      granite (~1400-char cap)
-    1024          4096      granite
-    2048          8192      granite; embeddinggemma borderline (2048-tok window)
-    4096         16384      granite, embeddinggemma; only 8k+-token models hold
+    256           1331      nobody
+    512           2662      granite (512-tok window)
+    1024          5325      granite
+    2048         10650      granite; embeddinggemma:300m borderline (2048-tok window)
+    4096         21299      granite, embeddinggemma:300m
+    8192         42598      only 8k+ windows hold (embeddinggemma-2 trained at 8,192)
+    16384        85197      beyond any trained window in the fleet — degradation probe
+
+8192/16384 were added for the MemoryCentral question (2026-10-08): 11% of its corpus
+exceeds 2,048 tokens and its longest memory is ~62k chars (~12k tokens).
 
 Each doc carries TWO unique, DISTINCTIVE, OFF-TOPIC nuggets — a unique city
 (head) and a unique codename (tail). Distinctive real-world entities (not opaque
@@ -46,7 +55,8 @@ Per bucket, per model:
     tail_recall craters once doc_len > the model's true window
 
 The gap (head_recall − tail_recall) is the truncation signature; embedding.py's
-window probe (max_input_chars) disambiguates "small window" from "weak model".
+per-doc token count (`prompt_eval_count`, `window_full`) disambiguates "small window"
+from "weak model": a doc that read exactly num_ctx tokens was cut.
 
 Deterministic, offline, reproducible — no network, no Math.random equivalent.
 
@@ -58,11 +68,11 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 
-# Nominal token buckets → char length at ~4 chars/token. The window probe in
-# embedding.py reports each model's *true* char cap, so this approximation is
-# transparent rather than load-bearing.
-CHARS_PER_TOKEN = 4
-BUCKETS_TOK = [256, 512, 1024, 2048, 4096]
+# Token buckets → char length at the MEASURED ratio of this filler (Gemma tokenizer,
+# 2026-10-08: 5.1–5.7 chars/token across buckets). embedding.py records each model's
+# real per-doc token count, so a tokenizer that reads denser or sparser is visible.
+CHARS_PER_TOKEN = 5.2
+BUCKETS_TOK = [256, 512, 1024, 2048, 4096, 8192, 16384]
 
 DOCS_PER_BUCKET = 20        # within-bucket pool size → recall@1 baseline 0.05
 TAIL_RESERVE_CHARS = 200    # space kept at the end for the tail nugget sentence
@@ -78,7 +88,7 @@ NAMES = [
     "Summit", "Talon",
 ]
 
-# Five themes, one per bucket, each with six distinct fictional system names so a
+# Seven themes, one per bucket, each with six distinct fictional system names so a
 # query resolves to exactly one doc. Filler is theme-flavoured generic prose,
 # cycled deterministically to pad to the target length.
 THEMES = [
@@ -175,6 +185,44 @@ THEMES = [
             "The evaluation used self-contained synthetic facts to avoid leakage from pretraining.",
             "Results held across two random seeds, suggesting the effect was not init luck.",
             "The note recommends gating model choice on window fit before optimising for speed.",
+        ],
+    },
+    {
+        "key": "meeting",
+        "label": "planning meeting notes",
+        "names": ["Apex", "Beacon", "Citadel", "Delta", "Echo", "Forge"],
+        "filler": [
+            "The group reviewed last sprint's carry-over items before taking on new work.",
+            "Two tickets were split because their estimates exceeded a single sprint.",
+            "The release train stays on its fortnightly cadence with a code freeze on Thursday.",
+            "Ownership of the flaky integration suite moved to the platform team.",
+            "Capacity is reduced next week because of a public holiday and planned leave.",
+            "The dependency upgrade was deferred until the vendor publishes a patched build.",
+            "Action items are tracked on the board and reviewed at the start of each meeting.",
+            "A spike was approved to evaluate the cost of moving the job scheduler.",
+            "Design review for the new permissions model is booked for the following Tuesday.",
+            "The team agreed to cap work in progress at three items per engineer.",
+            "Open questions were parked in the decision log with a named owner and a due date.",
+            "The retrospective surfaced slow code review turnaround as the main bottleneck.",
+        ],
+    },
+    {
+        "key": "changelog",
+        "label": "release changelog",
+        "names": ["Glacier", "Horizon", "Ion", "Juno", "Kestrel", "Lumen"],
+        "filler": [
+            "Fixed a race condition that could duplicate notifications under heavy load.",
+            "Improved startup time by deferring plugin discovery until first use.",
+            "The command-line client now honours the proxy settings from the environment.",
+            "Deprecated the legacy export endpoint; it will be removed in the next major version.",
+            "Upgraded the bundled TLS component to address a reported certificate parsing issue.",
+            "Search results now paginate consistently when filters are applied.",
+            "Reduced memory use of the indexer by streaming records instead of buffering them.",
+            "Added a dry-run flag to the schema upgrade command that prints planned changes only.",
+            "Corrected time-zone handling for recurring tasks that cross a daylight-saving boundary.",
+            "The settings page validates input before saving and reports errors inline.",
+            "Log lines now include a request identifier to simplify tracing across services.",
+            "Removed an unused configuration option that had no effect since the previous release.",
         ],
     },
 ]
@@ -307,7 +355,7 @@ def main():
     docs, queries = [], []
     gidx = 0
     for b_tok in BUCKETS_TOK:
-        target_chars = b_tok * CHARS_PER_TOKEN
+        target_chars = round(b_tok * CHARS_PER_TOKEN)
         theme = THEMES[BUCKETS_TOK.index(b_tok)]
         for j in range(DOCS_PER_BUCKET):
             name = NAMES[j]
@@ -333,6 +381,7 @@ def main():
 
     out = {
         "source": "seed (curated, length-stratified)",
+        "version": 3,
         "chars_per_token": CHARS_PER_TOKEN,
         "buckets_tok": BUCKETS_TOK,
         "docs_per_bucket": DOCS_PER_BUCKET,
@@ -348,7 +397,7 @@ def main():
     print("  bucket(tok)  target_chars  actual_char_range")
     for b in BUCKETS_TOK:
         sizes = [d["actual_chars"] for d in docs if d["bucket_tok"] == b]
-        print(f"    {b:<11} {b*CHARS_PER_TOKEN:<13} {min(sizes)}–{max(sizes)}")
+        print(f"    {b:<11} {round(b*CHARS_PER_TOKEN):<13} {min(sizes)}–{max(sizes)}")
 
 
 if __name__ == "__main__":
