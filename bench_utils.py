@@ -409,9 +409,77 @@ def _os_hardware() -> tuple[dict, dict]:
     return osd, hw
 
 
+# ── Installed models (Ollama ≥ 0.40 "local compat GGUF migration") ───────────
+# On first LOAD of a GGUF that Ollama routes to its llama.cpp runner, 0.40 converts it: the tag's
+# manifest gains a manifest-list + one child per runner (ggml, llamacpp), the converted weights are
+# written as a SECOND blob, and a rollback shadow tag `llamacpp:<child digest>` is created
+# (ollama/ollama#18830). /api/tags then returns the tag TWICE (one row per runner, different
+# digests) plus the shadow — and neither row carries the pre-migration digest, so every resume
+# check would read a migrated model as `weights-changed`. installed_models() is the one reader all
+# /api/tags consumers go through: shadow rows dropped, one row per name (non-llamacpp preferred),
+# and a migrated tag reports its pre-migration digest.
+_MIGRATION_LAYERS = ("application/vnd.ollama.manifest.list.v2+json",
+                     "application/vnd.docker.distribution.manifest.v2+json")
+
+
+def _is_local_host(host: str) -> bool:
+    return bool(re.match(r"https?://(localhost|127\.0\.0\.1)(:|/|$)", host))
+
+
+def _manifest_path(name: str) -> Path:
+    base = Path(os.environ.get("OLLAMA_MODELS") or Path.home() / ".ollama" / "models") / "manifests"
+    repo, _, tag = name.rpartition(":") if ":" in name.split("/")[-1] else (name, "", "latest")
+    parts = repo.split("/")
+    if len(parts) == 1:
+        parts = ["registry.ollama.ai", "library", *parts]
+    elif "." not in parts[0]:
+        parts = ["registry.ollama.ai", *parts]
+    return base.joinpath(*parts, tag)
+
+
+def _premigration_digest(name: str) -> str | None:
+    """The digest a migrated tag had before 0.40 rewrote its manifest: the migration only APPENDS
+    the list/child layers and `runner`/`format` fields, so stripping them and re-serialising compact
+    reproduces it (verified 2026-10-08 on all 4 migrated tags vs runs.env history). None if the tag
+    isn't migrated or its manifest isn't readable. If a future migration doesn't reproduce, resume
+    falls back to weights-changed — the same as having no fix."""
+    try:
+        m = json.loads(_manifest_path(name).read_text())
+    except Exception:
+        return None
+    if "runner" not in m:
+        return None
+    legacy = {"schemaVersion": m["schemaVersion"], "mediaType": m["mediaType"], "config": m["config"],
+              "layers": [l for l in m["layers"] if l.get("mediaType") not in _MIGRATION_LAYERS]}
+    return hashlib.sha256(json.dumps(legacy, separators=(",", ":")).encode()).hexdigest()
+
+
+def installed_models(host: str, timeout: int = 10) -> list[dict]:
+    """/api/tags rows, one per installed model — see the block comment above. Raises on HTTP errors.
+    Rows are the API's own dicts; a migrated local tag's `digest` is replaced by its pre-migration
+    digest (the converted-runner digest is kept as `runner_digest`)."""
+    r = requests.get(f"{host}/api/tags", timeout=timeout)
+    r.raise_for_status()
+    rows: dict[str, dict] = {}
+    for m in r.json().get("models", []):
+        name = m.get("name") or m.get("model")
+        runner = (m.get("details") or {}).get("runner")
+        if not name or (runner == "llamacpp" and name == f"llamacpp:{m.get('digest')}"):
+            continue  # migration rollback shadow — not a model anyone pulled
+        prev = rows.get(name)
+        if prev is None or (prev.get("details") or {}).get("runner") == "llamacpp":
+            rows[name] = m
+    local = _is_local_host(host)
+    for name, m in rows.items():
+        legacy = _premigration_digest(name) if local else None
+        if legacy:
+            m["runner_digest"], m["digest"] = m.get("digest"), legacy
+    return list(rows.values())
+
+
 def _model_digests(host: str, only: set | None = None) -> dict:
     try:
-        tags = requests.get(f"{host}/api/tags", timeout=10).json().get("models", [])
+        tags = installed_models(host)
     except Exception:
         return {}
     out = {}
@@ -679,12 +747,12 @@ def preflight(models, host):
     models: iterable of (name, ...) tuples — only the first element (name) is used.
     """
     try:
-        tags = requests.get(f"{host}/api/tags", timeout=10).json()
+        tags = installed_models(host)
     except Exception:
         return  # Ollama unreachable — let the benchmark surface the error
 
     installed = {}
-    for m in tags.get("models", []):
+    for m in tags:
         name = m["name"]
         try:
             show = requests.post(f"{host}/api/show", json={"name": name}, timeout=10).json()

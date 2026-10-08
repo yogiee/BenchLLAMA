@@ -48,7 +48,7 @@ from pathlib import Path
 REPO     = Path(__file__).parent
 REGISTRY = REPO / "models.json"
 sys.path.insert(0, str(REPO))
-from bench_utils import normalize_declared, fetch_declared   # noqa: E402
+from bench_utils import normalize_declared, fetch_declared, installed_models   # noqa: E402
 
 # Architectures that report "completion" but are not general-purpose chat models.
 # glmocr: OCR-specialist (glm-ocr); fails all chat benchmarks despite the flag,
@@ -96,10 +96,8 @@ def classify(caps, arch):
 
 def fetch_installed(host):
     """Returns {name: {"disk_gb": float, "capabilities": set, "arch": str}}"""
-    r = requests.get(f"{host}/api/tags", timeout=10)
-    r.raise_for_status()
     result = {}
-    for m in r.json().get("models", []):
+    for m in installed_models(host):   # 0.40 migration shadows/duplicate rows filtered (bench_utils)
         name    = m["name"]
         disk_gb = round(m.get("size", 0) / 1e9, 1)
         try:

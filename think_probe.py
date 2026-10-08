@@ -51,7 +51,8 @@ import requests
 
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO))
-from bench_utils import (THINK_LEVERS, THINK_PROBE_NUM_PREDICT, lever_value, THINK_OMIT, fetch_declared)
+from bench_utils import (THINK_LEVERS, THINK_PROBE_NUM_PREDICT, lever_value, THINK_OMIT, fetch_declared,
+                         installed_models)
 
 PROBE_FILE = REPO / "suites" / "think" / "probe.json"
 REGISTRY   = REPO / "models.json"
@@ -397,7 +398,7 @@ def ollama_meta():
         ver = None
     digests = {}
     try:
-        for m in requests.get(f"{ollama_host}/api/tags", timeout=10).json().get("models", []):
+        for m in installed_models(ollama_host):
             digests[m.get("name") or m.get("model")] = (m.get("digest") or "")[:16]
     except Exception:
         pass
