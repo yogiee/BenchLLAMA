@@ -26,6 +26,7 @@ REPO        = Path(__file__).parent
 MODELS_FILE = REPO / "models.json"
 PAUSE_SECS  = 10        # between pipeline phases
 MAX_LOG     = 4000      # capped in-memory log buffer (for late-joining web clients)
+_NO_SLEEP_GUARD = {"Update Registry", "Export Rankings"}   # instant runs — no sleep-guard warning
 
 COMMANDS = {"standard", "ladder", "aptitude", "batteries", "all", "update", "vision", "embedding", "longctx", "imagegen", "confab", "export", "probe"}
 
@@ -370,6 +371,20 @@ class Orchestrator:
                            f"benchllama {env.get('benchllama_commit')}")
             except Exception:
                 pass
+        # Sleep guard (CLAUDE.md Working Rule #4): warn, never block. Runs are long and unattended,
+        # and a mid-run sleep kills them — so say so at the start, in the console AND the dashboard
+        # log, before the user walks away. Skipped for instant bookkeeping runs.
+        if any(label not in _NO_SLEEP_GUARD for label, *_ in self._phases_spec):
+            try:
+                import sleep_guard
+                armed = sleep_guard.guarded()
+            except Exception:
+                armed = None
+            if armed is False:
+                self._emit("  ⚠  sleep guard: NOT ARMED. Nothing holds this Mac awake for the whole run "
+                           "(arm Amphetamine / Vorssaint / …; `python3 sleep_guard.py` shows the holders)")
+            elif armed:
+                self._emit("  sleep guard: armed")
         self._on_event()
 
         for i, (label, argv, role_filter) in enumerate(self._phases_spec):
@@ -574,9 +589,9 @@ def _style_frame(line: str) -> str:
         return paint(line, "cyan")
     if " ▶ " in line:                               # phase title
         return paint(line, "bold", "cyan")
-    if "■" in line:                                 # stop / abort
+    if "■" in line or s.startswith("⚠  sleep guard"):  # stop / abort / unarmed sleep guard
         return paint(line, "bold", "yellow")
-    if s.startswith(("env:", "Run log →")) or (s.startswith("run ") and "status=" in s):
+    if s.startswith(("env:", "Run log →", "sleep guard:")) or (s.startswith("run ") and "status=" in s):
         return paint(line, "dim")                   # provenance + timings block
     return line
 

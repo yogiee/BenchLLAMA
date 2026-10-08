@@ -67,9 +67,11 @@ pip install requests aiohttp beautifulsoup4 html5lib tinycss2
 
 ### Unattended full run
 
-Check first whether something already holds the machine awake — `pmset -g assertions | grep
-PreventUserIdleSystemSleep` (a `1` means Amphetamine or similar has it, and `caffeinate` is
-redundant). Otherwise, for a whole-fleet run you leave going (e.g. overnight), wrap it in
+Check first whether something already holds the machine awake: `python3 sleep_guard.py` (exit 0 =
+an untimed keep-awake hold exists, e.g. Amphetamine or Vorssaint, and `caffeinate` is redundant). It
+reads `pmset -g assertions` but ignores holders that won't last the run: timed holds, and system daemons
+like powerd's "while display is on". A bare `grep PreventUserIdleSystemSleep` is almost always `1`
+because of those. Otherwise, for a whole-fleet run you leave going (e.g. overnight), wrap it in
 `caffeinate -ims` (idle-system + disk + AC; **not** `-d`/`-u`, which pin the display on) so macOS
 doesn't sleep and kill it, and chain `export.py` to publish rankings when it finishes:
 
