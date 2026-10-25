@@ -7,7 +7,9 @@ determinant diff: **re-run a (model, battery) result iff something that changes 
 Otherwise the stored score IS the current score → skip + carry forward (via the DB; export reads latest()).
 
 Triggers (run iff ANY fired):
-  1. weights   — the model's /api/tags digest differs from when it was scored          (HARD, always on)
+  1. weights   — the model's CONTENT differs from when it was scored                   (HARD, always on)
+                 (bench_utils.model_content_id since 2026-10-25; older rows → /api/tags digest, then an
+                 attested alias from `--attest`)
   2. test      — a battery-relevant dataset hash OR the battery REVISION changed        (HARD, always on)
   3. runtime   — Ollama major.minor bumped (patch ignored: 0.31.1→0.31.2 = no)         (OPT-IN via --check-runtime)
 
@@ -27,7 +29,7 @@ Every battery script calls `targets(...)`; `should_run(...)` is the single-model
 uses `targets()` in dry mode to print the per-model split + reason.
 """
 
-from bench_utils import BATTERY_REVISION, BATTERY_DATASETS
+from bench_utils import BATTERY_REVISION, BATTERY_DATASETS, same_model
 
 
 def runtime_material(old: str | None, new: str | None) -> bool:
@@ -88,14 +90,20 @@ def should_run(battery: str, model: str, cur_env: dict, prev_env: dict | None, *
     if not prev_env:
         return True, "no-provenance"
 
-    # 1. weights (local only — cloud has no /api/tags digest; provider updates silently)
+    # 1. weights (local only — cloud has no /api/tags digest; provider updates silently). Keyed on the
+    # model's CONTENT (bench_utils.model_content_id), not its manifest digest, which Ollama ≥ 0.40
+    # rewrites without touching the weights; see same_model for the fallback on older rows.
+    new_manifest = False
     if not is_cloud:
         cur_dig = (cur_env.get("model_digests") or {}).get(model)
         prev_dig = (prev_env.get("model_digests") or {}).get(model)
-        if cur_dig and prev_dig and cur_dig != prev_dig:
+        same = same_model(model, prev_dig, (prev_env.get("model_content") or {}).get(model),
+                          cur_dig, (cur_env.get("model_content") or {}).get(model))
+        if same is False:
             return True, "weights-changed"
-        if cur_dig and not prev_dig:
+        if same is None and cur_dig:
             return True, "weights (no prior digest)"
+        new_manifest = bool(same and cur_dig and prev_dig and cur_dig != prev_dig)
 
     # 2. test
     tc = _test_changed(battery, prev_env, cur_env)
@@ -111,7 +119,7 @@ def should_run(battery: str, model: str, cur_env: dict, prev_env: dict | None, *
     if check_runtime and runtime_material(prev_env.get("ollama_version"), cur_env.get("ollama_version")):
         return True, f"ollama {prev_env.get('ollama_version')}→{cur_env.get('ollama_version')}"
 
-    return False, "up-to-date"
+    return False, "up-to-date (new manifest, same content)" if new_manifest else "up-to-date"
 
 
 def targets(battery: str, universe: list[str], cur_env: dict, *,
@@ -292,8 +300,63 @@ def report(batteries=None, host="http://localhost:11434", check_runtime=False) -
     return "\n".join(out)
 
 
+# ── Content attestation: `python3 resume.py --attest MODEL --note "evidence"` ───────────────────
+# For a model scored before runs.env carried `model_content` whose manifest Ollama has since rewritten:
+# it reads `weights-changed` although the content is the same. A human checks the blobs and attests;
+# this records every prior manifest digest of MODEL (all batteries + its think profile) as an alias of
+# the CURRENT content id. Reversible with --unattest MODEL; --aliases lists what is recorded.
+
+def _prior_digests(model: str) -> set:
+    import json as _json
+    from pathlib import Path as _Path
+    import results_db
+    out = set()
+    for b in results_db.BATTERIES + ("confab", "image"):
+        for a in ("direct", "think"):
+            d = ((results_db.latest_env_by_model(b, arm=a).get(model) or {}).get("model_digests") or {}).get(model)
+            if d:
+                out.add(d[:16])
+    reg = _json.loads((_Path(__file__).parent / "models.json").read_text())
+    for m in reg:
+        if m["name"] == model and (m.get("think_profile") or {}).get("digest"):
+            out.add(m["think_profile"]["digest"][:16])
+    return out
+
+
+def attest(model: str, note: str, host: str = "http://localhost:11434") -> str:
+    import results_db
+    from bench_utils import model_content_id, _model_digests
+    cid = model_content_id(model, host)
+    if not cid:
+        return f"✗ {model}: no readable local manifest — nothing attested"
+    cur = _model_digests(host, {model}).get(model)
+    olds = sorted(d for d in _prior_digests(model) if d != cur)
+    if not olds:
+        return f"· {model}: every prior digest equals the current one ({cur}) — nothing to attest"
+    for d in olds:
+        results_db.record_content_alias(model, d, cid, note)
+    return f"✓ {model}: {', '.join(olds)} → content {cid} (current manifest {cur}) — {note}"
+
+
 if __name__ == "__main__":
     import sys as _sys
+    def _arg(flag):
+        i = _sys.argv.index(flag)
+        return _sys.argv[i + 1] if i + 1 < len(_sys.argv) else None
+    if "--attest" in _sys.argv:
+        if "--note" not in _sys.argv or not _arg("--note"):
+            _sys.exit("--attest needs --note \"<the evidence that the content is unchanged>\"")
+        print(attest(_arg("--attest"), _arg("--note")))
+        _sys.exit(0)
+    if "--unattest" in _sys.argv:
+        import results_db
+        print(f"removed {results_db.delete_content_aliases(_arg('--unattest'))} alias(es) for {_arg('--unattest')}")
+        _sys.exit(0)
+    if "--aliases" in _sys.argv:
+        import results_db
+        for a in results_db.content_aliases():
+            print(f"{a['model']:32} {a['manifest_digest']} → {a['content_id']}  {a['recorded_at']}  {a['note']}")
+        _sys.exit(0)
     bats = None
     if "--battery" in _sys.argv:
         i = _sys.argv.index("--battery")

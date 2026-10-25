@@ -65,7 +65,7 @@ def strip_ansi(text: str) -> str:
 # ── Run provenance / environment fingerprint ──────────────────────────────────
 # Captured ONCE at run start so a score delta can be attributed to the right cause:
 # runtime (ollama_version) · harness (benchllama_commit) · model weights
-# (model_digests) · test set (datasets) · OS/Metal (os/hardware). Best-effort, per
+# (model_digests; model_content = the resume key) · test set (datasets) · OS/Metal (os/hardware). Best-effort, per
 # field — NEVER raises into the caller (a probe failure must not break a benchmark).
 
 # Scoring-relevant inputs whose content silently changes results — hashed so a
@@ -491,6 +491,72 @@ def _model_digests(host: str, only: set | None = None) -> dict:
     return out
 
 
+# ── Model CONTENT identity (2026-10-25) ───────────────────────────────────────
+# On Ollama ≥ 0.40 the manifest digest is not a stable model identity: Ollama rewrites manifests without
+# changing a byte of weights, and the pre-migration reconstruction above only covers the 10-08 shape.
+# Seen 2026-10-25 after a pull-all sweep on 10-17: gpt-oss:20b switched to the registry's llamacpp build
+# (its weights blob byte-identical to our own 10-08 conversion) and the original GGUF child was pruned,
+# so the old digest can't be rebuilt from anything on disk. embeddinggemma-2:270m was re-wrapped in a
+# two-runner manifest list with all 422 MLX tensors unchanged. Both read as `weights-changed`.
+# content_id = hash of the layers that decide a result: the weights AND the files that shape behaviour
+# (template / params / system / messages, MLX tokenizer + config json), so an upstream template fix still
+# re-runs. Excluded: license, the config blob, and nested child/list manifests (migrations rewrite those).
+_CONTENT_MEDIA = frozenset("application/vnd.ollama.image." + t for t in
+                           ("model", "tensor", "projector", "adapter", "template", "params", "system",
+                            "messages", "json"))
+
+
+def model_content_id(name: str, host: str = "http://localhost:11434") -> str | None:
+    """16-char content identity of an installed tag (see the block comment above). None for a remote
+    host, an unreadable manifest, or a manifest with no content layers."""
+    if not _is_local_host(host):
+        return None
+    try:
+        m = json.loads(_manifest_path(name).read_bytes())
+    except Exception:
+        return None
+    digs = sorted(l["digest"] for l in m.get("layers") or []
+                  if l.get("mediaType") in _CONTENT_MEDIA and l.get("digest"))
+    return hashlib.sha256("\n".join(digs).encode()).hexdigest()[:16] if digs else None
+
+
+def _model_contents(host: str, only: set | None = None) -> dict:
+    try:
+        names = [m.get("name") or m.get("model") for m in installed_models(host)]
+    except Exception:
+        return {}
+    out = {}
+    for name in names:
+        if name and (only is None or name in only):
+            cid = model_content_id(name, host)
+            if cid:
+                out[name] = cid
+    return out
+
+
+def same_model(model: str, prev_digest: str | None, prev_content: str | None,
+               cur_digest: str | None, cur_content: str | None) -> bool | None:
+    """Is the installed model the one that was scored? True / False, or None = no prior identity.
+    Content ids decide when both sides have one. Rows scored before content ids existed fall back to
+    the manifest digest, and then to an attested alias (results_db.content_alias, written only by
+    `resume.py --attest`), which maps an old manifest digest to the content it is known to hold."""
+    if prev_content and cur_content:
+        return prev_content == cur_content
+    if prev_digest and cur_digest and prev_digest[:16] == cur_digest[:16]:
+        return True
+    if prev_digest and cur_content:
+        try:
+            import results_db
+            alias = results_db.content_alias(model, prev_digest[:16])
+        except Exception:
+            alias = None
+        if alias:
+            return alias == cur_content
+    if prev_digest and cur_digest:
+        return False
+    return None
+
+
 def _live_battery_revisions() -> dict:
     """BATTERY_REVISION read FRESH from this file's source, not from the caller's import-time copy.
 
@@ -534,6 +600,7 @@ def env_fingerprint(host: str = "http://localhost:11434", models=None) -> dict:
         "battery_revisions": _live_battery_revisions(),  # content-addressed resume: test-code identity
         "think_profiles":    think_profiles_fingerprint(models),  # v3: per-model operating point (docs/think-spec.md)
         "model_digests":     _model_digests(host, set(models) if models else None),
+        "model_content":     _model_contents(host, set(models) if models else None),  # resume key (2026-10-25)
         "os":                osd,
         "hardware":          hw,
         "captured_at":       time.strftime("%Y-%m-%dT%H:%M:%S"),

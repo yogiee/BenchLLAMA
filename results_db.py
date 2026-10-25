@@ -66,6 +66,16 @@ CREATE TABLE IF NOT EXISTS phase_timings (
     n_models    INTEGER,           -- active models this phase touched
     PRIMARY KEY (run_id, idx)
 );
+-- Attested manifest-digest → content-id equivalences (resume.py --attest, 2026-10-25). Only for rows
+-- scored before runs.env carried `model_content`, whose manifest Ollama has since rewritten.
+CREATE TABLE IF NOT EXISTS content_aliases (
+    model           TEXT NOT NULL,
+    manifest_digest TEXT NOT NULL,     -- 16-char prefix, as stored in runs.env model_digests
+    content_id      TEXT NOT NULL,     -- bench_utils.model_content_id at attestation time
+    note            TEXT,              -- the evidence, in words
+    recorded_at     TEXT NOT NULL,
+    PRIMARY KEY (model, manifest_digest)
+);
 CREATE INDEX IF NOT EXISTS idx_results_model_battery ON results(model, battery);
 CREATE INDEX IF NOT EXISTS idx_results_battery       ON results(battery);
 """
@@ -209,6 +219,35 @@ def latest_env_by_model(battery: str, path: Path = DB_PATH, arm: str | None = No
         except Exception:
             out[row["model"]] = {}
     return out
+
+
+def content_alias(model: str, manifest_digest: str, path: Path = DB_PATH) -> str | None:
+    """The content id an old manifest digest was attested to hold (bench_utils.same_model), or None."""
+    with _conn(path) as c:
+        row = c.execute("SELECT content_id FROM content_aliases WHERE model=? AND manifest_digest=?",
+                        (model, manifest_digest[:16])).fetchone()
+    return row["content_id"] if row else None
+
+
+def record_content_alias(model: str, manifest_digest: str, content_id: str, note: str,
+                         path: Path = DB_PATH) -> None:
+    with _conn(path) as c:
+        c.execute("INSERT INTO content_aliases(model,manifest_digest,content_id,note,recorded_at) "
+                  "VALUES(?,?,?,?,?) ON CONFLICT(model,manifest_digest) DO UPDATE SET "
+                  "  content_id=excluded.content_id, note=excluded.note, recorded_at=excluded.recorded_at",
+                  (model, manifest_digest[:16], content_id, note, _now()))
+
+
+def content_aliases(model: str | None = None, path: Path = DB_PATH) -> list:
+    with _conn(path) as c:
+        rows = c.execute("SELECT * FROM content_aliases" + (" WHERE model=?" if model else "")
+                         + " ORDER BY model, recorded_at", (model,) if model else ()).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_content_aliases(model: str, path: Path = DB_PATH) -> int:
+    with _conn(path) as c:
+        return c.execute("DELETE FROM content_aliases WHERE model=?", (model,)).rowcount
 
 
 def history(model: str, battery: str, path: Path = DB_PATH) -> list:

@@ -43,7 +43,22 @@ and carry it forward. This is content-addressed, not time-addressed.
 
 Per `(model, battery)`, compare the CURRENT environment to the one stored with the model's latest DB result:
 
-1. **Model weights changed** — `/api/tags` digest differs. **Hard trigger, always on.** The biggest signal.
+1. **Model weights changed** — the model's **content** differs. **Hard trigger, always on.** The biggest signal.
+   _2026-10-25: keyed on `bench_utils.model_content_id`, not the `/api/tags` digest._ This is a hash of the
+   layer digests that decide a result: weights (`model`/`tensor`/`projector`/`adapter`) plus `template`,
+   `params`, `system`, `messages` and MLX `json` configs. It excludes license, config blob and nested
+   child/list manifests. It's recorded as `runs.env → model_content`.
+   - **Why:** Ollama ≥ 0.40 rewrites manifests without touching weights. After a pull-all on 10-17,
+     `gpt-oss:20b` became the registry's llamacpp build, with a weights blob byte-identical to our 10-08
+     local conversion. `embeddinggemma-2:270m` was re-wrapped as a manifest list with unchanged tensors.
+     Both read `weights-changed`.
+   - **Rows scored before content ids existed** fall back to the manifest digest. If that differs, they
+     fall back to an **attested alias**: `python3 resume.py --attest MODEL --note "<evidence>"` maps every
+     prior manifest digest of MODEL to its current content id (table `content_aliases`). It's
+     `--unattest` to undo and `--aliases` to list.
+   - A human attests after checking the blobs; nothing infers equivalence automatically. The report
+     prints `up-to-date (new manifest, same content)` whenever a moved manifest was matched.
+   - `think_probe.is_stale` uses the same rule (`bench_utils.same_model`), and profiles now store `content`.
 2. **Test/harness changed** — the battery's inputs changed. **Hard trigger, always on.**
    - **test data** — the battery's dataset/prompt sha256 (already in provenance `datasets`) differs; and
    - **grader/composition** — a per-battery **`REVISION`** integer constant (see below) differs.

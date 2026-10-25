@@ -52,7 +52,7 @@ import requests
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO))
 from bench_utils import (THINK_LEVERS, THINK_PROBE_NUM_PREDICT, lever_value, THINK_OMIT, fetch_declared,
-                         installed_models)
+                         installed_models, model_content_id, same_model)
 
 PROBE_FILE = REPO / "suites" / "think" / "probe.json"
 REGISTRY   = REPO / "models.json"
@@ -312,7 +312,8 @@ def derive(model, per_lever: dict, meta) -> dict:
     declared = meta.get("declared")
     return {
         "probed_at": meta.get("probed_at") or time.strftime("%Y-%m-%d"),
-        "ollama": meta.get("ollama"), "digest": meta.get("digest"), "probe_sha": meta.get("probe_sha"),
+        "ollama": meta.get("ollama"), "digest": meta.get("digest"), "content": meta.get("content"),
+        "probe_sha": meta.get("probe_sha"),
         "derive_version": DERIVE_VERSION,
         "declared": declared,          # /api/show `thinking` at probe time (normalized); None = undeclared
         "levers_probed": sorted(per_lever, key=_lever_order),
@@ -381,7 +382,7 @@ def rederive(prof: dict) -> dict | None:
                                "starved": r["st"], "done_reason": r["done"], "wall": r["wall"],
                                "leaked": r.get("lk", False)}
                          for iid, r in res.items()}
-    meta = {k: prof.get(k) for k in ("probed_at", "ollama", "digest", "probe_sha", "declared")}
+    meta = {k: prof.get(k) for k in ("probed_at", "ollama", "digest", "content", "probe_sha", "declared")}
     return derive(None, per_lever, meta)
 
 
@@ -396,26 +397,30 @@ def ollama_meta():
         ver = requests.get(f"{ollama_host}/api/version", timeout=10).json().get("version")
     except Exception:
         ver = None
-    digests = {}
+    digests, contents = {}, {}
     try:
         for m in installed_models(ollama_host):
-            digests[m.get("name") or m.get("model")] = (m.get("digest") or "")[:16]
+            name = m.get("name") or m.get("model")
+            digests[name] = (m.get("digest") or "")[:16]
+            contents[name] = model_content_id(name, ollama_host)
     except Exception:
         pass
-    return ver, digests
+    return ver, digests, contents
 
 
 _NOT_CHECKED = object()
 
 
-def is_stale(prof, digest, ver, psha, declared=_NOT_CHECKED) -> str | None:
+def is_stale(prof, digest, ver, psha, declared=_NOT_CHECKED, *, model=None, content=None) -> str | None:
     if not prof:
         return "no profile"
     if prof.get("derive_version") != DERIVE_VERSION and not prof.get("raw"):
         return "derivation changed (no raw to re-derive from)"
     if prof.get("probe_sha") != psha:
         return "probe set changed"
-    if digest and prof.get("digest") != digest:
+    # Same rule as resume (bench_utils.same_model): content id first, so a manifest Ollama rewrote without
+    # touching the weights doesn't re-probe. `model`/`content` omitted → plain digest comparison.
+    if digest and same_model(model, prof.get("digest"), prof.get("content"), digest, content) is not True:
         return "weights changed"
     a, b = str(prof.get("ollama") or ""), str(ver or "")
     if a.split(".")[:2] != b.split(".")[:2]:
@@ -456,7 +461,7 @@ if __name__ == "__main__":
     items, options = spec["items"], dict(spec.get("options") or {})
     options.setdefault("num_predict", THINK_PROBE_NUM_PREDICT)
     registry = json.loads(REGISTRY.read_text())
-    ver, digests = ollama_meta()
+    ver, digests, contents = ollama_meta()
     psha = probe_sha()
 
     # Offline re-derivation: a derivation change (DERIVE_VERSION) or --rederive rebuilds every stored
@@ -488,7 +493,8 @@ if __name__ == "__main__":
             _declared[name] = fetch_declared(ollama_host, name)
         return _declared[name]
     def stale(m):
-        return is_stale(m.get("think_profile"), digests.get(m["name"]), ver, psha, declared_of(m["name"]))
+        return is_stale(m.get("think_profile"), digests.get(m["name"]), ver, psha, declared_of(m["name"]),
+                        model=m["name"], content=contents.get(m["name"]))
     if model_args:
         by = {m["name"]: m for m in registry}
         targets = []
@@ -576,8 +582,8 @@ if __name__ == "__main__":
             print(f"    {lever:7s} think_tok≤{max(r['think_tokens_est'] for r in res.values()):5d}  {marks}"
                   + ("  ⚠ leaked <think> into content" if any(r.get("leaked") for r in res.values()) else ""), flush=True)
         unload(name)
-        prof = derive(name, per_lever, {"ollama": ver, "digest": digests.get(name), "probe_sha": psha,
-                                        "declared": declared})
+        prof = derive(name, per_lever, {"ollama": ver, "digest": digests.get(name), "content": contents.get(name),
+                                        "probe_sha": psha, "declared": declared})
         if not prof["class_stats"]:
             print(f"  ✗ {name}: every lever was rejected or errored — no profile written", flush=True)
             continue
