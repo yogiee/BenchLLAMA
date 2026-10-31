@@ -66,9 +66,11 @@ class BenchState:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def load_all_models() -> list[ModelState]:
+def load_all_models(key: Optional[str] = None) -> list[ModelState]:
     try:
-        raw = sort_registry(json.loads(MODELS_FILE.read_text()))   # display order = env BENCH_SORT (size)
+        # display order = the run's sort key (the same BENCH_SORT the phase subprocesses run in);
+        # None → this process's env BENCH_SORT (size)
+        raw = sort_registry(json.loads(MODELS_FILE.read_text()), key)
         return [ModelState(name=m["name"], role=m.get("role") or None,
                            caps=m.get("capabilities", []),
                            extended_roles=m.get("extended_roles", []),
@@ -295,6 +297,10 @@ class Orchestrator:
                  on_log: Optional[Callable[[str], None]] = None,
                  on_event: Optional[Callable[[], None]] = None):
         self._phases_spec = phases_spec
+        # The run's model selection (`--models …`), recovered from the phase argv so the console and
+        # web paths agree. Empty = the whole eligible fleet. Without it a scoped run listed every
+        # registered model of the phase's role as "in this phase" (and counted them in phase_timings).
+        self.selection = next((sel for _, argv, _ in phases_spec if (sel := _model_selection(argv[1:]))), [])
         self.state = BenchState()
         self.state.phases = [PhaseState(ph[0], role_filter=ph[2]) for ph in phases_spec]
         self._proc: Optional[asyncio.subprocess.Process] = None
@@ -311,10 +317,14 @@ class Orchestrator:
         return {
             "phases": [{"label": p.label, "status": p.status} for p in s.phases],
             "current_phase": s.current_phase, "phase_label": cur,
+            # a scoped run shows ONLY its selection; selected models outside this phase stay
+            # (active=False → the client's faded "not in this phase" group)
             "models": [{"name": m.name, "role": m.role, "tps": m.tps,
                         "status": m.status, "active": m.active, "cloud": m.cloud,
                         "caps": m.caps, "extended_roles": m.extended_roles,
-                        "disk_gb": m.disk_gb} for m in s.models],
+                        "disk_gb": m.disk_gb} for m in s.models
+                       if not self.selection or m.name in self.selection],
+            "selection": self.selection,
             "last_tps": s.last_tps, "elapsed": int(time.time() - s.start_time),
             "finished": s.finished, "pause_remaining": s.pause_remaining,
             "aborted": s.aborted, "pass_label": s.pass_label,
@@ -359,7 +369,7 @@ class Orchestrator:
         except Exception:
             pass
         t_run_start = time.time()
-        self.state.models = load_all_models()
+        self.state.models = load_all_models(self.sort)
         # Run-provenance fingerprint (runtime / harness commit / model digests / dataset
         # hashes / OS+hw) captured once at run start → runs.env, surfaced by export.py.
         if self._db is not None:
@@ -453,6 +463,8 @@ class Orchestrator:
                 ms.active = filt[4:] in (ms.caps or [])
             else:
                 ms.active = (ms.role == filt)
+            if self.selection and ms.name not in self.selection:
+                ms.active = False
             if ms.active:
                 ms.status = "pending"
 

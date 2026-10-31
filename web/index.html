@@ -678,13 +678,18 @@ function renderStatus(models, lastTps){
 
   // Candidates = models this phase actually touches (orchestrator role/cap filter); the rest are
   // shown faded at the bottom so the column still answers "is my model in this run at all?".
+  // A scoped run's snapshot already holds only the selected models (orchestrator `selection`).
   const cand = all.filter(m=>m.active), inelig = all.filter(m=>!m.active);
   const rank = new Map();
   EXEC_ORDER.forEach((n,i)=>rank.set(n,i));
   SEEN_ORDER.forEach((n,i)=>{ if(!rank.has(n)) rank.set(n, 500+i); });   // observed, if no plan was printed
+  // Neither yet → snapshot position: it is sorted by the run's own sort key, the order every battery
+  // walks its roster in, so a not-yet-reached model still lands where it will run (not A–Z).
+  const pos = new Map(all.map((m,i)=>[m.name, i]));
   const ordered = cand.sort((a,b)=>{
-    const ia = rank.has(a.name)?rank.get(a.name):9999, ib = rank.has(b.name)?rank.get(b.name):9999;
-    return ia-ib || (a.name||"").localeCompare(b.name||"");
+    const ia = rank.has(a.name)?rank.get(a.name):1000+pos.get(a.name),
+          ib = rank.has(b.name)?rank.get(b.name):1000+pos.get(b.name);
+    return ia-ib;
   });
 
   const isDone = m => ["done","skip","error"].includes(m.status);
