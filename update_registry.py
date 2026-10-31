@@ -81,6 +81,11 @@ def classify(caps, arch):
     specialist, not a chat model, so it lands in the vision lane.
     """
     caps = set(caps)
+    # Decision models (nimble / tev1 / d3 / clef) answer only on /v1/systemone — /api/chat 400s
+    # ("does not support chat"). d3 and clef ALSO report `vision` (0.40.13), which would route them
+    # into Battery V, so this check must come before the vision branch. No runner yet → skip.
+    if "decision" in caps:
+        return None
     if "completion" in caps and arch not in EXCLUDED_ARCHITECTURES:
         return "completion"
     if "completion" in caps and arch in EXCLUDED_ARCHITECTURES:
@@ -259,9 +264,10 @@ if __name__ == "__main__":
         print()
 
     if pruned:
-        print("Pruned (no longer installed — removed from registry):")
+        print("Pruned (removed from registry):")
         for name in pruned:
-            print(f"  - {name}")
+            why = "installed, but no gradeable lane (see Skipped)" if name in skipped else "no longer installed"
+            print(f"  - {name:<32}  {why}")
         print("  (pass --keep-missing to retain absent entries instead)")
         print()
 
