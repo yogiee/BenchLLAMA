@@ -126,9 +126,10 @@ def load_registry():
 
 def is_cloud(name):
     """Ollama cloud endpoints use the -cloud / :cloud naming convention. Flagging them sets
-    quality-only handling downstream (export nulls tps/disk/Q-GB, excluded from speed lists) and
-    exempts them from the pruner. Newer Ollama lists cloud models in /api/tags, so they flow
-    through the normal builder — detect by name so the flag is set automatically, not by hand."""
+    quality-only handling downstream (export nulls tps/disk/Q-GB, excluded from speed lists).
+    Newer Ollama lists cloud models in /api/tags, so they flow through the normal builder — and
+    prune like any other model once removed from the library — detect by name so the flag is set
+    automatically, not by hand."""
     return name.endswith("-cloud") or name.endswith(":cloud")
 
 
@@ -218,9 +219,10 @@ if __name__ == "__main__":
 
     for name, entry in existing.items():
         if name not in laned:
-            # Cloud endpoints never appear in /api/tags (they're not local) — keep them
-            # regardless, else every sync would prune a registered cloud model.
-            if keep_missing or entry.get("cloud"):
+            # Cloud models used to be exempt here, back when they never appeared in /api/tags.
+            # Ollama now lists them while they're in the library, so an absent cloud entry was
+            # removed on purpose and prunes like any other (2026-11-01). --keep-missing retains it.
+            if keep_missing:
                 missing.append(name)
                 if entry.get("cloud") and "thinking" in (entry.get("capabilities") or []):
                     entry = dict(entry)                  # cloud endpoints still answer /api/show
