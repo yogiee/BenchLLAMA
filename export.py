@@ -74,8 +74,9 @@ def _load_operating(prefix):
 
     Why (2026-09-26): `_load(arm=None)` returns the NEWEST row whatever its arm, so a deliberate
     direct-arm measurement silently replaced a model's operating-point result in the export — and in
-    resume, which then carried it forward as if it were the operating point. Used for F-elastic only
-    for now (user decision 09-26; the other batteries still read newest-of-any-arm)."""
+    resume, which then carried it forward as if it were the operating point. F-elastic since 09-26;
+    E, F, G and H since 11-01 (user decision, after a think-off diagnostic of lfm3:1.7b's D/F/H became
+    its newest rows). Vision, embedding and Battery A hold one arm per model and still read newest."""
     bat = _PREFIX_BATTERY[prefix]
     import results_db
     from bench_utils import resolve_arm, think_lever
@@ -258,13 +259,13 @@ def build():
     registry = json.load((REPO / "models.json").open())
     std, std_f = _load("benchmark", arm="direct")
     std_t, std_t_f = _load("benchmark", arm="think")   # v3: the think arm, when a model has one
-    coding, cod_f = _load("aptitude_e")
-    cons, cons_f = _load("aptitude_f")
+    coding, _cod_other, cod_f = _load_operating("aptitude_e")
+    cons, _cons_other, cons_f = _load_operating("aptitude_f")
     elastic, elastic_other, ela_f = _load_operating("aptitude_f_elastic")
     vision, vis_f = _load("vision")
     emb, emb_f = _load("embedding")
-    lctx, lctx_f = _load("longctx")
-    honesty, hon_f = _load("confab")
+    lctx, _lctx_other, lctx_f = _load_operating("longctx")
+    honesty, _hon_other, hon_f = _load_operating("confab")
     routing, rout_f = _load("aptitude_a")
 
     models, sources = [], {k: v for k, v in {

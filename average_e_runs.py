@@ -88,7 +88,7 @@ def _resume_targets(explicit_models, force, bat):
     tr, sk, why = resume.resolve("F-elastic" if bat == "F-ELASTIC" else bat, universe,
                                  cloud=cloud, force=force,
                                  explicit_models=explicit_models or None,
-                                 check_runtime="--check-runtime" in sys.argv, arm="auto")   # v3
+                                 check_runtime="--check-runtime" in sys.argv, arm=_arg("--arm", "auto"))   # v3
     if explicit_models:
         line = f"explicit --models ({len(tr)})"
     elif force:
@@ -134,6 +134,8 @@ def run_passes(n, model_args):
             cmd.append("--fast")
         if model_args:
             cmd += ["--models", *model_args]
+        if _arg("--arm"):                    # forced arm (e.g. a think-off re-measure); default = auto
+            cmd += ["--arm", _arg("--arm")]
         subprocess.run(cmd, check=True)
 
         d = date.today().isoformat()

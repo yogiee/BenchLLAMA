@@ -77,6 +77,7 @@ def _build_extra(payload: dict) -> list:
     return extra
 
 
+_ARMED = ("B", "C", "D", "E", "F", "longctx", "confab", "F-elastic")   # batteries that honour --arm
 _MULTIPASS = ("E", "F", "F-elastic")   # batteries average_e_runs.py drives; only these accept --runs
 _NAME_RE = re.compile(r"^[\w./:-]+$")   # model names in payloads → subprocess argv (no shell, but keep tight)
 
@@ -84,9 +85,9 @@ _NAME_RE = re.compile(r"^[\w./:-]+$")   # model names in payloads → subprocess
 def _units_phases(payload: dict):
     """Translate the multi-select payload → (phases, err).
 
-    Payload: {units: [...], params: {runs, grade, judge}, fast, force, models}.
+    Payload: {units: [...], params: {runs, grade, judge, arm}, fast, force, models}.
     Common flags go to every benchmark phase; params are routed only to the units
-    that understand them (runs → E/F/F-elastic, grade/judge → confab)."""
+    that understand them (runs → E/F/F-elastic, grade/judge → confab, arm → every operating-point battery)."""
     units = payload.get("units") or []
     if not isinstance(units, list) or not units:
         return None, "no units selected"
@@ -134,6 +135,14 @@ def _units_phases(payload: dict):
         confab += ["--judge", judge]
     if confab:
         unit_extra["confab"] = confab
+    arm = p.get("arm")
+    if arm:
+        # Force every operating-point battery onto one arm (e.g. a think-off re-measure). The standard
+        # suite already runs both arms, and Battery A + the ladder are pinned to direct.
+        if arm not in ("direct", "think"):
+            return None, "bad arm"
+        for u in _ARMED:
+            unit_extra.setdefault(u, []).extend(["--arm", arm])
     return O.build_phases_units(units, common, unit_extra), None
 
 

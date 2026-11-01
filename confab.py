@@ -83,6 +83,7 @@ force       = _flag("--force")
 smoke       = _flag("--smoke")
 judge_only  = _flag("--judge-only")
 reprofile_f = _flag("--reprofile")   # offline re-derive of honesty_balanced/profile (no model calls)
+restamp_f   = _flag("--restamp")     # offline backfill of the arm stamp from the _raw files (no model calls)
 calibrate   = _flag("--calibrate")
 grade_mode  = (_arg("--grade", "llm") or "llm").lower()          # llm (default, glm-4.7:cloud judge) | signal
 ollama_host = _arg("--ollama", "http://localhost:11434")
@@ -282,6 +283,8 @@ def generate(model_name, role, disk_gb, items):
 
 # ── Phase 2: judge the saved replies (batched by judge model in llm mode) ──────
 
+_STAMP_KEYS = ("arm", "think_lever", "think_class", "think_allowance")
+
 def judge_all(raw_results, items, mode, primary_judge):
     """Grade every candidate's saved replies → per-item verdicts + summary. In llm mode, batch by judge
     model (load one judge, grade all candidates routed to it, unload) so only one large model is ever
@@ -318,7 +321,10 @@ def judge_all(raw_results, items, mode, primary_judge):
                              "verdict": v["verdict"], "reason": v.get("reason", ""),
                              "grader": v.get("grader", "")})
         judge_used = sorted({p["grader"] for p in per_item if p["grader"] not in ("signal", "")}) or ["signal"]
+        # Carry generate()'s arm stamp: without it record_all() fell back to arm='direct' for every row,
+        # so a think-arm run and a forced think-off run were indistinguishable in the DB (bug 09-24).
         out.append({"model": r["model"], "role": r.get("role"), "disk_gb": r.get("disk_gb"),
+                    **{k: r[k] for k in _STAMP_KEYS if k in r},
                     "items": per_item, "summary": summarize(per_item, mode, judge_used)})
     return out
 
@@ -426,6 +432,53 @@ def reprofile(dry_run=False):
     return changes
 
 
+def restamp(dry_run=False):
+    """Backfill the arm stamp on stored Battery H rows from the per-day `_raw.json` files.
+
+    Until 11-01, judge_all() dropped generate()'s arm stamp, so every H row was written as
+    arm='direct' with no lever, even when the model generated at its think operating point. The raw
+    files kept the stamp (from 09-01 on), so it is recoverable without re-measuring. A row is matched
+    to `confab_<run date>_raw.json` by model. It is SKIPPED when there is no raw file or stamp, or when
+    the model has more than one H row that day (the raw file holds only the last run's stamp).
+    Rows are UPDATEd on their ORIGINAL run_id; verdicts and scores are not touched."""
+    import sqlite3, results_db
+    con = sqlite3.connect(results_db.DB_PATH)
+    rows = con.execute("SELECT run_id, model, arm, metrics FROM results WHERE battery='confab'").fetchall()
+    per_day = {}
+    for run_id, model, _a, _m in rows:
+        per_day[(model, run_id[:10])] = per_day.get((model, run_id[:10]), 0) + 1
+    raws, changes, skipped = {}, [], {"no raw/stamp": 0, "same-day re-run": 0}
+    for run_id, model, arm, metrics in rows:
+        day = run_id[:10]
+        if day not in raws:
+            f = RESULTS_DIR / f"confab_{day}_raw.json"
+            raws[day] = {r["model"]: r for r in json.loads(f.read_text())} if f.exists() else {}
+        stamp = {k: raws[day].get(model, {}).get(k) for k in _STAMP_KEYS}
+        if not stamp["arm"]:
+            skipped["no raw/stamp"] += 1; continue
+        if per_day[(model, day)] > 1:
+            skipped["same-day re-run"] += 1; continue
+        rec = json.loads(metrics) if metrics else {}
+        if arm == stamp["arm"] and all(rec.get(k) == v for k, v in stamp.items()):
+            continue
+        rec.update(stamp)
+        changes.append((run_id, model, arm, stamp, json.dumps(rec)))
+
+    print(f"Battery H restamp — {len(changes)} row(s) to fix · skipped {skipped}", flush=True)
+    for run_id, model, arm, stamp, _b in sorted(changes):
+        print(f"  {run_id}  {model[:40]:<40} {arm} → {stamp['arm']} ({stamp['think_lever']})", flush=True)
+    if dry_run:
+        print("\n  --dry-run: nothing written.", flush=True)
+        con.close(); return changes
+    with con:
+        for run_id, model, arm, stamp, blob in changes:
+            con.execute("UPDATE results SET arm=?, metrics=? WHERE run_id=? AND model=? AND battery='confab' AND arm=?",
+                        (stamp["arm"], blob, run_id, model, arm))
+    con.close()
+    print(f"\n  → updated {len(changes)} DB row(s) in place (run_id, scores preserved)", flush=True)
+    return changes
+
+
 # ── Markdown ──────────────────────────────────────────────────────────────────
 
 def write_summary(results, out_md, mode, judge_used, fast=False):
@@ -524,6 +577,9 @@ if __name__ == "__main__":
     # ── --reprofile: re-derive the honesty axis from stored rows; no model calls, no cooldown ──
     if reprofile_f:
         reprofile(dry_run=_flag("--dry-run"))
+        sys.exit(0)
+    if restamp_f:
+        restamp(dry_run=_flag("--dry-run"))
         sys.exit(0)
 
     # ── --judge-only: re-grade persisted P1, skip generation ──
