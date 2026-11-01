@@ -12,13 +12,14 @@
 #   --allow-control  → let LAN clients control too   ·   --host 127.0.0.1 → localhost-only   ·   --port N
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
-args=(); console=0; report=0; battery=""; check_runtime=0
+args=(); console=0; report=0; battery=""; check_runtime=0; think=0
 prev=""
 for a in "$@"; do
   if [ "$a" = "--console" ]; then console=1;
   elif [ "$a" = "--resume-report" ]; then report=1;
   else args+=("$a"); fi
   if [ "$a" = "--check-runtime" ]; then check_runtime=1; fi
+  if [ "$a" = "--think" ]; then think=1; fi
   if [ "$prev" = "--battery" ]; then battery="$a"; fi
   prev="$a"
 done
@@ -28,6 +29,7 @@ if [ "$report" -eq 1 ]; then
   rflags=()
   [ -n "$battery" ] && rflags+=(--battery "$battery")
   [ "$check_runtime" -eq 1 ] && rflags+=(--check-runtime)
+  [ "$think" -eq 1 ] && rflags+=(--think)          # preview a thinking run (batteries at the operating point)
   exec python3 "$DIR/resume.py" "${rflags[@]}"
 fi
 

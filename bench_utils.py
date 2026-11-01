@@ -252,18 +252,34 @@ def think_profile(model: str):
     return think_profiles().get(model)
 
 
+def think_enabled(argv=None) -> bool:
+    """Is THINKING opted in for this run? `--think` (argv) or env BENCH_THINK=1|true|on.
+    2026-11-01 (user decision): thinking is OPTIONAL and OFF by default — the think arm made runs far
+    longer than needed, and several models score worse with it (Qwen3.5's levels all mean full think,
+    expense_split dropped at think for 4 models on 09-26). A run with and a run without `--think` store
+    their rows under different arms, so the two are directly comparable."""
+    argv = sys.argv if argv is None else argv
+    if "--think" in argv:
+        return True
+    return (os.environ.get("BENCH_THINK") or "").strip().lower() in ("1", "true", "on", "yes")
+
+
 def requested_arm(default: str = "auto", argv=None) -> str:
     """Which arm this INVOCATION measures: `--arm direct|think|auto` (argv) > env BENCH_ARM > default.
       direct — every model at its direct (no-thinking) arm (the standard suite's first pass; ctx ladder; Battery A)
       think — every model that HAS an operating point at its think arm; the rest are skipped
-      auto  — each model at its operating point if it has one, else fast (the batteries)"""
+      auto  — each model at its operating point if it has one, else direct (the batteries)
+    A default of `auto` only stands when thinking is opted in (`--think`, see think_enabled); otherwise it
+    resolves to `direct`, so the batteries run without thinking unless the run asks for it."""
     argv = sys.argv if argv is None else argv
     if "--arm" in argv:
         i = argv.index("--arm")
         if i + 1 < len(argv) and argv[i + 1] in THINK_ARMS + ("auto",):
             return argv[i + 1]
     env = (os.environ.get("BENCH_ARM") or "").strip().lower()
-    return env if env in THINK_ARMS + ("auto",) else default
+    if env in THINK_ARMS + ("auto",):
+        return env
+    return "direct" if default == "auto" and not think_enabled(argv) else default
 
 
 def resolve_arm(model: str, requested: str = "auto"):

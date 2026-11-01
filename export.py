@@ -39,8 +39,10 @@ PUBLISH = Path.home() / ".config" / "ollama-consumers" / "benchllama-rankings.js
 SCHEMA = 1
 HOST_PROFILE = "M1 Max 32GB"
 PROTOCOL = {"num_ctx": 16384, "protocol_version": 3,
-            "think": "per-model arm — see models[*].think (docs/think-spec.md); standard = direct arm, "
-                     "standard_think = think arm, batteries at the operating point"}
+            "think": "OPTIONAL (2026-11-01): runs are no-thinking unless opted in with --think. standard = "
+                     "direct arm, standard_think = think arm; each battery sub-block's headline is its "
+                     "direct-arm row (`arm`), with the think-arm row beside it under `think` when measured. "
+                     "See models[*].think (docs/think-spec.md)"}
 
 # F-elastic ranking: hard-adherence at/above this counts as SATURATED — within that tier models are
 # ordered by per-turn cost, not by adherence (see elastic_key). Policy, not test content.
@@ -68,35 +70,43 @@ _PREFIX_BATTERY = {
 
 
 def _load_operating(prefix):
-    """(main, other, source) — one row per model at its OPERATING-POINT arm (`think` if it has an
-    operating lever, else `direct` — bench_utils.resolve_arm(…, "auto"), the arm the batteries run
-    at), plus the other arm's row when one exists.
+    """(main, other, source) — one HEADLINE row per model plus the other arm's row when one exists.
 
-    Why (2026-09-26): `_load(arm=None)` returns the NEWEST row whatever its arm, so a deliberate
-    direct-arm measurement silently replaced a model's operating-point result in the export — and in
-    resume, which then carried it forward as if it were the operating point. F-elastic since 09-26;
-    E, F, G and H since 11-01 (user decision, after a think-off diagnostic of lfm3:1.7b's D/F/H became
-    its newest rows). Vision, embedding and Battery A hold one arm per model and still read newest."""
+    Headline = the DIRECT (no-thinking) arm since 2026-11-01: thinking is optional and off by default
+    (user decision), so the published number is the one a consumer gets calling the model plainly, and
+    the think arm rides beside it for comparison. A direct row wins only if it is v3-stamped
+    (`think_lever`) — a pre-v3 row ran under the old blanket think=False on an older battery set, so it
+    must not displace a current think-arm row; it still shows when it is the model's only row. A model
+    measured only at its think arm shows that row (its `arm` field says so) until a direct run lands.
+
+    History: 09-26 → 11-01 the headline was the OPERATING-POINT arm (`think` for any model with an
+    operating lever), because `_load(arm=None)` had let a newest-of-any-arm diagnostic replace it.
+    The two-arm split stays; only which arm leads changed. Vision, embedding and Battery A hold one arm
+    per model and still read newest."""
     bat = _PREFIX_BATTERY[prefix]
     import results_db
-    from bench_utils import resolve_arm, think_lever
+    from bench_utils import think_lever
     by = {a: results_db.latest(bat, arm=a) for a in ("direct", "think")}
     lever_now = lambda n, a: str(think_lever(n, a)).lower()
     main, other = {}, {}
     for name in set(by["direct"]) | set(by["think"]):
-        want = resolve_arm(name, "auto")
-        alt = "direct" if want == "think" else "think"
-        if name in by[want]:
-            main[name] = by[want][name]
-            # the other arm only from v3 rows measured at the lever that arm uses TODAY — a pre-v3 row
-            # (no `think_lever` stamp) ran under blanket think=False, and a row at a since-moved lever
-            # (lfm2.5:8b's 09-02 `low` row; its profile now has no operating lever) is not this arm's number
-            o = by[alt].get(name)
-            if o and "think_lever" in o and str(o["think_lever"]).lower() == lever_now(name, alt):
-                other[name] = o
-        else:                                   # never measured at its operating arm — show what exists
-            main[name] = by[alt][name]
-    return main, other, f"db:{bat}@operating"
+        d, th = by["direct"].get(name), by["think"].get(name)
+        if d and ("think_lever" in d or not th):
+            main[name], alt = d, "think"
+        else:
+            main[name], alt = th or d, "direct"
+        # the other arm only from v3 rows measured at the lever that arm uses TODAY — a pre-v3 row
+        # (no `think_lever` stamp) ran under blanket think=False, and a row at a since-moved lever
+        # (lfm2.5:8b's 09-02 `low` row; its profile later had no operating lever) is not this arm's number
+        o = by[alt].get(name)
+        if o and o is not main[name] and "think_lever" in o and str(o["think_lever"]).lower() == lever_now(name, alt):
+            other[name] = o
+    return main, other, f"db:{bat}@direct-first"
+
+
+def _arm_of(row) -> dict:
+    """The arm a published row was measured at (pre-v3 rows carry no stamp → legacy think=False)."""
+    return {"arm": row.get("arm") or "direct", "think_lever": row.get("think_lever", "false (pre-v3)")}
 
 
 def _load(prefix, arm=None):
@@ -259,13 +269,13 @@ def build():
     registry = json.load((REPO / "models.json").open())
     std, std_f = _load("benchmark", arm="direct")
     std_t, std_t_f = _load("benchmark", arm="think")   # v3: the think arm, when a model has one
-    coding, _cod_other, cod_f = _load_operating("aptitude_e")
-    cons, _cons_other, cons_f = _load_operating("aptitude_f")
+    coding, cod_other, cod_f = _load_operating("aptitude_e")
+    cons, cons_other, cons_f = _load_operating("aptitude_f")
     elastic, elastic_other, ela_f = _load_operating("aptitude_f_elastic")
     vision, vis_f = _load("vision")
     emb, emb_f = _load("embedding")
-    lctx, _lctx_other, lctx_f = _load_operating("longctx")
-    honesty, _hon_other, hon_f = _load_operating("confab")
+    lctx, lctx_other, lctx_f = _load_operating("longctx")
+    honesty, hon_other, hon_f = _load_operating("confab")
     routing, rout_f = _load("aptitude_a")
 
     models, sources = [], {k: v for k, v in {
@@ -307,16 +317,18 @@ def build():
         if tp:
             m["think"] = {k: tp.get(k) for k in ("operating_point", "operating_lever", "direct_lever", "off_supported",
                                                   "default_thinks", "always_on", "think_unbounded", "probed_at")}
-            m["think"]["battery_arm"] = "think" if tp.get("operating_lever") else "direct"
+            # batteries run direct unless a run opts into --think (2026-11-01); each sub-block's `arm` says
+            # which arm its headline actually came from
+            m["think"]["battery_arm"] = "direct"
         st = std_t.get(name)
         if st:
             m["standard_think"] = _standard_summary(st)
             m["standard_think"].update({"tps": None if is_cloud else st.get("avg_tps"),
                                         "wall_s": None if is_cloud else st.get("avg_wall_s"),
                                         "think_lever": st.get("think_lever")})
-        # the standard-suite view the batteries were measured under → what the worker key ranks on
-        m["standard_operating"] = (m.get("standard_think") if (m.get("think") or {}).get("battery_arm") == "think"
-                                   and m.get("standard_think") else m.get("standard"))
+        # the standard-suite view the worker key ranks on: the direct arm since 2026-11-01 (thinking is
+        # opt-in; the think arm stays published as standard_think for comparison)
+        m["standard_operating"] = m.get("standard")
         c = coding.get(name)
         if c and c.get("summary"):
             cs = c["summary"]
@@ -339,7 +351,14 @@ def build():
                 "runs": cs.get("n_runs", 1),
                 # quality-per-GB — lets the consumer trade quality vs footprint directly
                 "quality_per_gb": round(comp / disk, 4) if (comp is not None and disk) else None,
+                **_arm_of(c),
             }
+            o = cod_other.get(name)
+            if o and o.get("summary"):
+                os_ = o["summary"]
+                m["coding"][o.get("arm")] = {"composite": os_.get("composite"),
+                                             "e_hard": (os_.get("category_means") or {}).get("E-hard"),
+                                             "think_lever": o.get("think_lever")}
         fr = cons.get(name)
         if fr and fr.get("summary"):
             fs = fr["summary"]
@@ -348,13 +367,17 @@ def build():
             m["consistency"] = {"composite": fs.get("composite"),
                                  "composite_stdev": fs.get("composite_stdev"),
                                  "dims": fs.get("dims", {}),
-                                 "runs": fs.get("n_runs", 1)}
+                                 "runs": fs.get("n_runs", 1),
+                                 **_arm_of(fr)}
+            o = cons_other.get(name)
+            if o and o.get("summary"):
+                m["consistency"][o.get("arm")] = {"composite": o["summary"].get("composite"),
+                                                  "think_lever": o.get("think_lever")}
         pe = elastic.get(name)
         if pe and pe.get("summary"):
             # prompt-elasticity is a per-model SUB-BLOCK (like `consistency`); the `prompt_elasticity`
-            # ranking list (below) orders it. Headline = the OPERATING-POINT arm (see _load_operating);
-            # a measurement at the other arm rides along under `direct` / `think` so a consumer that
-            # calls the model with thinking off can read the number that applies to it.
+            # ranking list (below) orders it. Headline = the DIRECT arm (see _load_operating); a measurement
+            # at the other arm rides along under `direct` / `think`, and the ranking uses best_arm.
             m["prompt_elasticity"] = _elastic_block(pe, is_cloud)
             po = elastic_other.get(name)
             if po and po.get("summary"):
@@ -405,7 +428,13 @@ def build():
                 **({"subtask_recall": gs["subtask_recall"]} if gs.get("subtask_recall") else {}),
                 **({"band_thresholds": {"core": gs.get("core_threshold"), "hard": gs.get("hard_threshold")}}
                    if gs.get("core_threshold") is not None else {}),
+                **_arm_of(g),
             }
+            o = lctx_other.get(name)
+            if o and o.get("summary"):
+                m["long_context"][o.get("arm")] = {"composite": o["summary"].get("composite"),
+                                                   "clean_depth": o["summary"].get("clean_depth"),
+                                                   "think_lever": o.get("think_lever")}
         # Battery A is LANE-gated (only the router lane runs it), so a worker's A row is a fossil
         # from when it was last a router — results_db.latest() happily returns it years later. Publishing
         # that reads as a current capability: gpt-oss:120b-cloud carried classify_accuracy 0.0 from
@@ -440,7 +469,13 @@ def build():
                 "judge": hs.get("judge", []),
                 "by_category": hs.get("by_category", {}),
                 "_cutoffs": dict(H_PROFILE_CUTOFFS),
+                **_arm_of(h),
             }
+            o = hon_other.get(name)
+            if o and o.get("summary"):
+                m["honesty"][o.get("arm")] = {"honesty_balanced": o["summary"].get("honesty_balanced"),
+                                              "honesty_profile": o["summary"].get("honesty_profile"),
+                                              "think_lever": o.get("think_lever")}
         models.append(m)
 
     by_name = {m["name"]: m for m in models}

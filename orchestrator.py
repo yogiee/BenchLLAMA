@@ -130,20 +130,30 @@ BATTERY_LABELS = {
 _AVG3 = " · 3-run avg"
 
 
+def _split_think(extra) -> tuple[bool, list]:
+    """(think, extra without `--think`). Thinking is OPTIONAL and off by default (2026-11-01, user
+    decision): `--think` adds the standard suite's think-arm phase and is forwarded ONLY to the batteries
+    that honour it (the operating-point ones), so the other scripts never see a flag they don't parse."""
+    x = list(extra or [])
+    return "--think" in x, [a for a in x if a != "--think"]
+
+
 def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
     """Returns [(label, argv, role_filter), ...]"""
     apt = REPO / "aptitude.py"
-    x   = extra
+    think, x = _split_think(extra)
+    T   = ["--think"] if think else []           # appended to the operating-point batteries only
     role_in_extra = _arg(extra, "--role")
+    think_arm = lambda *a: ([("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *a), role_in_extra)]
+                            if think else [])
 
     # v3 (docs/think-spec.md): the think probe writes each model's lever profile; the standard suite runs a
-    # direct pass (speed lane, role gate) AND a think pass (models with an operating point).
+    # direct pass (speed lane, role gate) and — only with --think — a think pass (models with an operating point).
     probe = ("Think Probe", _cmd(REPO/"think_probe.py", *_probe_scope(x)), None)
     if cmd == "probe":
         return [("Think Probe", _cmd(REPO/"think_probe.py", *x), None)]
     if cmd == "standard":
-        return [probe, ("Standard Suite", _cmd(REPO/"runner.py", *x), role_in_extra),
-                ("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x), role_in_extra)]
+        return [probe, ("Standard Suite", _cmd(REPO/"runner.py", *x), role_in_extra), *think_arm(*x)]
     if cmd == "ladder":
         return [("ctx Ladder", _cmd(REPO/"ctx_ladder.py", *x), role_in_extra)]
     if cmd == "aptitude":
@@ -155,8 +165,8 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         if bat in AVG:
             drop = ("--battery", "E", "e", "F", "f", "F-elastic", "f-elastic", "F-ELASTIC")
             clean = [a for a in x if a not in drop]
-            return [(f"{BATTERY_LABELS.get(bat, 'Battery ' + bat)}{_AVG3}", _cmd(REPO/"average_e_runs.py", *AVG[bat], *clean), "cap:completion")]
-        return [("Aptitude", _cmd(apt, *x), role_in_extra)]
+            return [(f"{BATTERY_LABELS.get(bat, 'Battery ' + bat)}{_AVG3}", _cmd(REPO/"average_e_runs.py", *AVG[bat], *clean, *T), "cap:completion")]
+        return [("Aptitude", _cmd(apt, *x, *([] if bat == "A" else T)), role_in_extra)]
     if cmd == "update":
         return [("Update Registry", _cmd(REPO/"update_registry.py", *x), None)]
     if cmd == "export":
@@ -166,9 +176,9 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
     if cmd == "embedding":
         return [("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x), "cap:embedding")]
     if cmd == "longctx":
-        return [("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x), "cap:completion")]
+        return [("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x, *T), "cap:completion")]
     if cmd == "confab":
-        return [("Honesty (Battery H)", _cmd(REPO/"confab.py", *x), "cap:completion")]
+        return [("Honesty (Battery H)", _cmd(REPO/"confab.py", *x, *T), "cap:completion")]
     if cmd == "imagegen":
         if not IMAGEGEN_AVAILABLE:           # callers check first and print the message; this is the backstop
             return []
@@ -177,11 +187,11 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         return [
             probe,
             (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),                    "router"),
-            (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x),                    "worker"),
-            (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x),  "worker"),
-            (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x),  "worker"),
-            (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x),                             "cap:completion"),
-            (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),           "cap:completion"),
+            (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x, *T),                    "worker"),
+            (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x, *T),  "worker"),
+            (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x, *T),  "worker"),
+            (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x, *T),                             "cap:completion"),
+            (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x, *T),           "cap:completion"),
         ]
     if cmd == "all":
         # --with-elastic / --with-imagegen append normally-opt-in batteries as final in-pipeline
@@ -196,22 +206,22 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
         phases = [
             probe,
             ("Standard Suite", _cmd(REPO/"runner.py", *x),                                              None),
-            ("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x),                None),
+            *[(lbl, argv, None) for lbl, argv, _ in think_arm(*x)],
             ("ctx Ladder",     _cmd(REPO/"ctx_ladder.py", *x),                                          None),
             (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x),              "router"),
-            (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x),              "worker"),
-            (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x), "worker"),
-            (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x), "worker"),
-            (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x),                        "cap:completion"),
-            (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x),      "cap:completion"),
-            ("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x),                            "cap:completion"),
-            *([("Honesty (Battery H)", _cmd(REPO/"confab.py", *x), "cap:completion")] if with_confab else []),
+            (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x, *T),              "worker"),
+            (BATTERY_LABELS["C"], _cmd(apt, "--battery", "C", "--role", "worker", "--capable-only", *x, *T), "worker"),
+            (BATTERY_LABELS["D"], _cmd(apt, "--battery", "D", "--role", "worker", "--capable-only", *x, *T), "worker"),
+            (BATTERY_LABELS["E"] + _AVG3, _cmd(REPO/"average_e_runs.py", *x, *T),                        "cap:completion"),
+            (BATTERY_LABELS["F"] + _AVG3, _cmd(REPO/"average_e_runs.py", "--battery", "F", *x, *T),      "cap:completion"),
+            ("Long-Context (Battery G)", _cmd(REPO/"longctx.py", *x, *T),                            "cap:completion"),
+            *([("Honesty (Battery H)", _cmd(REPO/"confab.py", *x, *T), "cap:completion")] if with_confab else []),
             ("Vision (Battery V)",      _cmd(REPO/"vision.py", *x),                              "cap:vision"),
             ("Embedding (Battery EMB)", _cmd(REPO/"embedding.py", *x),                           "cap:embedding"),
         ]
         if with_elastic:
             phases.append((BATTERY_LABELS["F-ELASTIC"] + _AVG3,
-                           _cmd(REPO/"average_e_runs.py", "--battery", "F-elastic", *x), "cap:completion"))
+                           _cmd(REPO/"average_e_runs.py", "--battery", "F-elastic", *x, *T), "cap:completion"))
         if with_imagegen and not IMAGEGEN_AVAILABLE:
             # an unattended `all` must not die at the end over its one unavailable opt-in — say so, drop it
             print(f"⚠ --with-imagegen ignored: {IMAGEGEN_UNAVAILABLE_MSG}", flush=True)
@@ -229,7 +239,10 @@ def build_phases(cmd: str, extra: list[str]) -> list[tuple]:
 UNIT_ORDER = ["update", "probe", "standard", "ladder", "A", "B", "C", "D", "E", "F",
               "longctx", "confab", "vision", "embedding", "F-elastic", "imagegen", "export"]
 # units whose measurement depends on a model's think profile → the probe rides along automatically
+# (also without --think: the probe is what says which lever means "off" for each model)
 _NEEDS_PROBE = {"standard", "A", "B", "C", "D", "E", "F", "longctx", "confab", "F-elastic"}
+# units that honour --think (they run at the operating point when thinking is opted in)
+_THINK_UNITS = {"B", "C", "D", "E", "F", "longctx", "confab", "F-elastic"}
 
 def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
     """Phase list for an arbitrary unit selection, in canonical order.
@@ -240,8 +253,10 @@ def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
     Maintenance units (update/export) get ONLY their unit_extra — common benchmark
     flags like --models/--fast would be noise (or positional-arg hazards) there."""
     apt = REPO / "aptitude.py"
-    x   = list(extra or [])
-    ux  = lambda u: list((unit_extra or {}).get(u, []))
+    think, x = _split_think(extra)
+    _base_ux = lambda u: list((unit_extra or {}).get(u, []))
+    # --think rides only on the operating-point batteries (webserver._ARMED); A and the ladder are direct by design
+    ux  = lambda u: _base_ux(u) + (["--think"] if think and u in _THINK_UNITS else [])
 
     def avg(u):
         """Label suffix that matches the pass count ACTUALLY requested for a multipass battery.
@@ -258,7 +273,8 @@ def build_phases_units(units, extra=None, unit_extra=None) -> list[tuple]:
         "probe":     ("Think Probe",     _cmd(REPO/"think_probe.py", *_probe_scope(x, explicit="probe" in units),
                                               *ux("probe")), None),
         "standard":  [("Standard Suite",  _cmd(REPO/"runner.py", *x, *ux("standard")), None),
-                      ("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x, *ux("standard")), None)],
+                      *([("Standard Suite · think arm", _cmd(REPO/"runner.py", "--arm", "think", *x, *ux("standard")), None)]
+                        if think else [])],
         "ladder":    ("ctx Ladder",      _cmd(REPO/"ctx_ladder.py", *x, *ux("ladder")), None),
         "A": (BATTERY_LABELS["A"], _cmd(apt, "--battery", "A", "--role", "router", *x, *ux("A")), "router"),
         "B": (BATTERY_LABELS["B"], _cmd(apt, "--battery", "B", "--role", "worker", *x, *ux("B")), "worker"),

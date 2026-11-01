@@ -412,6 +412,7 @@
         <div class="checks">
           <label title="skip cool-downs — informal results"><input type="checkbox" id="fast"> fast</label>
           <label title="ignore content-addressed resume — re-run everything (cloud models too)"><input type="checkbox" id="force"> force</label>
+          <label title="opt in to thinking — adds the standard suite's think arm and runs the batteries at each model's operating point (off = no thinking; slower, results stored as a separate arm)"><input type="checkbox" id="think"> think</label>
         </div>
       </div>
       <div id="runRow">
@@ -894,6 +895,7 @@ async function startUnits(units, bare){
   if(!units.length) return;
   const body = { units, params:{runs:RUNS, grade:GRADE, judge:JUDGE}, sort:SORT_BY,
                  fast: !bare && $("#fast").checked, force: !bare && $("#force").checked,
+                 think: !bare && $("#think").checked,
                  models: bare ? "" : [...SELECTED].join(" ") };
   if(window.DRY_RUN) body.dry = true;                  // debug: preview assembled phases, start nothing
   $("#startMsg").textContent = "starting…";

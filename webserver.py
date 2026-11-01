@@ -71,6 +71,8 @@ def _build_extra(payload: dict) -> list:
         extra.append("--fast")
     if payload.get("force"):
         extra.append("--force")
+    if payload.get("think"):
+        extra.append("--think")
     models = (payload.get("models") or "").split()
     if models:
         extra += ["--models", *models]
@@ -85,7 +87,9 @@ _NAME_RE = re.compile(r"^[\w./:-]+$")   # model names in payloads → subprocess
 def _units_phases(payload: dict):
     """Translate the multi-select payload → (phases, err).
 
-    Payload: {units: [...], params: {runs, grade, judge, arm}, fast, force, models}.
+    Payload: {units: [...], params: {runs, grade, judge, arm}, fast, force, think, models}.
+    `think` (2026-11-01) opts the run into thinking: adds the standard suite's think arm and runs the
+    operating-point batteries at each model's operating point. Off = every battery at the direct arm.
     Common flags go to every benchmark phase; params are routed only to the units
     that understand them (runs → E/F/F-elastic, grade/judge → confab, arm → every operating-point battery)."""
     units = payload.get("units") or []
@@ -101,6 +105,8 @@ def _units_phases(payload: dict):
         common.append("--fast")
     if payload.get("force"):
         common.append("--force")
+    if payload.get("think"):
+        common.append("--think")       # orchestrator routes it to the standard think arm + _ARMED batteries
     models = (payload.get("models") or "").split()
     if models:
         if not all(_NAME_RE.match(m) for m in models):
@@ -137,8 +143,8 @@ def _units_phases(payload: dict):
         unit_extra["confab"] = confab
     arm = p.get("arm")
     if arm:
-        # Force every operating-point battery onto one arm (e.g. a think-off re-measure). The standard
-        # suite already runs both arms, and Battery A + the ladder are pinned to direct.
+        # Force every operating-point battery onto one arm (an explicit --arm beats `think`). The standard
+        # suite's arms follow `think` instead, and Battery A + the ladder are pinned to direct.
         if arm not in ("direct", "think"):
             return None, "bad arm"
         for u in _ARMED:

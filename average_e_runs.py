@@ -82,13 +82,14 @@ def _resume_targets(explicit_models, force, bat):
     always run internal --force (a fresh pass each), so scoping is done via --models here; the DB carries
     the skipped models forward (export reads results_db.latest). Returns (targets, report_line)."""
     import resume
+    from bench_utils import requested_arm
     universe = _completion_models()
     reg = json.loads((REPO / "models.json").read_text())
     cloud = {m["name"] for m in reg if m.get("cloud")}
     tr, sk, why = resume.resolve("F-elastic" if bat == "F-ELASTIC" else bat, universe,
                                  cloud=cloud, force=force,
                                  explicit_models=explicit_models or None,
-                                 check_runtime="--check-runtime" in sys.argv, arm=_arg("--arm", "auto"))   # v3
+                                 check_runtime="--check-runtime" in sys.argv, arm=requested_arm())   # v3; direct unless --think
     if explicit_models:
         line = f"explicit --models ({len(tr)})"
     elif force:
@@ -126,6 +127,7 @@ HMIN, HBAND = _G["E_CODER_HARD_MIN"], _G["E_CODER_HARD_BAND"]
 
 def run_passes(n, model_args):
     """Run the battery n times and tag each pass as <prefix>_<date>_run{k}.json."""
+    from bench_utils import think_enabled
     tagged = []
     for k in range(1, n + 1):
         print(f"\n{'#' * 60}\n# Battery {BAT} — averaging pass {k}/{n}\n{'#' * 60}", flush=True)
@@ -134,8 +136,10 @@ def run_passes(n, model_args):
             cmd.append("--fast")
         if model_args:
             cmd += ["--models", *model_args]
-        if _arg("--arm"):                    # forced arm (e.g. a think-off re-measure); default = auto
+        if _arg("--arm"):                    # forced arm (e.g. a think-off re-measure)
             cmd += ["--arm", _arg("--arm")]
+        if think_enabled():                  # thinking opted in → each pass runs at the operating point
+            cmd.append("--think")
         subprocess.run(cmd, check=True)
 
         d = date.today().isoformat()

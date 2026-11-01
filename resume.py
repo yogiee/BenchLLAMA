@@ -271,12 +271,18 @@ def _eligible(battery, reg):
 # granite4.2:3b and ornith-1.5:9b, both of which had fresh think-arm E rows).
 # MUST track the runners. Source of truth, per runner's `arm=` into resume:
 #   aptitude.py:61   ARM_REQ = "direct" if battery=="A" else requested_arm(default="auto")
-#   average_e_runs   arm="auto"                    longctx.py:71   requested_arm(default="auto")
+#   average_e_runs   arm=requested_arm()           longctx.py:71   requested_arm(default="auto")
 #   confab.py        requested_arm(default="auto") runner.py       requested_arm(default="direct")
 #   ctx_ladder / vision / embedding — no arm, so the "direct" default below is correct.
 # Anything absent here is reported at "direct"; add a battery the moment its runner moves to auto.
-_REPORT_ARM = {"B": "auto", "C": "auto", "D": "auto", "E": "auto", "F": "auto",
-               "F-elastic": "auto", "G": "auto", "confab": "auto"}
+# requested_arm(default="auto") is `direct` unless thinking is opted in (--think, 2026-11-01), so the
+# report resolves the same way: `./bench.sh --resume-report --think` previews a thinking run.
+_AUTO_BATTERIES = ("B", "C", "D", "E", "F", "F-elastic", "G", "confab")
+
+
+def _report_arm(battery: str) -> str:
+    from bench_utils import requested_arm
+    return requested_arm(default="auto") if battery in _AUTO_BATTERIES else "direct"
 
 
 def report(batteries=None, host="http://localhost:11434", check_runtime=False) -> str:
@@ -295,7 +301,7 @@ def report(batteries=None, host="http://localhost:11434", check_runtime=False) -
         if not elig:
             continue
         tr, sk, why = resolve(b, elig, cur_env=cur, cloud=cloud, check_runtime=check_runtime,
-                              arm=_REPORT_ARM.get(b, "direct"))
+                              arm=_report_arm(b))
         out.append(format_report(b, tr, sk, why))
     return "\n".join(out)
 

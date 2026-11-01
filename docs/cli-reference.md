@@ -14,6 +14,7 @@ Runs the standard benchmark suite: 13 tests across 5 dimensions (personality, re
 ./bench.sh standard new-model:tag          # single model, merges into existing JSON
 ./bench.sh standard --fast                 # skip cool-down (informal results)
 ./bench.sh standard --force                # re-run all models, ignore 72h resume window
+./bench.sh all --think                     # opt into thinking (off by default): adds the standard think arm, batteries at each model's operating point
 ```
 
 Output: `results/benchmark_YYYY-MM-DD.json` + `.md`

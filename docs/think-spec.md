@@ -191,6 +191,15 @@ latency and is published beside it.
 
 ## 6. Component 3 — two-arm measurement
 
+> **2026-11-01 — thinking is OPTIONAL, off by default (user decision).** The table below describes a
+> run with `--think` (dashboard **think** checkbox / `BENCH_THINK=1`). Without it, the standard suite
+> runs only the `direct` arm and every battery runs `direct` (`bench_utils.requested_arm`: a default of
+> `auto` resolves to `direct` unless thinking is opted in). Rows are stored per arm, so a plain run and a
+> `--think` run of the same models compare directly. The export's headline is the direct-arm row, with
+> the think-arm row beside it (`export._load_operating`). Why: the think arm multiplied run time (09-26:
+> think walls 3.5–7× direct; three thinking models = 76% of a 10h46m F-elastic phase) and scored worse
+> as often as better (`expense_split` fell at think for 4 models, rose for 2).
+
 | Where | `direct` arm | `think` arm |
 |---|---|---|
 | Standard suite (13 tests) | always | when an operating point exists |
