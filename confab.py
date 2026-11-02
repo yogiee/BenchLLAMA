@@ -28,8 +28,14 @@ Grading modes:
   --grade llm      (DEFAULT) — capable LLM judge, self-neutral routing (see below). Pass --judge <model>
                      to override the primary judge set in JUDGE_PRIMARY.
 
-⚠ A judge must never grade ITSELF. Invariant: the primary grades every other candidate; a different-lineage
-FALLBACK grades the primary's own row. Never self-judge.
+Judge routing is set by JUDGE_NEUTRALITY. Since 2026-11-02 Battery H runs "none": the local primary grades
+every candidate INCLUDING its own row, with no cloud call. "self" / "family" restore the hand-off to
+JUDGE_FALLBACK (a cloud model, pruned from the local list 11-01 but still callable).
+
+SCOPE NOTE (2026-11-02) — why the primary may grade itself here. The same 07-10 screen found gemma4:26b-mlx
+graded its OWN replies 9/9 against the anchor with zero self-lenient flips, so the evidence that relaxed the
+family rule (below) covers self-grading too, and the user ruled out the cloud fallback. Comparability: until
+11-02 the primary's own row was graded by gpt-oss:120b-cloud, so that one row changes grader.
 
 SCOPE NOTE (2026-08-21) — why self-only, not same-family. The rule used to hand off every same-LINEAGE
 candidate. The 07-10 anchor screen (commit 6a13b40) tested that assumption directly and it did not hold on
@@ -105,12 +111,13 @@ COMPLETION_ROLES = ("worker", "router")
 # ⚠ Changing the judge BREAKS cross-run comparability — every score shifts with the grader, so re-grade
 # the whole back-set (--judge-only, free) rather than mixing judges across runs.
 JUDGE_PRIMARY  = "gemma4:26b-mlx"      # anchor-screened successor (93.3%); glm-4.7:cloud retired 07-15
-JUDGE_FALLBACK = "gpt-oss:120b-cloud"  # distinct lineage; grades the primary's own row only
+JUDGE_FALLBACK = "gpt-oss:120b-cloud"  # distinct lineage; used only under "self" / "family" (cloud)
 
-# Neutrality rule — see the SCOPE NOTE in the module docstring.
-#   "self"   → primary grades every candidate but its own row   (Battery H: ground-truth-anchored axis)
-#   "family" → primary also hands off same-lineage candidates   (strict; subjective axes)
-JUDGE_NEUTRALITY = "self"
+# Neutrality rule — see the SCOPE NOTES in the module docstring.
+#   "none"   → primary grades every candidate, itself included   (Battery H since 11-02: local-only, no cloud)
+#   "self"   → primary grades every candidate but its own row    (own row → JUDGE_FALLBACK)
+#   "family" → primary also hands off same-lineage candidates    (strict; subjective axes)
+JUDGE_NEUTRALITY = "none"
 
 def _family(name: str) -> str:
     """Coarse lineage bucket from the model name — enough to enforce 'never same-family judge'."""
@@ -123,9 +130,11 @@ def _family(name: str) -> str:
     return n.split(":")[0]
 
 def _judge_for(candidate: str, primary: str) -> str:
-    """Route a candidate to its judge. Self-judging is banned under BOTH neutrality rules; under
-    "family" the primary additionally hands off its whole lineage. See the SCOPE NOTE in the module
-    docstring for why Battery H runs "self"."""
+    """Route a candidate to its judge. "none" keeps every row on the primary; "self" hands the
+    primary's own row to JUDGE_FALLBACK; "family" also hands off its whole lineage. See the SCOPE
+    NOTES in the module docstring for why Battery H runs "none"."""
+    if JUDGE_NEUTRALITY == "none":
+        return primary
     if candidate == primary:
         return JUDGE_FALLBACK
     if JUDGE_NEUTRALITY == "family" and _family(candidate) == _family(primary):

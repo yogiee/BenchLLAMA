@@ -121,6 +121,7 @@ usage just for benchmarking. So generation and judging are **strictly separated*
   judge-accuracy in calibration (must not call honest hedges "fabrication" or miss confident invention). Cloud
   (`gpt-oss:120b-cloud`) is a **fallback**, used batched in P2 *only* if no local grader clears the accuracy bar —
   chosen on merit, not because a consumer uses it.
+- **Superseded for Battery H (routing as of 2026-11-02):** the primary is `gemma4:26b-mlx` and it grades **every** candidate, its own row included (`confab.JUDGE_NEUTRALITY = "none"`), with no cloud call. The 07-10 anchor screen found no family bias on this ground-truth-anchored axis (gemma-family 97.8%, own replies 9/9 with zero self-lenient flips). That relaxed the rule to self-only on 08-21; on 11-02 the user ruled out the cloud fallback. The family-neutral design below still applies to subjective axes.
 - **⚠ Judge must be family-NEUTRAL — FAMILY-AWARE ROUTING, not a single fixed judge.** LLM judges systematically
   rate their own family/lineage higher, and a judge grading *its own* output is the extreme case. **Invariant: no
   candidate is ever judged by a judge of the same family** (never self-judge, never same-lineage). Because the
