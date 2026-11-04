@@ -249,6 +249,20 @@ local chat model with **no tool use**; it is not a fleet-anchor candidate.
 (`hadad/LFM2.5-1.2B`, `maternion/lfm2.5`, `oamazonasgabriel/lfm2-1.2b-tool`) ship their own templates and
 sampling — benchmark the official library tag, not a mirror. ⚠ `lfm2:24b` remains a different, weaker tag
 for our lanes (no tools, no thinking, 32K) — see the disambiguation above.
+### muse-glimmer (Meta) — measured 2026-11-04, Ollama 0.40.14
+
+30B dense + vision, 128K, Apache 2.0, knowledge cutoff 2026-01-04. The Modelfile sampling (temp 1, top_k 64, top_p 0.95)
+matches the card. The tags declare levers `false/low/medium/high/max`, default `high`; the card lists low/medium/high/xhigh
+through a `Reasoning strength:` system-prompt line.
+
+- **`think:false` hides the reasoning, it does not stop it** (`docs/think-spec.md` §4.5). Omitting `think` means `high`.
+- **Number format:** writes "Rs 1 700" and LaTeX in plain chat. A consumer that parses numbers has to normalise them.
+- **Drafter on/off (`30b-mlx` vs `30b-nvfp4`, same weights, ABBA, n=2 per arm):** code +131% decode, math +60%, prose +14–17%;
+  in the two adjacent hot blocks, prose −3% to +10%. RAM 19.8 vs 17.9 GB. The prefill control also moved +28%, which drafting
+  cannot cause, so thermal state contaminates these numbers. Trust the code and math gaps, not the prose ones.
+- **`30b-mlx` is not reproducible under a seed; `30b-nvfp4` was** (identical token counts across blocks).
+- **Sustained load:** decode falls from ~16–26 t/s cool to ~10 t/s at thermal pressure Heavy (M1 Max).
+
 ## 5. Ollama 0.32.x–0.33.x entries that matter here
 
 0.32.1 Gemma 4 tool calling + multi-turn reasoning; MLX recurrent cache leak fixed · 0.32.3 GLM tool

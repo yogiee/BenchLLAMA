@@ -171,6 +171,22 @@ answer. Such calls are now:
 ⚠ The batteries do NOT strip leaked `<think>`. The guard works by steering the arm onto a clean lever,
 so a model whose every lever leaks would still be graded on raw text. The probe report says so.
 
+### 4.5 Hidden reasoning (2026-11-04)
+
+A lever can return no thinking text and still reason: the parser discards the tokens. muse-glimmer at
+`think:false` spends 917 tokens for about 306 visible, with the first visible text at 56 s.
+
+- **Estimate.** With no trace, `think_tokens_est` = `eval_count` − visible chars / 2, counting tool calls as
+  visible, and 0 under `HIDDEN_TOKENS_MIN` (48). The fleet measures 2.8–4.1 chars/token, and its worst
+  content-only reply on this charge is 16 tokens.
+- **Classification.** The class stays `off`, because a consumer sending `false` gets exactly this behaviour.
+  `_sig` keeps traced and untraced levers apart; demand alone merged muse-glimmer's `false` (≤149) into `low` (≤155).
+- **Profile.** `hidden_reasoning: true`, published in the export's `think` block.
+- **Budget.** `think_tokens_max` is non-zero, so the off class gets the normal allowance. Call sites also retry
+  a truncated reply (`bench_utils.hidden_reasoning`), since it says nothing about the answer. C5 opts out: its cap is the test.
+- **Not a `DERIVE_VERSION` bump.** Stored `raw` holds `tt: 0` for these levers, so it can't reveal hidden tokens;
+  only a fresh probe can. The stored standard rows show no registered model above the floor.
+
 ## 5. Component 2 — lever-aware budgets (`bench_utils.think_budget`)
 
 For a call to model M at lever class C with a test's `base_max_tokens`:

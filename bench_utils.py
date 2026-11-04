@@ -311,9 +311,19 @@ def think_class(model: str, arm: str):
     return prof.get("operating_point") if (arm == "think" and prof.get("operating_lever")) else prof.get("direct_class")
 
 
+def hidden_reasoning(model: str, arm: str) -> bool:
+    """True when this (model, arm) reasons with no thinking text: its no-thinking lever still spends
+    output tokens the parser discards (think_probe.py `hidden_reasoning`). A truncated reply from such
+    a model says nothing about the answer, because the budget went on tokens nobody can see, so its
+    call sites retry on truncation. A test that caps output ON PURPOSE (C5) opts out explicitly."""
+    prof = think_profile(model)
+    return bool(prof and prof.get("hidden_reasoning") and think_class(model, arm) == "off")
+
+
 def think_allowance(model: str, arm: str) -> int:
     """Extra output tokens to grant on top of a test's own max_tokens so the thinking trace fits:
-    clamp(K × probe think_tokens_max, MIN, MAX). 0 for a no-thinking class or an unprofiled model.
+    clamp(K × probe think_tokens_max, MIN, MAX). 0 for a no-thinking class or an unprofiled model; an
+    "off" class that reasons invisibly has a non-zero think_tokens_max, so it gets one too.
     The reactive ×8 retry (post_with_budget_retry) stays as the backstop; it firing on a profiled
     arm means the probe under-estimated, which is worth seeing in `_budget_retry`."""
     prof = think_profile(model)

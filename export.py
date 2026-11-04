@@ -316,7 +316,7 @@ def build():
         tp = entry.get("think_profile") or {}
         if tp:
             m["think"] = {k: tp.get(k) for k in ("operating_point", "operating_lever", "direct_lever", "off_supported",
-                                                  "default_thinks", "always_on", "think_unbounded", "probed_at")}
+                                                  "default_thinks", "always_on", "think_unbounded", "hidden_reasoning", "probed_at")}
             # batteries run direct unless a run opts into --think (2026-11-01); each sub-block's `arm` says
             # which arm its headline actually came from
             m["think"]["battery_arm"] = "direct"

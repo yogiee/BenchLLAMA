@@ -130,6 +130,22 @@ def check(item, msg) -> bool:
 
 # ── one call ──────────────────────────────────────────────────────────────────
 
+# Reasoning that reaches neither `thinking` nor `content`: muse-glimmer at think:false spends 917 tokens
+# for 306 visible, first text at 56 s (2026-11-04). The estimate charges visible text at 2 chars/token,
+# the generous end of what the fleet measures (2.8–4.1), and tool calls count as visible. The fleet's
+# worst content-only reply on that charge is 16 tokens, hence the 3× floor below.
+HIDDEN_TOKENS_MIN = 48
+
+
+def hidden_tokens(eval_count: int, thinking: str, content: str, tool_calls) -> int:
+    """Output tokens with nothing to show for them; 0 under the floor or when a thinking trace exists."""
+    if thinking:
+        return 0
+    visible = len(content) + (len(json.dumps(tool_calls)) if tool_calls else 0)
+    hidden = int(eval_count - visible / 2)
+    return hidden if hidden >= HIDDEN_TOKENS_MIN else 0
+
+
 def call(model, item, lever, options):
     msgs = ([{"role": "system", "content": item["system"]}] if item.get("system") else []) + \
            [{"role": "user", "content": item["prompt"]}]
@@ -154,7 +170,7 @@ def call(model, item, lever, options):
         "unsupported": False,
         "thinking": thinking, "content": content, "tool_calls": msg.get("tool_calls"),
         "done_reason": d.get("done_reason"), "eval_count": ev,
-        "think_tokens_est": int(round(ev * tc)) if thinking else 0,
+        "think_tokens_est": int(round(ev * tc)) if thinking else hidden_tokens(ev, thinking, content, msg.get("tool_calls")),
         "starved": d.get("done_reason") == "length" and not content.strip(),
         "correct": check(item, {**msg, "content": content}), "wall": round(wall, 1),
         "leaked": leaked,
@@ -192,10 +208,12 @@ def _lever_order(lv: str):
 
 
 def _sig(res: dict):
-    """Behaviour signature of one lever: per-item correctness + starvation pattern (item-id order)."""
+    """Behaviour signature of one lever: per-item correctness + starvation pattern (item-id order), and
+    whether it shows a thinking trace at all. A lever with hidden reasoning has token demand and no trace,
+    so demand alone would merge muse-glimmer's `false` (≤149) into `low` (≤155) and lose the off class."""
     ids = sorted(res)
     return (tuple(bool(res[i]["correct"]) for i in ids), tuple(bool(res[i]["starved"]) for i in ids),
-            any(res[i].get("leaked") for i in ids))
+            any(res[i].get("leaked") for i in ids), any(bool(res[i].get("thinking")) for i in ids))
 
 
 def _same_demand(a: int, b: int) -> bool:
@@ -325,6 +343,8 @@ def derive(model, per_lever: dict, meta) -> dict:
         "always_on": not off_supported,
         "default_thinks": default_thinks,
         "think_unbounded": bool(thinking) and not bounded,
+        # the "off" class still spends tokens on reasoning nobody sees → `false` is not free, see hidden_tokens
+        "hidden_reasoning": bool(off) and class_stats["off"]["think_tokens_max"] > 0,
         "classes": lever_class,
         "class_stats": class_stats,
         "direct_class": direct_class, "direct_lever": direct_lever,
@@ -450,6 +470,9 @@ def fmt_report(model, prof) -> str:
     if prof.get("leaked_levers"):
         L.append(f"    ⚠ LEAKED: thinking arrives inside content at {','.join(prof['leaked_levers'])} "
                  f"— never used as an arm while a clean lever exists; batteries would grade raw <think> text")
+    if prof.get("hidden_reasoning"):
+        L.append(f"    ⚠ HIDDEN REASONING: `off` still spends ≤{prof['class_stats']['off']['think_tokens_max']} tokens "
+                 f"on discarded reasoning — budgets carry an allowance and truncated replies retry")
     for mm in prof.get("declared_mismatch") or []:
         L.append(f"    ≠ declared vs measured: {mm}")
     return "\n".join(L)

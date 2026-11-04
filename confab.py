@@ -61,7 +61,7 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
-from bench_utils import (cooldown, preflight, sort_registry, post_with_budget_retry,
+from bench_utils import (cooldown, preflight, sort_registry, post_with_budget_retry, hidden_reasoning,
                          apply_think, arm_stamp, requested_arm, resolve_arm, budget_timeout,
                          honesty_profile as _honesty_profile, H_PROFILE_CUTOFFS)
 
@@ -146,7 +146,8 @@ def _judge_for(candidate: str, primary: str) -> str:
 def chat(model, messages, max_tokens=NUM_PREDICT, num_ctx=NUM_CTX, arm=None):
     payload = {"model": model, "messages": messages, "stream": False,
                "options": {"num_ctx": num_ctx, "num_predict": max_tokens}}
-    apply_think(payload, model, arm or resolve_arm(model, ARM_REQ) or "direct")   # v3
+    _arm = arm or resolve_arm(model, ARM_REQ) or "direct"
+    apply_think(payload, model, _arm)   # v3
     def _post(pl):
         t0 = time.time()
         r = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
@@ -160,7 +161,8 @@ def chat(model, messages, max_tokens=NUM_PREDICT, num_ctx=NUM_CTX, arm=None):
 
     # Retry once with headroom if the model spent the whole budget thinking (bench_utils). Battery H
     # lost 5 of gpt-oss:120b-cloud's 9 items to this on 2026-08-24.
-    data, wall = post_with_budget_retry(payload, _post, label=model)
+    data, wall = post_with_budget_retry(payload, _post, label=model,
+                                        retry_on_truncation=hidden_reasoning(model, _arm))
     return data.get("message", {}).get("content", ""), wall
 
 def unload(model_name):

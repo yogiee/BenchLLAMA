@@ -38,7 +38,7 @@ import requests
 from pathlib import Path
 from datetime import date
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
-                         G_CORE_THRESHOLD, G_HARD_THRESHOLD, post_with_budget_retry,
+                         G_CORE_THRESHOLD, G_HARD_THRESHOLD, post_with_budget_retry, hidden_reasoning,
                          apply_think, arm_stamp, requested_arm, resolve_arm, budget_timeout)
 
 REPO        = Path(__file__).parent
@@ -84,6 +84,12 @@ PREFILL_TPS_CEILING = 20000
 COOLDOWN    = 0 if fast_mode else 300
 NUM_PREDICT = 320
 CTX_MARGIN  = 1536   # num_ctx = bucket + margin → holds our own prompt + the short answer
+# A tokenizer that runs long overflows bucket + margin, and Ollama then silently keeps num_ctx/2 of the
+# prompt, so the depth is graded on half a haystack. granite3.1-moe (1.11–1.19 tokens per bucket token)
+# got 8962 of 18197 at 16384: core 0.333 truncated vs 1.0 with room (2026-11-04). Every other registered
+# model fits, so only an overflowing call re-runs, in a larger window, and that fact is recorded.
+WINDOW_GROW       = 1.5    # retry window = bucket × this + CTX_MARGIN
+TRUNCATED_BELOW   = 0.75   # prompt tokens under this share of the bucket can only be a cut prompt (fleet min 0.88)
 COMPLETION_ROLES = ("worker", "router")
 
 # ── Grading (objective, exact-match) ──────────────────────────────────────────
@@ -201,7 +207,8 @@ def chat(model, messages, num_ctx, max_tokens=NUM_PREDICT):
         "stream":   False,
         "options":  {"num_ctx": num_ctx, "num_predict": max_tokens},
     }
-    apply_think(payload, model, resolve_arm(model, ARM_REQ) or "direct")   # v3: lever + allowance
+    _arm = resolve_arm(model, ARM_REQ) or "direct"
+    apply_think(payload, model, _arm)   # v3: lever + allowance
     def _post(pl):
         t0 = time.time()
         r  = requests.post(f"{ollama_host}/api/chat", json=pl, timeout=budget_timeout(pl, TIMEOUT))
@@ -215,7 +222,32 @@ def chat(model, messages, num_ctx, max_tokens=NUM_PREDICT):
 
     # An always-reasoning model spends this budget on thinking and returns empty content; retry
     # once with headroom rather than grading the silence as a wrong answer. See bench_utils.
-    return post_with_budget_retry(payload, _post, label=model)
+    return post_with_budget_retry(payload, _post, label=model,
+                                  retry_on_truncation=hidden_reasoning(model, _arm))
+
+def _prompt_truncated(prompt_tokens, bucket, num_ctx):
+    """prompt_eval_count is the only signal: Ollama reports the kept tokens and raises no error."""
+    if not prompt_tokens:
+        return False
+    halved = abs(prompt_tokens - num_ctx / 2) <= 16 and prompt_tokens < bucket
+    return halved or prompt_tokens < TRUNCATED_BELOW * bucket
+
+def chat_in_window(model, messages, bucket):
+    """chat() at bucket + CTX_MARGIN; one retry in a larger window if the prompt did not fit."""
+    num_ctx = bucket + CTX_MARGIN
+    data, wall = chat(model, messages, num_ctx=num_ctx)
+    kept = data.get("prompt_eval_count")
+    if not _prompt_truncated(kept, bucket, num_ctx):
+        return data, wall
+    grown = int(bucket * WINDOW_GROW) + CTX_MARGIN
+    print(f"    ⚠  {model}: prompt cut to {kept} tokens at num_ctx={num_ctx} — retrying at num_ctx={grown}", flush=True)
+    data, wall = chat(model, messages, num_ctx=grown)
+    full = data.get("prompt_eval_count")
+    data["_window_grown"] = {"num_ctx": [num_ctx, grown], "prompt_tokens": [kept, full],
+                             "recovered": not _prompt_truncated(full, bucket, grown)}
+    if not data["_window_grown"]["recovered"]:
+        print(f"    ⚠  {model}: STILL cut ({full} tokens) at num_ctx={grown} — recorded in window_grown", flush=True)
+    return data, wall
 
 def tps(data):
     ec = data.get("eval_count", 0); ed = data.get("eval_duration", 1)
@@ -259,9 +291,9 @@ def run_longctx(model_name, role, disk_gb, items):
         _ws(model_name, "running", bucket=bucket)
         print(f"\n  ── depth={bucket} (num_ctx={num_ctx}) ──", flush=True)
         try:
-            data, wall = chat(model_name,
-                              sys_msgs + [{"role": "user", "content": it["prompt"]}],
-                              num_ctx=num_ctx)
+            data, wall = chat_in_window(model_name,
+                                        sys_msgs + [{"role": "user", "content": it["prompt"]}],
+                                        bucket)
             resp = data.get("message", {}).get("content", "")
             g    = grade(resp, it["answer_key"], it.get("question_index"))
             entry = {
@@ -277,6 +309,8 @@ def run_longctx(model_name, role, disk_gb, items):
                 "prompt_tokens": data.get("prompt_eval_count"),
                 "response":     resp,
             }
+            if data.get("_window_grown"):
+                entry["window_grown"] = data["_window_grown"]
             depths[str(bucket)] = entry
             ok = [k.replace("needle_", "").replace("multihop", "hop") for k, v in g["hits"].items() if v]
             print(f"    acc={g['accuracy']} (core={g['core_accuracy']} hard={g['hard_accuracy']})"

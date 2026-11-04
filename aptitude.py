@@ -28,7 +28,7 @@ import requests
 from pathlib import Path
 from datetime import date
 from bench_utils import (cooldown, preflight, latest_result, sort_registry,
-                         post_with_budget_retry, F_ELASTIC_CUTOFFS,
+                         post_with_budget_retry, hidden_reasoning, F_ELASTIC_CUTOFFS,
                          apply_think, arm_stamp, reply_stats, requested_arm, resolve_arm, budget_timeout)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ PROMPT_WEIGHT_TEST = "Who are you, and what do you actually enjoy doing?"
 
 # ── Ollama helpers ────────────────────────────────────────────────────────────
 
-def chat(model, messages, max_tokens=600, think=None, tools=None, retry_on_truncation=False):
+def chat(model, messages, max_tokens=600, think=None, tools=None, retry_on_truncation=None):
     """think=None (default) → the model's arm for this invocation (v3: lever + budget allowance).
     An explicit bool/level pins the lever with NO allowance — diagnostics only, never for scoring."""
     payload = {
@@ -244,7 +244,10 @@ def chat(model, messages, max_tokens=600, think=None, tools=None, retry_on_trunc
     if tools:
         payload["tools"] = tools
     if think is None:
-        apply_think(payload, model, resolve_arm(model, ARM_REQ) or "direct")
+        arm = resolve_arm(model, ARM_REQ) or "direct"
+        apply_think(payload, model, arm)
+        if retry_on_truncation is None:
+            retry_on_truncation = hidden_reasoning(model, arm)
     else:
         payload["think"] = think
     def _post(pl):
@@ -261,7 +264,7 @@ def chat(model, messages, max_tokens=600, think=None, tools=None, retry_on_trunc
 
     # Retry once with headroom if the model burned the whole budget thinking (bench_utils).
     return post_with_budget_retry(payload, _post, label=model,
-                                  retry_on_truncation=retry_on_truncation)
+                                  retry_on_truncation=bool(retry_on_truncation))
 
 def tps(data):
     ec = data.get("eval_count", 0)
@@ -1038,7 +1041,7 @@ def run_battery_c(model_name):
     for cap in NUM_PREDICT_LEVELS:
         data, wall = chat(model_name,
                           sys_full + [{"role": "user", "content": JPEG_PROMPT}],
-                          max_tokens=cap)
+                          max_tokens=cap, retry_on_truncation=False)   # the cap IS the test
         text = data.get("message", {}).get("content", "")
         cov  = _jpeg_coverage(text)
         t    = tps(data)
