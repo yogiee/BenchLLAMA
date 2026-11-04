@@ -1,15 +1,5 @@
 [
   {
-    "name": "granite3.1-moe:3b",
-    "disk_gb": 2.0,
-    "role": "worker",
-    "capabilities": [
-      "completion",
-      "tools"
-    ],
-    "extended_roles": []
-  },
-  {
     "name": "muse-glimmer:30b-mlx",
     "disk_gb": 19.1,
     "role": "worker",
