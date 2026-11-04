@@ -344,8 +344,60 @@ def attest(model: str, note: str, host: str = "http://localhost:11434") -> str:
     return f"✓ {model}: {', '.join(olds)} → content {cid} (current manifest {cur}) — {note}"
 
 
+# ── One-time repair: `python3 resume.py --backfill-think-env [--dry-run]` ───────────────────────
+# Until 2026-11-04 the orchestrator fingerprinted a run BEFORE its Think Probe phase, so a model probed
+# in that run has no lever in runs.env and reads as `think-point direct_lever —→false` forever. A row's
+# own arm stamp says what it was measured at: where every stamp a model has in that run matches the
+# current profile's lever for that arm, the current levers are written into that run's env, on its
+# ORIGINAL run_id. A row whose stamp differs, or a pre-v3 env with no think_profiles key, stays
+# untouched and keeps re-running, because that re-run is real.
+
+def backfill_think_env(dry_run: bool = False) -> list[tuple[str, str]]:
+    import json as _json
+    import results_db
+    from bench_utils import think_profiles_fingerprint
+    cur = think_profiles_fingerprint()
+    patched = []
+    with results_db._conn(results_db.DB_PATH) as c:
+        runs = c.execute("SELECT run_id, env FROM runs WHERE env IS NOT NULL").fetchall()
+        for run in runs:
+            try:
+                env = _json.loads(run["env"])
+            except Exception:
+                continue
+            tp = env.get("think_profiles")
+            if tp is None:
+                continue
+            stamps: dict = {}
+            for row in c.execute("SELECT model, arm, metrics FROM results WHERE run_id=?", (run["run_id"],)):
+                if row["model"] in cur and row["model"] not in tp:
+                    try:
+                        lever = _json.loads(row["metrics"] or "{}").get("think_lever")
+                    except Exception:
+                        lever = None
+                    if lever is not None:
+                        stamps.setdefault(row["model"], []).append((row["arm"], lever))
+            hits = [m for m, st in stamps.items()
+                    if all(lv == cur[m].get("operating_lever" if a == "think" else "direct_lever") for a, lv in st)]
+            if not hits:
+                continue
+            for m in hits:
+                tp[m] = cur[m]
+                patched.append((run["run_id"], m))
+            if not dry_run:
+                c.execute("UPDATE runs SET env=? WHERE run_id=?", (_json.dumps(env), run["run_id"]))
+    return patched
+
+
 if __name__ == "__main__":
     import sys as _sys
+    if "--backfill-think-env" in _sys.argv:
+        _dry = "--dry-run" in _sys.argv
+        _done = backfill_think_env(dry_run=_dry)
+        for _r, _m in _done:
+            print(f"  {_r}  {_m}")
+        print(f"{'would patch' if _dry else 'patched'} {len(_done)} (run, model) pair(s)")
+        _sys.exit(0)
     def _arg(flag):
         i = _sys.argv.index(flag)
         return _sys.argv[i + 1] if i + 1 < len(_sys.argv) else None

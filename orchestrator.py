@@ -392,6 +392,7 @@ class Orchestrator:
             try:
                 from bench_utils import env_fingerprint
                 env = env_fingerprint(models=[m.name for m in self.state.models])
+                self._run_env = env
                 self._db.set_env(self.run_id, env)
                 self._emit(f"  env: ollama {env.get('ollama_version')} · "
                            f"benchllama {env.get('benchllama_commit')}")
@@ -454,6 +455,8 @@ class Orchestrator:
                     ms.status = "done" if ok else "error"
             self._record_phase(i, label, phase_started, phase_elapsed,
                                "done" if ok else "error", n_models)
+            if label == "Think Probe":
+                self._refresh_think_env()
             self._sync_roles()
             self._on_event()
 
@@ -483,6 +486,21 @@ class Orchestrator:
                 ms.active = False
             if ms.active:
                 ms.status = "pending"
+
+    def _refresh_think_env(self) -> None:
+        """The fingerprint is taken before the Think Probe phase, but every battery after it measures at
+        the levers the probe just wrote. A new or re-probed model's env would otherwise show no lever (or
+        the old one), and resume would re-queue it next run as `think-point direct_lever —→false`.
+        Runs on a failed probe too: a Stop keeps the profiles that finished."""
+        env = getattr(self, "_run_env", None)
+        if self._db is None or not env:
+            return
+        try:
+            from bench_utils import think_profiles_fingerprint
+            env["think_profiles"] = think_profiles_fingerprint([m.name for m in self.state.models])
+            self._db.set_env(self.run_id, env)
+        except Exception:
+            pass
 
     def _record_phase(self, idx: int, label: str, started_at: str,
                       elapsed_s: float, status: str, n_models: int) -> None:
