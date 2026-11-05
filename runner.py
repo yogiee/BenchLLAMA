@@ -31,7 +31,7 @@ import sys
 import time
 import requests
 from pathlib import Path
-from bench_utils import (cooldown, preflight, latest_result, sort_registry,
+from bench_utils import (cooldown, preflight, latest_result, sort_registry, normalize_numbers,
                          post_with_budget_retry, hidden_reasoning, apply_think, arm_stamp, reply_stats, requested_arm, resolve_arm,
                          budget_timeout, measured_ram_gb, runner_pids)
 
@@ -93,23 +93,6 @@ def _load_prompt(override_path, default_name):
 PROMPT_WORKER = _load_prompt(worker_prompt_path, "worker_default.md")
 PROMPT_ROUTER = _load_prompt(router_prompt_path, "router_default.md")
 
-# ── Number formats ────────────────────────────────────────────────────────────
-# Numeric graders below match digit strings, so a reply's FORMATTING must not read as a wrong answer.
-# muse-glimmer writes "Rs 1 700" and LaTeX `1\,131` / `18\;{\rm h}`: `expense_split` scored 0/7 on replies
-# that normalise to 4–6/7 (2026-11-04). The comma rule is the original one. Regrading all 1342 stored replies
-# moved 11, all on dropped models and no registered model's, so this is not a BATTERY_REVISION bump.
-_GROUP_SPACE = re.compile(r"(?<![\d.])(\d{1,3})((?: \d{3})+)(?!\d)")
-
-def _normalize_numbers(text: str) -> str:
-    s = re.sub(r"\{\\(?:rm|mathrm)\s+([^{}]*)\}", r"\1", text)                  # {\rm h} → h
-    s = re.sub(r"\\(?:rm|mathrm|text|textrm)\s*\{([^{}]*)\}", r"\1", s)          # \text{h} → h
-    s = s.replace("{,}", ",").replace("{:}", ":")
-    s = re.sub(r"\\[,;:! ]", " ", s)                                             # LaTeX spacing → a space
-    s = re.sub(r"[\u00a0\u2007\u2009\u200a\u202f]", " ", s)                      # NBSP, figure/thin/hair, NNBSP
-    s = re.sub(r"(\d),(\d)", r"\1\2", s)                                         # "5,116" → "5116"
-    return _GROUP_SPACE.sub(lambda m: m[1] + m[2].replace(" ", ""), s)           # "5 116" → "5116"
-
-
 # ── JPEG auto-scorer ──────────────────────────────────────────────────────────
 
 def _jpeg_coverage(response: str) -> dict:
@@ -149,7 +132,7 @@ def _no_eiffel_check(response: str) -> bool:
 #  (3) Sam's 2000 prior-outing debt rolls in; the distance/mileage math is a distractor.
 # Ground truth: Sam -> Jack 5116.67, Chris -> Jack 1966.67 (Jack nets +7083.33).
 def _expense_split_check(response: str) -> dict:
-    n = _normalize_numbers(response)                     # "5,116" / "5 116" -> "5116"
+    n = normalize_numbers(response)                     # "5,116" / "5 116" -> "5116"
     has = lambda *xs: any(x in n for x in xs)
     signals = {
         "fuel_used_1700":   "1700" in n,                  # shared fuel = rounded USED, not the 3000 paid
@@ -199,7 +182,7 @@ QUALITY_TESTS = [
     # Two cities — relative motion, same departure. Expected: 10:24 AM, 216 km
     {"id": "two_cities", "category": "reasoning", "domain": "travel",
      "expected": "10:24 AM, 216 km from City A", "max_tokens": 800,
-     "auto_check": lambda r: ("10:24" in _normalize_numbers(r)) and ("216" in _normalize_numbers(r)),
+     "auto_check": lambda r: ("10:24" in normalize_numbers(r)) and ("216" in normalize_numbers(r)),
      "prompt": (
          "Two cities are 360 km apart. A car leaves City A at 8:00 AM travelling toward City B "
          "at 90 km/h. At the same time, a second car leaves City B travelling toward City A "
@@ -211,8 +194,8 @@ QUALITY_TESTS = [
     {"id": "cylinder", "category": "reasoning", "domain": "geometry/physics",
      "expected": "18 hours 51 minutes (1131 min)", "max_tokens": 800,
      "auto_check": lambda r: (
-         any(x in _normalize_numbers(r) for x in ["1130", "1131", "18 h", "18h"])
-         and any(x in _normalize_numbers(r) for x in ["51", "50.9"])
+         any(x in normalize_numbers(r) for x in ["1130", "1131", "18 h", "18h"])
+         and any(x in normalize_numbers(r) for x in ["51", "50.9"])
      ),
      "prompt": (
          "A cylindrical water tank has a diameter of 3 metres and is 4 metres tall. "

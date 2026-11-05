@@ -27,7 +27,7 @@ import time
 import requests
 from pathlib import Path
 from datetime import date
-from bench_utils import (cooldown, preflight, latest_result, sort_registry,
+from bench_utils import (cooldown, preflight, latest_result, sort_registry, normalize_numbers,
                          post_with_budget_retry, hidden_reasoning, F_ELASTIC_CUTOFFS,
                          apply_think, arm_stamp, reply_stats, requested_arm, resolve_arm, budget_timeout)
 
@@ -1435,8 +1435,9 @@ def run_battery_d(model_name):
     )
     calc_calls = [c for c in calls6 if c["tool"] == "calculate"]
     both_done  = len(calc_calls) >= 2
-    has_391    = "391" in text6
-    has_1245   = "1245" in text6
+    nums6      = normalize_numbers(text6)    # "1,245" is the right answer, not a miss
+    has_391    = "391" in nums6
+    has_1245   = "1245" in nums6
     result["tests"]["d6_parallel"] = {
         "calc_call_count": len(calc_calls), "both_done": both_done,
         "has_391": has_391, "has_1245": has_1245,

@@ -336,6 +336,24 @@ def think_allowance(model: str, arm: str) -> int:
     return int(min(max(THINK_ALLOWANCE_K * tk, THINK_ALLOWANCE_MIN), THINK_ALLOWANCE_MAX))
 
 
+# ── Number formats ────────────────────────────────────────────────────────────
+# Numeric graders match digit strings, so a reply's FORMATTING must not read as a wrong answer.
+# muse-glimmer writes "Rs 1 700" and LaTeX `1\,131` / `18\;{\rm h}`: `expense_split` scored 0/7 on replies
+# that normalise to 4–6/7 (2026-11-04). The comma rule is the original one. Regrading all 1342 stored replies
+# moved 11, all on dropped models and no registered model's, so this is not a BATTERY_REVISION bump.
+# Lives here because runner.py AND aptitude.py grade with it (D6: `1,245`, found 2026-11-05).
+_GROUP_SPACE = re.compile(r"(?<![\d.])(\d{1,3})((?: \d{3})+)(?!\d)")
+
+def normalize_numbers(text: str) -> str:
+    s = re.sub(r"\{\\(?:rm|mathrm)\s+([^{}]*)\}", r"\1", text)                  # {\rm h} → h
+    s = re.sub(r"\\(?:rm|mathrm|text|textrm)\s*\{([^{}]*)\}", r"\1", s)          # \text{h} → h
+    s = s.replace("{,}", ",").replace("{:}", ":")
+    s = re.sub(r"\\[,;:! ]", " ", s)                                             # LaTeX spacing → a space
+    s = re.sub(r"[\u00a0\u2007\u2009\u200a\u202f]", " ", s)                      # NBSP, figure/thin/hair, NNBSP
+    s = re.sub(r"(\d),(\d)", r"\1\2", s)                                         # "5,116" → "5116"
+    return _GROUP_SPACE.sub(lambda m: m[1] + m[2].replace(" ", ""), s)           # "5 116" → "5116"
+
+
 def apply_think(payload: dict, model: str, arm: str) -> dict:
     """Set `think` and grow options.num_predict / options.num_ctx by the arm's allowance. Mutates
     and returns `payload`. Growing num_ctx is not optional — the window binds before num_predict
