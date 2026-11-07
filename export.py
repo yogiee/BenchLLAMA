@@ -104,6 +104,43 @@ def _load_operating(prefix):
     return main, other, f"db:{bat}@direct-first"
 
 
+_CODER_BAND_FALLBACK = {"composite_band": 0.65, "hard_band": 0.40}   # aptitude.E_CODER_*_BAND
+
+
+def _coder_status(rows, tagged: bool):
+    """(coder_status, coder_arm) from the headline row and the other arm's row.
+
+    earned   — some arm's row clears the earn gate (`coder_eligible`)
+    retained — the model is tagged and some arm's row sits inside the hysteresis band
+    stale    — tagged, but no measured arm earns OR retains it (only a hand edit or a regate gap
+               gets here; before 2026-11-07 this case was mislabelled `retained`)
+    none     — untagged and no arm earns it
+    coder_arm = "direct" | "think" | "both" (both arms clear that bar) | None.
+    The earn check runs before the band check on every arm, so an arm that EARNS wins over one
+    that only RETAINS."""
+    def arm(r):
+        return r.get("arm") or "direct"
+
+    def in_band(r):
+        s = r["summary"]
+        th = s.get("threshold") or _CODER_BAND_FALLBACK
+        comp = s.get("composite")
+        hard = s.get("hard_band", (s.get("category_means") or {}).get("E-hard"))
+        return (comp is not None and hard is not None
+                and comp >= th.get("composite_band", _CODER_BAND_FALLBACK["composite_band"])
+                and hard >= th.get("hard_band", _CODER_BAND_FALLBACK["hard_band"]))
+
+    rows = [r for r in rows if r and r.get("summary")]
+    for status, ok in (("earned", lambda r: bool(r["summary"].get("coder_eligible"))),
+                       ("retained", in_band)):
+        if status == "retained" and not tagged:
+            break
+        arms = sorted({arm(r) for r in rows if ok(r)})
+        if arms:
+            return status, ("both" if len(arms) > 1 else arms[0])
+    return ("stale" if tagged else "none"), None
+
+
 def _arm_of(row) -> dict:
     """The arm a published row was measured at (pre-v3 rows carry no stamp → legacy think=False)."""
     return {"arm": row.get("arm") or "direct", "think_lever": row.get("think_lever", "false (pre-v3)")}
@@ -334,17 +371,20 @@ def build():
             cs = c["summary"]
             comp = cs.get("composite")
             disk = m.get("disk_gb")
-            # Hysteresis made legible. `coder_eligible` answers "does it EARN the tag now?";
-            # the tag in extended_roles also survives on the retain band, so the two disagree for
-            # any retained model and a consumer reading the JSON cannot tell that from a stale
-            # tag. coder_status names which case it is.
+            # Hysteresis made legible. `coder_eligible` answers "does it EARN the tag now?" on the
+            # HEADLINE row; the tag in extended_roles also survives on the retain band, so the two
+            # disagree for any retained model. coder_status names which case it is, and coder_arm
+            # names the arm whose row justifies it — the tag is reconciled by whichever arm's E run
+            # landed last, so a tag earned only with thinking (mimo-v2.6:9b, 2026-11-07: E-hard 0.51
+            # at think, 0.29 direct) sits beside a direct headline that would never earn it.
             _tag = "coder" in (entry.get("extended_roles") or [])
+            _status, _carm = _coder_status([c, cod_other.get(name)], _tag)
             m["coding"] = {
                 "composite": comp,
                 "category_means": cs.get("category_means", {}),
                 "coder_eligible": cs.get("coder_eligible"),
-                "coder_status": ("earned" if cs.get("coder_eligible")
-                                 else ("retained" if _tag else "none")),
+                "coder_status": _status,
+                "coder_arm": _carm,
                 "gate": cs.get("threshold"),
                 "composite_stdev": cs.get("composite_stdev", 0.0),   # consistency (σ over runs)
                 "composite_spread": cs.get("composite_spread", 0.0),

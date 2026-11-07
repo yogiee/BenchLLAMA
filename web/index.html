@@ -1161,7 +1161,9 @@ function buildProfile(m){
   const c=m.coding;
   if(c) h += `<div class="msec"><h4>Coding (Battery E)</h4>${mstats([
     ["composite", f3(c.composite)],["σ", f3(c.composite_stdev)],["Q/GB", f3(c.quality_per_gb)],
-    ["coder", c.coder_eligible?"✓":"·"],["runs", c.runs],
+    ["coder", c.coder_status && c.coder_status!=="none"
+              ? c.coder_status+(c.coder_arm?` @${c.coder_arm}`:"")
+              : (c.coder_eligible?"✓":"·")],["runs", c.runs],
     ...Object.entries(c.category_means||{}).map(([k,v])=>[k, f2(v)]),
   ])}</div>`;
   const cf=m.consistency;
