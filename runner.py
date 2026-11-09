@@ -615,6 +615,20 @@ def write_summary(results, out_md: Path, fast_mode: bool = False):
 
 ROUTER_TPS_FLOOR = 80  # tok/s
 
+# USER DECISION 2026-11-09: a router has to fit a limited-memory machine beside the model it routes
+# to, whatever its speed. gemma4:e4b-mlx (10.1 GB measured, 10/10 classify) crossed the speed floor at
+# 83.1 t/s and was promoted over models a third its size. 6 GB is the top of the fleet's 3-6 GB seat.
+ROUTER_RAM_CEILING_GB = 6.0
+
+
+def _router_ram_gb(result):
+    """Memory the size ceiling reads: measured, else Ollama's estimate, else disk.
+
+    The estimate understates some models, so a memory budget is sized by `ram_measured_gb`
+    (CLAUDE.md, "RAM has two numbers"). The gate runs on a fresh result, so measured is normally
+    present on a local Mac; the fallbacks cover a remote Ollama, where it cannot be read."""
+    return result.get("ram_measured_gb") or result.get("ram_gb") or result.get("disk_gb")
+
 def _role_gate(result, is_cloud=False):
     """Apply the role assignment gate. Returns 'router' or 'worker'.
 
@@ -628,6 +642,10 @@ def _role_gate(result, is_cloud=False):
       - avg_tps >= 80
       - calculate tool called with correct args
       - at least 1/4 reasoning tests correct
+      - fits ROUTER_RAM_CEILING_GB (unknown size does not pass: promotion is sticky)
+
+    The gate only ever promotes (see _maybe_promote), so a router already over the ceiling keeps
+    its role until someone moves it.
     """
     if is_cloud:
         return result.get("role") or "worker"
@@ -637,7 +655,14 @@ def _role_gate(result, is_cloud=False):
         1 for tid in ("bat_ball", "two_cities", "cylinder", "farm_heads")
         if result["tests"].get(tid, {}).get("correct")
     )
-    return "router" if (tps_ok and tool_ok and reason >= 1) else "worker"
+    fast_enough = tps_ok and tool_ok and reason >= 1
+    ram = _router_ram_gb(result)
+    fits = ram is not None and ram <= ROUTER_RAM_CEILING_GB
+    if fast_enough and not fits and result.get("role") == "worker":
+        size = "size unknown" if ram is None else f"{ram} GB"
+        print(f"\n  · Role gate: {result.get('model')} passes on speed, stays worker: "
+              f"{size} against the {ROUTER_RAM_CEILING_GB:g} GB router ceiling", flush=True)
+    return "router" if (fast_enough and fits) else "worker"
 
 
 def _maybe_promote(model_name, gate_role, registry_path):

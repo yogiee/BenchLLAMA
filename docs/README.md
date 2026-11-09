@@ -52,7 +52,7 @@ BenchLLAMA has since been extracted as a standalone, model-agnostic tool. The pe
 
 | Role | Criteria |
 |------|---------|
-| Router | ≥80 tok/s, tool ✓, reasoning ≥1/4 |
+| Router | ≥80 tok/s, tool ✓, reasoning ≥1/4, ≤6 GB RAM |
 | Worker — Chat | Personality avg ≥3.5/5, instruction ≥1/2, reasoning ≥2/4 |
 | Worker — Research | JPEG ≥5/7 OR rag_finetune ≥4/5, tool ✓ |
 | Worker — Tool-heavy | Tool ✓, reasoning ≥2/4 |

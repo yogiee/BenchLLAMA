@@ -244,7 +244,7 @@ After the standard run, each model is assigned a role based on its composite sco
 
 | Role | Criteria |
 |------|---------|
-| **Router** | Fast (≥80 tok/s), tool ✓, reasoning ≥1/4, personality not required |
+| **Router** | Fast (≥80 tok/s), tool ✓, reasoning ≥1/4, ≤6 GB RAM, personality not required |
 | **Worker — Chat** | Personality ≥3.5/5 avg, instruction ≥1/2, reasoning ≥2/4 |
 | **Worker — Research** | Research depth ≥5/7 JPEG OR rag ≥4/5, tool ✓ |
 | **Worker — Tool-heavy** | Tool ✓, reasoning ≥2/4, research depth optional |
