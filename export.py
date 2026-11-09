@@ -26,7 +26,7 @@ import re
 from pathlib import Path
 from datetime import datetime, timezone
 
-from bench_utils import H_PROFILE_CUTOFFS
+from bench_utils import BUDGET_RETRY_CAP, H_PROFILE_CUTOFFS
 
 REPO = Path(__file__).parent
 RESULTS = REPO / "results"
@@ -180,12 +180,21 @@ def _standard_summary(rec):
     # `t["jpeg_formats"]["signals"]` and so exported as ABSENT for every model since it was added —
     # the same silent-hole family as Battery A never reaching export (Rule #17).
     jpeg = ((t.get("jpeg_formats") or {}).get("check_detail") or {}).get("score")
-    expense = ((t.get("expense_split") or {}).get("check_detail") or {}).get("score")
+    exp_test = t.get("expense_split") or {}
+    expense = (exp_test.get("check_detail") or {}).get("score")
+    # A reply stopped at the output ceiling never finished, so its 0 is not a wrong answer: gemma4
+    # 26b/12b at think spent all 12000 tokens reasoning and published 0/7 beside 5/7 and 4/7 direct.
+    # Drop that 0 and say why. A nonzero score stays, flagged: those signals really were in the reply.
+    # The workers key reads this with `or 0`, so a truncated run ranks as it did before.
+    truncated = (exp_test.get("eval_count") or 0) >= BUDGET_RETRY_CAP
+    if truncated and not expense:
+        expense = None
     return {"reasoning": reasoning, "instr": instr, "tool": ok("calculate"),
             # ⚠ jpeg has a documented +/-2 noise floor (same model, same prompt, 4 contexts ->
             # 7/6/5/6). Published for provenance; NEVER read a delta and never rank on it.
             **({"jpeg": jpeg, "jpeg_max": 7} if jpeg is not None else {}),
-            **({"expense_split": expense, "expense_split_max": 7} if expense is not None else {})}
+            **({"expense_split": expense, "expense_split_max": 7} if expense is not None else {}),
+            **({"expense_split_truncated": True} if truncated else {})}
 
 
 def _routing_summary(rec):
